@@ -122,26 +122,6 @@ esp_err_t display_init(void)
     esp_lcd_panel_invert_color(s_panel, true);
     esp_lcd_panel_mirror(s_panel, BOARD_LCD_MIRROR_X, BOARD_LCD_MIRROR_Y);
     esp_lcd_panel_set_gap(s_panel, BOARD_LCD_GAP_X, BOARD_LCD_GAP_Y);
-#if BOARD_LCD_TFTESPI_GAMMA
-    /* Séquence d'init TFT_eSPI (ST7789_Init.h) : sans elle, les tons sombres
-     * saturés (bois, vert bouteille) virent au mauve / bleu-vert. */
-    static const struct { uint8_t cmd, len, d[14]; } tune[] = {
-        { 0xB2, 5,  { 0x0C, 0x0C, 0x00, 0x33, 0x33 } },          /* PORCTRL */
-        { 0xB7, 1,  { 0x35 } },                                  /* GCTRL */
-        { 0xBB, 1,  { 0x28 } },                                  /* VCOMS */
-        { 0xC0, 1,  { 0x0C } },                                  /* LCMCTRL */
-        { 0xC2, 2,  { 0x01, 0xFF } },                            /* VDVVRHEN */
-        { 0xC3, 1,  { 0x10 } },                                  /* VRHS */
-        { 0xC4, 1,  { 0x20 } },                                  /* VDVSET */
-        { 0xC6, 1,  { 0x0F } },                                  /* FRCTR2 : 60 Hz */
-        { 0xD0, 2,  { 0xA4, 0xA1 } },                            /* PWCTRL1 */
-        { 0xE0, 14, { 0xD0, 0x00, 0x02, 0x07, 0x0A, 0x28, 0x32, 0x44, 0x42, 0x06, 0x0E, 0x12, 0x14, 0x17 } },
-        { 0xE1, 14, { 0xD0, 0x00, 0x02, 0x07, 0x0A, 0x28, 0x31, 0x54, 0x47, 0x0E, 0x1C, 0x17, 0x1B, 0x1E } },
-    };
-    for (size_t i = 0; i < sizeof(tune) / sizeof(tune[0]); i++) {
-        esp_lcd_panel_io_tx_param(s_io, tune[i].cmd, tune[i].d, tune[i].len);
-    }
-#endif
 
     size_t bsz = BOARD_LCD_W * BUF_LINES * 2;
     void *b1 = heap_caps_malloc(bsz, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
