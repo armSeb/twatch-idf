@@ -257,7 +257,15 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             s_conn = event->connect.conn_handle;
             s_eco_pending = false;
             ble_npl_callout_stop(&s_co_adv);
-            ESP_LOGI(TAG, "connecté (handle %d)", s_conn);
+            if (ble_gap_conn_find(s_conn, &desc) == 0) {
+                const uint8_t *o = desc.peer_ota_addr.val, *i = desc.peer_id_addr.val;
+                /* ota ≠ id : RPA de l'iPhone résolue par le contrôleur (bond retrouvé) */
+                ESP_LOGI(TAG, "connecté (handle %d) ota=%02x:%02x:%02x:%02x:%02x:%02x/%d "
+                         "id=%02x:%02x:%02x:%02x:%02x:%02x/%d bonded=%d", s_conn,
+                         o[5], o[4], o[3], o[2], o[1], o[0], desc.peer_ota_addr.type,
+                         i[5], i[4], i[3], i[2], i[1], i[0], desc.peer_id_addr.type,
+                         desc.sec_state.bonded);
+            }
             refresh_conn_params(s_conn);
 #if BLE_DEBUG_RSSI
             ble_npl_callout_reset(&s_co_rssi, ble_npl_time_ms_to_ticks32(1000));
