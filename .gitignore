@@ -1,0 +1,21 @@
+# PlatformIO / ESP-IDF
+.pio/
+build/
+build_*/
+sdkconfig
+sdkconfig.*
+!sdkconfig.defaults
+managed_components/
+dependencies.lock
+# Tests PC / outils
+host_tests/out/
+*.o
+*.bin
+*.elf
+*.map
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+.DS_Store
+host_tests/test_host

@@ -1,0 +1,110 @@
+# =====================================================================
+#  T-Watch 2020 V1 — sdkconfig.defaults (ESP-IDF 5.5)
+#  Après modification : supprimer sdkconfig.twatch2020v1 puis rebuild.
+# =====================================================================
+
+CONFIG_IDF_TARGET="esp32"
+
+# ---------- Flash / partitions ----------
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+# Flash QIO 80 MHz (Winbond) : code, polices et données LVGL lus en flash
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ---------- Coredump en flash (diagnostic de crash après coup) ----------
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+
+# ---------- CPU / compilation ----------
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# ---------- Gestion d'énergie ----------
+# DFS + light sleep auto (le light sleep n'est effectif que BLE coupé sur
+# ESP32 classique sans quartz 32 kHz, cf. README).
+CONFIG_PM_ENABLE=y
+CONFIG_PM_DFS_INIT_AUTO=n
+CONFIG_PM_SLP_IRAM_OPT=y
+CONFIG_PM_RTOS_IDLE_OPT=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_FREERTOS_IDLE_TIME_BEFORE_SLEEP=3
+CONFIG_FREERTOS_HZ=100
+
+# ---------- Logs ----------
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
+
+# ---------- Bluetooth : contrôleur BLE seul + NimBLE ----------
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
+CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY=n
+CONFIG_BTDM_CTRL_MODE_BTDM=n
+CONFIG_BTDM_CTRL_BLE_MAX_CONN=1
+# Modem sleep du contrôleur, horloge basse conso = quartz principal
+# (pas de quartz 32 kHz sur la T-Watch 2020).
+CONFIG_BTDM_CTRL_MODEM_SLEEP=y
+CONFIG_BTDM_CTRL_MODEM_SLEEP_MODE_ORIG=y
+CONFIG_BTDM_CTRL_LPCLK_SEL_MAIN_XTAL=y
+CONFIG_BTDM_CTRL_PINNED_TO_CORE_0=y
+
+CONFIG_BT_NIMBLE_PINNED_TO_CORE_0=y
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=5120
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_MAX_BONDS=3
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+CONFIG_BT_NIMBLE_SM_LEGACY=y
+CONFIG_BT_NIMBLE_SM_SC=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+# Le client GATT (indispensable pour ANCS) dépend du rôle Central dans
+# ESP-IDF 5.5 : le désactiver supprimerait ble_gattc_* silencieusement.
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_GATT_CLIENT=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=185
+CONFIG_BT_NIMBLE_GATT_MAX_PROCS=4
+CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="T-Watch"
+CONFIG_BT_NIMBLE_SVC_GAP_APPEARANCE=0x0
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+
+# ---------- LVGL 9.2 (Kconfig, pas de lv_conf.h) ----------
+CONFIG_LV_CONF_SKIP=y
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_USE_BUILTIN_MALLOC=y
+CONFIG_LV_MEM_SIZE_KILOBYTES=64
+CONFIG_LV_DEF_REFR_PERIOD=33
+CONFIG_LV_DPI_DEF=130
+CONFIG_LV_OS_NONE=y
+CONFIG_LV_USE_DRAW_SW=y
+CONFIG_LV_DRAW_SW_COMPLEX=y
+CONFIG_LV_ATTRIBUTE_FAST_MEM_USE_IRAM=n
+CONFIG_LV_USE_LOG=n
+CONFIG_LV_USE_ASSERT_NULL=y
+CONFIG_LV_USE_ASSERT_MALLOC=y
+CONFIG_LV_USE_THEME_DEFAULT=y
+CONFIG_LV_THEME_DEFAULT_DARK=y
+CONFIG_LV_FONT_MONTSERRAT_12=n
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_16=n
+CONFIG_LV_FONT_DEFAULT_MONTSERRAT_14=y
+CONFIG_LV_USE_PERF_MONITOR=n
+CONFIG_LV_USE_SYSMON=n
+CONFIG_LV_BUILD_EXAMPLES=n
+CONFIG_LV_USE_DEMO_WIDGETS=n
+
+# ---------- RF ----------
+# Calibration RF complète à chaque boot, sans réutiliser de données en NVS :
+# une calibration héritée d'un ancien firmware (autre version du PHY) peut
+# rendre la radio sourde.
+CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE=n
+CONFIG_ESP_PHY_RF_CAL_FULL=y
+
+# ---------- Confidentialité (RPA) ----------
+# Résolution des RPA de l'iPhone par la liste de résolution du CONTRÔLEUR
+# (défaut NimBLE). La résolution « host based » échouait dès que l'iPhone
+# changeait d'adresse privée (~15 min) : reconnexion impossible, SMP timeout.
+# Le bug de résolution du contrôleur est corrigé dans IDF 5.5.6 (919c7f4).
+CONFIG_BT_NIMBLE_HOST_BASED_PRIVACY=n

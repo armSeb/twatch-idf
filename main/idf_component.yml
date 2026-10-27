@@ -1,0 +1,5 @@
+dependencies:
+  idf: ">=5.5.0"
+  # Version figée pour la reproductibilité. 9.2.2 = branche 9.2 la plus
+  # éprouvée sur ESP32 en rendu logiciel.
+  lvgl/lvgl: "9.2.2"
