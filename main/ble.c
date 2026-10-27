@@ -1,5 +1,8 @@
 #include "ble.h"
 #include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <time.h>
 #include "ancs.h"
 #include "app_events.h"
 #include "esp_log.h"
@@ -148,6 +151,52 @@ static void adv_set_data(void)
     if (rc) ESP_LOGE(TAG, "adv_rsp_set_fields rc=%d", rc);
 }
 
+/* ------------------------------------------------------------------ */
+/* Journal de diagnostic (anneau en RAM, horodaté à l'heure locale)    */
+/* ------------------------------------------------------------------ */
+static char s_diag[BLE_DIAG_LINES][48];
+static int  s_diag_head, s_diag_n;
+static portMUX_TYPE s_diag_mux = portMUX_INITIALIZER_UNLOCKED;
+
+void ble_diag(const char *fmt, ...)
+{
+    char msg[36];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    time_t now = time(NULL);
+    struct tm tm;
+    localtime_r(&now, &tm);
+    char line[48];
+    snprintf(line, sizeof(line), "%02d:%02d:%02d %s", tm.tm_hour, tm.tm_min, tm.tm_sec, msg);
+    ESP_LOGI(TAG, "diag: %s", msg);
+    portENTER_CRITICAL(&s_diag_mux);
+    memcpy(s_diag[s_diag_head], line, sizeof(line));
+    s_diag_head = (s_diag_head + 1) % BLE_DIAG_LINES;
+    if (s_diag_n < BLE_DIAG_LINES) s_diag_n++;
+    portEXIT_CRITICAL(&s_diag_mux);
+}
+
+int ble_diag_dump(char *out, size_t len)
+{
+    static char copy[BLE_DIAG_LINES][48];
+    int n, head;
+    portENTER_CRITICAL(&s_diag_mux);
+    memcpy(copy, s_diag, sizeof(copy));
+    n = s_diag_n; head = s_diag_head;
+    portEXIT_CRITICAL(&s_diag_mux);
+    size_t pos = 0;
+    out[0] = 0;
+    for (int i = 0; i < n && pos + 1 < len; i++) {
+        int idx = (head - 1 - i + BLE_DIAG_LINES) % BLE_DIAG_LINES;
+        int w = snprintf(out + pos, len - pos, "%s%s", i ? "\n" : "", copy[idx]);
+        if (w < 0) break;
+        pos += (size_t)w;
+    }
+    return n;
+}
+
 static void adv_start(bool fast, uint32_t fast_ms)
 {
     if (s_conn != BLE_HS_CONN_HANDLE_NONE) return;
@@ -160,6 +209,7 @@ static void adv_start(bool fast, uint32_t fast_ms)
     int rc = ble_gap_adv_start(s_own_addr_type, NULL, BLE_HS_FOREVER, &p, gap_event, NULL);
     if (rc) {
         ESP_LOGE(TAG, "adv_start rc=%d", rc);
+        ble_diag("ERREUR pub. rc=%d", rc);
         return;
     }
     s_fast_adv = fast;
@@ -167,6 +217,7 @@ static void adv_start(bool fast, uint32_t fast_ms)
     else ble_npl_callout_stop(&s_co_adv);
     set_state(BLE_ST_ADVERTISING);
     ESP_LOGI(TAG, "publicité %s", fast ? "rapide" : "lente");
+    ble_diag("pub. %s", fast ? "rapide" : "lente");
 }
 
 static void co_adv_cb(struct ble_npl_event *ev)
@@ -265,6 +316,8 @@ static int gap_event(struct ble_gap_event *event, void *arg)
                          o[5], o[4], o[3], o[2], o[1], o[0], desc.peer_ota_addr.type,
                          i[5], i[4], i[3], i[2], i[1], i[0], desc.peer_id_addr.type,
                          desc.sec_state.bonded);
+                ble_diag("conn %02x%02x%s b=%d", o[1], o[0],
+                         memcmp(o, i, 6) ? " résolu" : "", desc.sec_state.bonded);
             }
             refresh_conn_params(s_conn);
 #if BLE_DEBUG_RSSI
@@ -290,12 +343,14 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             if (rc && rc != BLE_HS_EALREADY) ESP_LOGW(TAG, "security_initiate rc=%d", rc);
         } else {
             ESP_LOGW(TAG, "échec connexion status=%d", event->connect.status);
+            ble_diag("échec conn st=%d", event->connect.status);
             adv_start(true, ADV_FAST_MS);
         }
         return 0;
 
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "déconnecté, raison=0x%x", event->disconnect.reason);
+        ble_diag("déco 0x%x", event->disconnect.reason);
         s_conn = BLE_HS_CONN_HANDLE_NONE;
         s_itvl = s_lat = s_tmo = 0;
         s_eco_pending = false;
@@ -312,6 +367,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_ENC_CHANGE:
         if (event->enc_change.status == 0) {
             ESP_LOGI(TAG, "lien chiffré");
+            ble_diag("chiffré");
             refresh_bonds();
             if (s_pairing_in_progress) {
                 s_pairing_in_progress = false;
@@ -322,6 +378,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         } else {
             int st = event->enc_change.status;
             ESP_LOGW(TAG, "échec chiffrement status=%d", st);
+            ble_diag("ÉCHEC chiffr. st=%d", st);
             if (st == BLE_HS_ERR_HCI_BASE + BLE_ERR_PINKEY_MISSING &&
                 ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0) {
                 /* l'iPhone a oublié la montre : on efface notre bond et on
@@ -356,6 +413,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         return 0;
 
     case BLE_GAP_EVENT_REPEAT_PAIRING:
+        ble_diag("ré-appairage demandé");
         /* le pair a perdu ses clés : on oublie l'ancien bond et on recommence */
         if (ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc) == 0) {
             ble_store_util_delete_peer(&desc.peer_id_addr);
@@ -384,6 +442,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         return 0;
 
     case BLE_GAP_EVENT_ADV_COMPLETE:
+        ble_diag("fin pub. r=%d", event->adv_complete.reason);
         if (s_conn == BLE_HS_CONN_HANDLE_NONE) adv_start(s_fast_adv, ADV_FAST_MS);
         return 0;
 
@@ -436,6 +495,7 @@ static void host_task(void *param)
 esp_err_t ble_start(void)
 {
     if (s_running) return ESP_OK;
+    ble_diag("démarrage BLE");
     esp_err_t err = nimble_port_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "nimble_port_init: %s", esp_err_to_name(err));
@@ -490,6 +550,7 @@ esp_err_t ble_start(void)
 void ble_stop(void)
 {
     if (!s_running) return;
+    ble_diag("arrêt BLE");
     int rc = nimble_port_stop();          /* termine les connexions, arrête la tâche hôte */
     if (rc == 0) {
         ble_npl_callout_deinit(&s_co_adv);
@@ -515,6 +576,7 @@ void ble_get_info(ble_info_t *o)
     o->latency = s_lat;
     o->timeout_x10 = s_tmo;
     o->bonds = s_bonds;
+    o->adv_active = s_running && ble_gap_adv_active();
     memcpy(o->addr, s_addr, 6);
 }
 

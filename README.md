@@ -151,6 +151,11 @@ pas de lib AXP/BMA/FT (quelques registres suffisent), `esp_lcd` natif, `i2c_mast
 - **Contrôleur BT d'ESP-IDF 5.5.3** : liaison chiffrée perdue en 0x208 (voir *Compiler*).
 - **Confidentialité « host based » de NimBLE** : reconnexion impossible après rotation de
   l'adresse privée de l'iPhone (~15 min, SMP timeout). Résolution laissée au contrôleur.
+- **En cours d'investigation** : après des heures de fonctionnement, l'iPhone n'arrive
+  parfois plus à se reconnecter ; couper/relancer le Bluetooth de la montre ne suffit pas,
+  un redémarrage complet si. Pour le diagnostic sans PC : *À propos* affiche un journal BLE
+  horodaté (connexions, adresse vue, chiffrement, déconnexions, publicité) et l'écran
+  *Énergie* signale une publicité annoncée mais inactive.
 - **`BT_NIMBLE_GATT_CLIENT` dépend de `BT_NIMBLE_ROLE_CENTRAL`** dans IDF 5.5 : désactiver le
   rôle central supprime silencieusement `ble_gattc_*`, donc ANCS.
 - **Rails AXP202** : sur cette montre LDO3 alimente l'écran et LDO4 le tactile. Aucun rail

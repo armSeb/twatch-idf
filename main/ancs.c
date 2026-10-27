@@ -217,7 +217,7 @@ static void setup_fail(const char *what, int status)
                 c.st = SU_NONE;
                 ble_npl_callout_reset(&s_co_setup, ble_npl_time_ms_to_ticks32(SETUP_RETRY_MS));
             } else {
-                c.st = SU_FAILED;
+                c.st = SU_FAILED; ble_diag("ANCS ÉCHEC");
                 ESP_LOGE(TAG, "accès ANCS refusé par l'iPhone");
             }
         } else {
@@ -230,7 +230,7 @@ static void setup_fail(const char *what, int status)
         c.st = SU_NONE;
         ble_npl_callout_reset(&s_co_setup, ble_npl_time_ms_to_ticks32(SETUP_RETRY_MS));
     } else {
-        c.st = SU_FAILED;
+        c.st = SU_FAILED; ble_diag("ANCS ÉCHEC");
         ESP_LOGE(TAG, "ANCS indisponible sur ce lien");
     }
 }
@@ -403,6 +403,7 @@ static int on_cccd(uint16_t conn, const struct ble_gatt_error *err, struct ble_g
         c.st = SU_READY;
         c.retries = 0;
         ESP_LOGI(TAG, "ANCS prêt");
+        ble_diag("ANCS prêt");
         ble_internal_ancs_ready(c.conn);
         ble_npl_callout_reset(&s_co_cts, ble_npl_time_ms_to_ticks32(3000));   /* CTS plus tard */
         process_next();

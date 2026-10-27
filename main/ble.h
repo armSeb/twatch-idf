@@ -3,6 +3,7 @@
  * service batterie, paramètres de connexion économes, cycle de vie.
  */
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
@@ -22,7 +23,13 @@ typedef struct {
     uint16_t timeout_x10;  /* supervision en unités de 10 ms */
     int      bonds;
     uint8_t  addr[6];
+    bool     adv_active;   /* publicité réellement active côté pile */
 } ble_info_t;
+
+/* Journal de diagnostic BLE en RAM (consultable dans « À propos », sans PC) */
+#define BLE_DIAG_LINES 16
+void ble_diag(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+int  ble_diag_dump(char *out, size_t len);   /* plus récent en premier */
 
 esp_err_t ble_start(void);              /* init + démarrage de la pile */
 void      ble_stop(void);               /* arrêt complet (contrôleur off) */

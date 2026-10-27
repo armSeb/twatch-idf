@@ -787,7 +787,8 @@ static void power_refresh(void)
     if (b.itvl_x125) {
         snprintf(s, sizeof(s), "BLE %s · %.0f ms · lat %u", ST[b.state], b.itvl_x125 * 1.25f, b.latency);
     } else {
-        snprintf(s, sizeof(s), "BLE %s", ST[b.state]);
+        snprintf(s, sizeof(s), "BLE %s%s", ST[b.state],
+                 (b.state == BLE_ST_ADVERTISING && !b.adv_active) ? " INACTIVE" : "");
     }
     lv_label_set_text(p_lbl[4], s);
 
@@ -852,8 +853,8 @@ static void about_refresh(void)
     uint32_t up = (uint32_t)(esp_timer_get_time() / 1000000);
     lv_mem_monitor_t mm;
     lv_mem_monitor(&mm);
-    char s[360];
-    snprintf(s, sizeof(s),
+    static char s[1200];
+    int n = snprintf(s, sizeof(s),
              "Firmware %s\nESP-IDF %s · LVGL %d.%d.%d\n"
              "BLE %02X:%02X:%02X:%02X:%02X:%02X\nAppareils appairés : %d\n"
              "En marche depuis %luj %02luh%02lu\nTas libre %u Ko (min %u Ko)\nLVGL %u %% (pic %u Ko)\nReset : %d",
@@ -864,6 +865,11 @@ static void about_refresh(void)
              (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
              (unsigned)mm.used_pct, (unsigned)(mm.max_used / 1024),
              (int)esp_reset_reason());
+    if (n > 0 && n < (int)sizeof(s)) {
+        n += snprintf(s + n, sizeof(s) - n, "\n\nJournal BLE (pub. %s) :\n",
+                      b.adv_active ? "active" : "INACTIVE");
+        if (n < (int)sizeof(s)) ble_diag_dump(s + n, sizeof(s) - n);
+    }
     lv_label_set_text(a_lbl, s);
 }
 
@@ -876,6 +882,10 @@ static void build_about(void)
     lv_obj_set_width(a_lbl, BOARD_LCD_W - 24);
     lv_label_set_long_mode(a_lbl, LV_LABEL_LONG_WRAP);
     lv_obj_set_pos(a_lbl, 12, 44);
+    lv_obj_set_style_pad_bottom(a_lbl, 16, 0);
+    lv_obj_add_flag(s, LV_OBJ_FLAG_SCROLLABLE);       /* journal BLE en dessous */
+    lv_obj_set_scroll_dir(s, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(s, LV_SCROLLBAR_MODE_ACTIVE);
 }
 
 /* ------------------------------------------------------------------ */
