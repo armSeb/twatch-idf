@@ -75,6 +75,7 @@ static void handle_axp(void)
     uint64_t m = power_handle_irq();
     if (m & AXP_IRQ_PEK_SHORT) {
         if (!display_is_on()) {
+            if (!ui_open_pending()) ui_go_home();   /* dernière notif non vue, sinon cadran */
             screen_wake();
         } else if (!ui_is_home()) {
             ui_go_home();
@@ -109,8 +110,7 @@ static void handle_notifs(void)
         notif_entry_t *e = ns_add(&n, &alert);
         ESP_LOGI(TAG, "notif [%s] « %s » flags=0x%02x alerte=%d (%d en mémoire)",
                  e->n.app_name, e->n.title, e->n.flags, alert, ns_count());
-        ui_on_notif(e, alert);           /* e n'est plus valide après cet appel */
-        if (alert) screen_wake();
+        if (ui_on_notif(e, alert)) screen_wake();   /* e n'est plus valide après */
     }
 }
 

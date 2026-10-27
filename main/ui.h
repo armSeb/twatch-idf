@@ -15,7 +15,8 @@ void     ui_go_home(void);                 /* cadran, sans animation si écran �
 bool     ui_is_home(void);
 uint32_t ui_timeout_ms(void);              /* délai d'inactivité de l'écran courant */
 
-void ui_on_notif(notif_entry_t *e, bool alert); /* alert → affiche le détail */
+bool ui_on_notif(notif_entry_t *e, bool alert); /* alert → affiche le détail ; true = allumer l'écran */
+bool ui_open_pending(void);                /* écran éteint : prépare la dernière notif non vue ; true si une notif est prête */
 void ui_on_notif_removed(uint32_t uid);
 void ui_on_ble_state(int st);
 void ui_on_power(void);                    /* batterie / charge changés */

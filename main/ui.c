@@ -55,6 +55,8 @@ static lv_obj_t *c_who;
 static uint32_t c_uid;
 static bool c_uid_valid;
 /* menu */
+static uint32_t s_pending_hash;   /* notif reçue écran éteint, pas encore vue */
+static lv_obj_t *m_sw_nwake;
 static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_dd_tmo, *m_dd_face, *m_toast;
 static lv_timer_t *m_toast_t;
 /* énergie */
@@ -333,6 +335,7 @@ static void build_watch(void)
 static void detail_fill(const notif_entry_t *e)
 {
     d_hash = e->hash;
+    if (e->hash == s_pending_hash) s_pending_hash = 0;
     lv_obj_set_style_bg_color(d_header, cat_color(e->n.category), 0);
     char app[48];
     snprintf(app, sizeof(app), "%s %s", cat_icon(e->n.category), e->n.app_name);
@@ -567,6 +570,12 @@ static void menu_vib_cb(lv_event_t *ev)
     if (settings_get()->vibrate) power_vibrate(VIB_SHORT);
 }
 
+static void menu_nwake_cb(lv_event_t *ev)
+{
+    settings_get()->notif_wake = lv_obj_has_state(m_sw_nwake, LV_STATE_CHECKED);
+    settings_save();
+}
+
 static void menu_bt_cb(lv_event_t *ev)
 {
     bool on = lv_obj_has_state(m_sw_bt, LV_STATE_CHECKED);
@@ -666,6 +675,13 @@ static void build_menu(void)
     lv_obj_add_event_cb(m_sw_vib, menu_vib_cb, LV_EVENT_VALUE_CHANGED, NULL);
     bubble(m_sw_vib);
 
+    r = mk_row(col, "Allumer si notif");
+    m_sw_nwake = lv_switch_create(r);
+    style_switch(m_sw_nwake);
+    lv_obj_align(m_sw_nwake, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_add_event_cb(m_sw_nwake, menu_nwake_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    bubble(m_sw_nwake);
+
     r = mk_row(col, "Bluetooth");
     m_sw_bt = lv_switch_create(r);
     style_switch(m_sw_bt);
@@ -721,6 +737,8 @@ static void menu_sync_from_settings(void)
     lv_slider_set_value(m_slider, st->brightness, LV_ANIM_OFF);
     if (st->vibrate) lv_obj_add_state(m_sw_vib, LV_STATE_CHECKED);
     else lv_obj_remove_state(m_sw_vib, LV_STATE_CHECKED);
+    if (st->notif_wake) lv_obj_add_state(m_sw_nwake, LV_STATE_CHECKED);
+    else lv_obj_remove_state(m_sw_nwake, LV_STATE_CHECKED);
     if (st->ble_enabled) lv_obj_add_state(m_sw_bt, LV_STATE_CHECKED);
     else lv_obj_remove_state(m_sw_bt, LV_STATE_CHECKED);
     lv_dropdown_set_selected(m_dd_face, st->watchface ? 1 : 0);
@@ -908,13 +926,22 @@ void ui_on_wake(void)
     if (s_cur == SCR_POWER) power_refresh();
 }
 
-void ui_on_notif(notif_entry_t *e, bool alert)
+bool ui_on_notif(notif_entry_t *e, bool alert)
 {
     l_dirty = true;
     if (s_cur == SCR_LIST) list_rebuild();
     watch_refresh_status();
     if (s_cur == SCR_DETAIL && e->hash == d_hash) detail_fill(e);
-    if (!alert) return;
+    if (!alert) return false;
+
+    /* Mode discret : écran éteint → on vibre seulement ; le bouton affichera
+     * cette notif. Les appels allument toujours (décrocher/refuser). */
+    if (!display_is_on() && !settings_get()->notif_wake
+        && e->n.category != ANCS_CAT_INCOMING_CALL) {
+        s_pending_hash = e->hash;
+        if (settings_get()->vibrate && !(e->n.flags & ANCS_FLAG_SILENT)) power_vibrate(VIB_NOTIF);
+        return false;
+    }
 
     bool vib = settings_get()->vibrate && !(e->n.flags & ANCS_FLAG_SILENT);
     if (e->n.category == ANCS_CAT_INCOMING_CALL) {
@@ -929,6 +956,19 @@ void ui_on_notif(notif_entry_t *e, bool alert)
         show(SCR_DETAIL, LV_SCR_LOAD_ANIM_OVER_TOP);
         if (vib) power_vibrate(VIB_NOTIF);
     }
+    return true;
+}
+
+bool ui_open_pending(void)
+{
+    if (!s_pending_hash) return false;
+    notif_entry_t *e = ns_find_hash(s_pending_hash);
+    s_pending_hash = 0;
+    if (!e) return false;              /* supprimée entre-temps sur l'iPhone */
+    d_return = SCR_WATCH;
+    detail_fill(e);
+    show(SCR_DETAIL, LV_SCR_LOAD_ANIM_NONE);
+    return true;
 }
 
 void ui_on_notif_removed(uint32_t uid)
@@ -937,6 +977,7 @@ void ui_on_notif_removed(uint32_t uid)
     uint32_t h = e ? e->hash : 0;
     bool was_call = (s_cur == SCR_CALL && c_uid_valid && c_uid == uid);
     if (e) {
+        if (e->hash == s_pending_hash) s_pending_hash = 0;
         ns_remove_entry(e);
         l_dirty = true;
         if (s_cur == SCR_LIST) list_rebuild();

@@ -82,12 +82,13 @@ Si l'iPhone oublie la montre, elle efface son propre bond et relance un appairag
 | Cadran | ↑ | Liste des notifications |
 | Cadran | ← | Réglages |
 | Partout | → | Retour |
-| Bouton (écran éteint) | appui court | Allume l'écran |
+| Bouton (écran éteint) | appui court | Allume l'écran (sur la dernière notif non vue en mode discret) |
 | Bouton (hors cadran) | appui court | Retour cadran |
 | Bouton (sur cadran) | appui court | Éteint l'écran |
 | Bouton | 4 s | Coupure matérielle AXP202 |
 
-Réglages : luminosité, vibreur, Bluetooth (mode avion), délai d'extinction, cadran,
+Réglages : luminosité, vibreur, **Allumer si notif** (désactivé = mode discret : la
+montre vibre sans allumer l'écran, les appels allument toujours), Bluetooth (mode avion), délai d'extinction, cadran,
 appairage, Énergie, À propos ; appui long sur « Oublier les appareils » pour effacer les bonds.
 
 ---
