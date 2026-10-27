@@ -773,8 +773,13 @@ static void power_refresh(void)
     }
     lv_label_set_text(p_lbl[4], s);
 
-    snprintf(s, sizeof(s), "CPU %d-%d MHz · %u Ko", POWER_CPU_MIN_MHZ, POWER_CPU_MAX_MHZ,
-             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
+    if (t.vbus) {
+        snprintf(s, sizeof(s), "Veille : sur batterie");
+    } else if (t.off_avg_ma > 0.05f) {
+        snprintf(s, sizeof(s), "Veille %.1f mA · écran %.0f%%", t.off_avg_ma, t.screen_pct);
+    } else {
+        snprintf(s, sizeof(s), "Écran allumé %.0f %% du temps", t.screen_pct);
+    }
     lv_label_set_text(p_lbl[5], s);
 }
 

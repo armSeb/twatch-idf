@@ -16,6 +16,9 @@ typedef struct {
     float used_mah;        /* coulomb depuis débranchement (ou boot) */
     uint32_t since_s;      /* durée de la période de mesure */
     float avg_ma;          /* used_mah / heures, 0 si période trop courte */
+    float off_avg_ma;      /* moyenne écran éteint (veille), 0 si < 2 min */
+    float on_avg_ma;       /* moyenne écran allumé, 0 si < 10 s */
+    float screen_pct;      /* part du temps écran allumé */
 } power_telemetry_t;
 
 esp_err_t power_init(void);           /* AXP, BMA423 suspend, PM, GPIO IRQ, LEDC, moteur */
@@ -33,6 +36,8 @@ int  power_percent(void);
 bool power_vbus(void);
 bool power_charging(void);
 void power_get_telemetry(power_telemetry_t *t);
+/* appelé par display.c à chaque allumage/extinction (ventilation de la conso) */
+void power_screen_segment(bool on);
 
 /* rétroéclairage 0..255 (0 = éteint) */
 void power_backlight(uint8_t level);

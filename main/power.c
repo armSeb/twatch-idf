@@ -96,6 +96,29 @@ static void IRAM_ATTR axp_isr(void *arg)
     if (hp) portYIELD_FROM_ISR();
 }
 
+/* ------------------------------------------------------------------ */
+/* Ventilation écran allumé / veille (compteur coulométrique)           */
+/* ------------------------------------------------------------------ */
+static bool    s_seg_on;
+static float   s_seg_mah, s_on_mah, s_off_mah;
+static int64_t s_seg_us, s_on_us, s_off_us;
+
+static void meter_reset(void)
+{
+    s_seg_mah = 0; s_on_mah = s_off_mah = 0;
+    s_on_us = s_off_us = 0;
+    s_seg_us = esp_timer_get_time();
+}
+
+void power_screen_segment(bool on)
+{
+    int64_t now = esp_timer_get_time();
+    float mah = axp_coulomb_used_mah();
+    if (s_seg_on) { s_on_mah += mah - s_seg_mah; s_on_us += now - s_seg_us; }
+    else          { s_off_mah += mah - s_seg_mah; s_off_us += now - s_seg_us; }
+    s_seg_mah = mah; s_seg_us = now; s_seg_on = on;
+}
+
 uint64_t power_handle_irq(void)
 {
     uint64_t m = axp_irq_read_and_clear();
@@ -107,6 +130,7 @@ uint64_t power_handle_irq(void)
             /* début d'une période sur batterie : on remet la mesure à zéro */
             axp_coulomb_reset();
             s_period_start_us = esp_timer_get_time();
+            meter_reset();
             s_ocv_filt = -1;   /* tension de charge non représentative */
         }
         if (m & AXP_IRQ_CHG_DONE) s_percent = 100;
@@ -245,6 +269,7 @@ esp_err_t power_init(void)
     s_charging = axp_is_charging();
     axp_coulomb_reset();
     s_period_start_us = esp_timer_get_time();
+    meter_reset();
 
     axp_irq_enable(AXP_IRQ_VBUS_CONNECT | AXP_IRQ_VBUS_REMOVED | AXP_IRQ_CHG_START |
                    AXP_IRQ_CHG_DONE | AXP_IRQ_PEK_SHORT | AXP_IRQ_PEK_LONG |
@@ -326,4 +351,13 @@ void power_get_telemetry(power_telemetry_t *t)
     if (t->since_s >= 120 && !t->vbus) {
         t->avg_ma = t->used_mah / (t->since_s / 3600.0f);
     }
+    /* segment en cours inclus */
+    int64_t now = esp_timer_get_time();
+    float on_mah = s_on_mah, off_mah = s_off_mah;
+    int64_t on_us = s_on_us, off_us = s_off_us;
+    if (s_seg_on) { on_mah += t->used_mah - s_seg_mah; on_us += now - s_seg_us; }
+    else          { off_mah += t->used_mah - s_seg_mah; off_us += now - s_seg_us; }
+    if (!t->vbus && off_us >= 120LL * 1000000) t->off_avg_ma = off_mah / (off_us / 3.6e9f);
+    if (!t->vbus && on_us >= 10LL * 1000000)   t->on_avg_ma  = on_mah / (on_us / 3.6e9f);
+    if (on_us + off_us > 0) t->screen_pct = (float)(100.0 * on_us / (double)(on_us + off_us));
 }

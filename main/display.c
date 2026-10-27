@@ -154,6 +154,7 @@ esp_err_t display_init(void)
 void display_set_on(bool on)
 {
     if (on == s_on) return;
+    power_screen_segment(on);
     if (on) {
         power_hold_nosleep(true);                /* LEDC sur REF_TICK : pas de light sleep écran allumé */
         power_hold_active(true);                 /* CPU max pour le premier rendu */
