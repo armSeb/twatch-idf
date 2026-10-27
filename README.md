@@ -6,7 +6,7 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
 
 | Cadrans | Écrans |
 |---|---|
-| ![cadrans](docs/cadrans.png) | ![écrans](docs/ecrans.png) |
+| ![cadrans](docs/cadrans.png) ![pub](docs/cadran_pub.png) | ![écrans](docs/ecrans.png) |
 
 *(rendus PC de l'UI réelle avec des données factices)*
 
@@ -17,8 +17,9 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
 - Écran d'appel entrant dédié.
 - Heure et fuseau (DST compris) récupérés de l'iPhone (Current Time Service), RTC PCF8563
   en UTC comme référence.
-- Deux cadrans : **Classique** (cadran ivoire, aiguilles bleuies, réserve de marche =
-  batterie, guichet date, petite seconde) et **Numérique**.
+- Trois cadrans : **Classique** (cadran ivoire, aiguilles bleuies, réserve de marche =
+  batterie, guichet date, petite seconde), **Pub** (carré plein écran, cadre acajou,
+  cadran vert bouteille et laiton, mêmes complications) et **Numérique**.
 - Appairage sécurisé LE Secure Connections + code à 6 chiffres, reconnexion automatique.
 - Mode avion (Bluetooth coupé → vrai light sleep), écran **Énergie** (consommation moyenne
   mesurée par le compteur coulométrique de l'AXP202).
@@ -182,7 +183,7 @@ Parseur ANCS, nettoyage UTF-8, stockage (dédup/tri/capacité), sous `-fsanitize
 | `main/ble.c` | NimBLE : GAP, sécurité, publicité, params éco, service batterie, mode avion |
 | `main/ancs.c` / `ancs_parse.c` | client ANCS + CTS ; réassemblage Data Source |
 | `main/notif_store.c` | stockage, tri par date, dédup, nettoyage UTF-8 |
-| `main/ui.c` / `face_classic.c` | écrans LVGL, navigation ; cadran classique |
+| `main/ui.c` / `face_classic.c` / `face_pub.c` | écrans LVGL, navigation ; cadrans analogiques |
 | `main/display.c` | ST7789 (`esp_lcd`, SPI DMA), FT6336, glue LVGL, DFS écran allumé |
 | `main/power.c` / `axp202.c` | PMIC, batterie (OCV + compensation IR), verrous PM, rétroéclairage, vibreur |
 | `main/wclock.c` | PCF8563 (UTC), fuseau, resynchro de l'horloge système |

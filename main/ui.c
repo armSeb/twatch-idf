@@ -4,6 +4,7 @@
 #include "lvgl.h"
 #include "fonts/fonts.h"
 #include "face_classic.h"
+#include "face_pub.h"
 #include "board.h"
 #include "power.h"
 #include "ble.h"
@@ -40,7 +41,8 @@ static lv_obj_t *s_scr[SCR_COUNT];
 static scr_id_t s_cur = SCR_WATCH;
 
 /* cadran */
-static lv_obj_t *w_digital, *w_classic;
+static lv_obj_t *w_digital, *w_classic, *w_pub, *w_scr;
+enum { FACE_CLASSIC = 0, FACE_DIGITAL = 1, FACE_PUB = 2 };
 static lv_obj_t *w_time, *w_date, *w_ble, *w_batt, *w_notif;
 /* liste */
 static lv_obj_t *l_list;
@@ -250,19 +252,21 @@ static void watch_update_time(bool force)
         lv_label_set_text(w_date, b);
         last_day = tm.tm_mday;
     }
-    if (settings_get()->watchface == 0) face_classic_set_time(&tm, force);
+    if (w_classic) face_classic_set_time(&tm, force);
+    if (w_pub) face_pub_set_time(&tm, force);
 }
 
+/* Un seul cadran analogique existe à la fois (mémoire LVGL) : créé à la
+ * demande, l'autre est détruit. Le numérique, léger, reste en place. */
 static void apply_face(void)
 {
-    bool classic = settings_get()->watchface == 0;
-    if (classic) {
-        lv_obj_remove_flag(w_classic, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(w_digital, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        lv_obj_add_flag(w_classic, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_remove_flag(w_digital, LV_OBJ_FLAG_HIDDEN);
-    }
+    uint8_t f = settings_get()->watchface;
+    if (f != FACE_CLASSIC && w_classic) { lv_obj_delete(w_classic); w_classic = NULL; }
+    if (f != FACE_PUB && w_pub)         { lv_obj_delete(w_pub); w_pub = NULL; }
+    if (f == FACE_CLASSIC && !w_classic) w_classic = face_classic_create(w_scr);
+    if (f == FACE_PUB && !w_pub)         w_pub = face_pub_create(w_scr);
+    if (f == FACE_DIGITAL) lv_obj_remove_flag(w_digital, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(w_digital, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void watch_refresh_status(void)
@@ -292,7 +296,8 @@ static void watch_refresh_status(void)
     if (n > 0) lv_label_set_text_fmt(w_notif, LV_SYMBOL_BELL " %d", n);
     else lv_label_set_text(w_notif, "");
 
-    face_classic_set_status(p, power_charging(), bi.state == BLE_ST_READY, bi.state != BLE_ST_OFF, n);
+    if (w_classic) face_classic_set_status(p, power_charging(), bi.state == BLE_ST_READY, bi.state != BLE_ST_OFF, n);
+    if (w_pub) face_pub_set_status(p, power_charging(), bi.state == BLE_ST_READY, bi.state != BLE_ST_OFF, n);
 }
 
 static void clock_timer_cb(lv_timer_t *t)
@@ -322,9 +327,8 @@ static void build_watch(void)
     lv_obj_t *hint = mk_label(d, &font_text_16, C_OFF, LV_SYMBOL_UP);
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -6);
 
-    /* cadran classique (montre ancienne) */
-    w_classic = face_classic_create(s);
-
+    /* cadrans analogiques : créés par apply_face() selon le réglage */
+    w_scr = s;
     apply_face();
     lv_timer_create(clock_timer_cb, 1000, NULL);
 }
@@ -699,7 +703,7 @@ static void build_menu(void)
 
     r = mk_row(col, "Cadran");
     m_dd_face = lv_dropdown_create(r);
-    lv_dropdown_set_options(m_dd_face, "Classique\nNumérique");
+    lv_dropdown_set_options(m_dd_face, "Classique\nNumérique\nPub");
     lv_obj_set_width(m_dd_face, 120);
     lv_obj_align(m_dd_face, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_add_event_cb(m_dd_face, menu_face_cb, LV_EVENT_VALUE_CHANGED, NULL);
@@ -741,7 +745,7 @@ static void menu_sync_from_settings(void)
     else lv_obj_remove_state(m_sw_nwake, LV_STATE_CHECKED);
     if (st->ble_enabled) lv_obj_add_state(m_sw_bt, LV_STATE_CHECKED);
     else lv_obj_remove_state(m_sw_bt, LV_STATE_CHECKED);
-    lv_dropdown_set_selected(m_dd_face, st->watchface ? 1 : 0);
+    lv_dropdown_set_selected(m_dd_face, st->watchface <= 2 ? st->watchface : 0);
     for (size_t i = 0; i < sizeof(TMO_VALUES); i++) {
         if (TMO_VALUES[i] >= st->screen_timeout_s) { lv_dropdown_set_selected(m_dd_tmo, i); break; }
     }

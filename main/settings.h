@@ -8,7 +8,7 @@ typedef struct {
     bool    vibrate;
     bool    ble_enabled;      /* false = mode avion (light sleep réel) */
     int16_t tz_offset_min;    /* fuseau + DST */
-    uint8_t watchface;        /* 0 = classique, 1 = numérique */
+    uint8_t watchface;        /* 0 = classique, 1 = numérique, 2 = pub (carré) */
     bool    notif_wake;       /* false = notif : vibre seulement, bouton pour voir */
 } settings_t;
 

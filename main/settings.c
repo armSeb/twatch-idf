@@ -23,7 +23,7 @@ void settings_load(void)
     if (nvs_get_u8(h, "vib", &u8) == ESP_OK) s_set.vibrate = u8;
     if (nvs_get_u8(h, "bt", &u8) == ESP_OK) s_set.ble_enabled = u8;
     if (nvs_get_i16(h, "tz", &i16) == ESP_OK) s_set.tz_offset_min = i16;
-    if (nvs_get_u8(h, "face", &u8) == ESP_OK && u8 <= 1) s_set.watchface = u8;
+    if (nvs_get_u8(h, "face", &u8) == ESP_OK && u8 <= 2) s_set.watchface = u8;
     if (nvs_get_u8(h, "nwake", &u8) == ESP_OK) s_set.notif_wake = u8;
     nvs_close(h);
     ESP_LOGI(TAG, "lum=%u veille=%us vib=%d bt=%d tz=%+d min", s_set.brightness,
