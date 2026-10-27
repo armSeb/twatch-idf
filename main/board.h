@@ -20,6 +20,11 @@
 /* MOSI=19 passe par la matrice GPIO (pas l'IOMUX VSPI) : 40 MHz en écriture
  * seule fonctionne (valeur TFT_eSPI d'origine). Descendre à 26 MHz si artefacts. */
 #define BOARD_LCD_PCLK_HZ       (40 * 1000 * 1000)
+/* 1 = réglages tension/gamma du ST7789 repris de TFT_eSPI (lib LilyGo/Arduino).
+ * 0 = valeurs par défaut de la dalle (esp_lcd n'écrit pas de gamma). */
+#ifndef BOARD_LCD_TFTESPI_GAMMA
+#define BOARD_LCD_TFTESPI_GAMMA 1
+#endif
 
 /* Orientation. La lib LilyGo utilise setRotation(2) sur la 2020 (180°) :
  * miroir X+Y et décalage de 80 lignes dans la GRAM 240x320 du ST7789.
