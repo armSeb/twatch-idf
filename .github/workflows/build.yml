@@ -35,8 +35,12 @@ jobs:
             --flash_mode dio --flash_freq 80m --flash_size 16MB \
             0x1000 bootloader/bootloader.bin \
             0x8000 partition_table/partition-table.bin \
-            0x10000 twatch.bin
+            0x10000 ota_data_initial.bin \
+            0x20000 twatch.bin
           cp twatch.bin ../dist/twatch2020v1-app.bin
+          cp bootloader/bootloader.bin ../dist/bootloader.bin
+          cp partition_table/partition-table.bin ../dist/partition-table.bin
+          cp ota_data_initial.bin ../dist/ota_data_initial.bin
           cp twatch.elf ../dist/twatch2020v1.elf
       - uses: actions/upload-artifact@v4
         with:

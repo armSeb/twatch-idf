@@ -10,6 +10,7 @@
 #include "ble.h"
 #include "ancs.h"
 #include "media.h"
+#include "ota.h"
 #include "app_events.h"
 #include "wclock.h"
 #include "settings.h"
@@ -37,7 +38,7 @@
 #define ANIM_MS 140
 
 typedef enum {
-    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_MEDIA, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT, SCR_COUNT
+    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_MEDIA, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT, SCR_OTA, SCR_COUNT
 } scr_id_t;
 
 static lv_obj_t *s_scr[SCR_COUNT];
@@ -63,7 +64,11 @@ static bool c_uid_valid;
 static uint32_t s_pending_hash;   /* notif reçue écran éteint, pas encore vue */
 static lv_obj_t *m_sw_nwake, *m_sw_tap;
 static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_toast;
-static lv_obj_t *m_sum[5], *m_bt_info, *m_confirm;
+static lv_obj_t *m_sum[6], *m_bt_info, *m_confirm;
+static lv_obj_t *o_info, *o_bar, *o_status, *o_btn;
+static void ota_ui_idle(void);
+static void build_ota(void);
+static void back_cb(lv_event_t *ev);
 static void menu_bt_refresh(void);
 static scr_id_t menu_parent(scr_id_t id);
 static void menu_refresh_summaries(void);
@@ -196,7 +201,7 @@ static void menu_sync_from_settings(void);
  * éteint (ui_release_idle) pour ménager le pool LVGL de 64 Ko. */
 static bool is_menu_group(scr_id_t id)
 {
-    return id == SCR_MENU || id == SCR_SET_DISP || id == SCR_SET_ALERT || id == SCR_SET_BT;
+    return id == SCR_MENU || id == SCR_SET_DISP || id == SCR_SET_ALERT || id == SCR_SET_BT || id == SCR_OTA;
 }
 
 static void release_menu(void);
@@ -262,7 +267,8 @@ static void gesture_cb(lv_event_t *e)
     case SCR_SET_DISP:
     case SCR_SET_ALERT:
     case SCR_SET_BT:
-        if (dir == LV_DIR_RIGHT) show(menu_parent(s_cur), LV_SCR_LOAD_ANIM_MOVE_RIGHT);
+    case SCR_OTA:
+        if (dir == LV_DIR_RIGHT) back_cb(NULL);
         else handled = false;
         break;
     default:
@@ -685,7 +691,7 @@ static void menu_nav_cb(lv_event_t *ev)
 static scr_id_t menu_parent(scr_id_t id)
 {
     switch (id) {
-    case SCR_SET_DISP: case SCR_SET_ALERT: case SCR_SET_BT:
+    case SCR_SET_DISP: case SCR_SET_ALERT: case SCR_SET_BT: case SCR_OTA:
     case SCR_POWER: case SCR_ABOUT:        return SCR_MENU;
     case SCR_PAIR:                         return SCR_SET_BT;
     default:                               return SCR_WATCH;
@@ -694,6 +700,7 @@ static scr_id_t menu_parent(scr_id_t id)
 
 static void back_cb(lv_event_t *ev)
 {
+    if (s_cur == SCR_OTA && ota_active()) { toast("Annuler d'abord la mise à jour"); return; }
     show(menu_parent(s_cur), LV_SCR_LOAD_ANIM_MOVE_RIGHT);
 }
 
@@ -873,7 +880,9 @@ static void menu_refresh_summaries(void)
     else snprintf(b, sizeof(b), "%d %%%s", t.percent, t.charging ? " · en charge" : "");
     lv_label_set_text(m_sum[3], b);
 
-    lv_label_set_text(m_sum[4], esp_app_get_description()->version);
+    snprintf(b, sizeof(b), "Firmware %s", esp_app_get_description()->version);
+    lv_label_set_text(m_sum[4], b);
+    lv_label_set_text(m_sum[5], "Par Wi-Fi, sans câble");
 }
 
 static void build_toast(void)
@@ -901,6 +910,7 @@ static void build_menu(void)
     mk_entry(col, LV_SYMBOL_BLUETOOTH, "Bluetooth", SCR_SET_BT, &m_sum[2]);
     mk_entry(col, LV_SYMBOL_CHARGE, "Énergie", SCR_POWER, &m_sum[3]);
     mk_entry(col, LV_SYMBOL_LIST, "À propos", SCR_ABOUT, &m_sum[4]);
+    mk_entry(col, LV_SYMBOL_REFRESH, "Mise à jour", SCR_OTA, &m_sum[5]);
 
     /* ---- affichage ---- */
     col = mk_page(SCR_SET_DISP, "Affichage");
@@ -969,6 +979,104 @@ static void build_menu(void)
     lv_obj_set_size(yes, 88, 40);
     lv_obj_align(yes, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
     lv_obj_add_flag(m_confirm, LV_OBJ_FLAG_HIDDEN);
+
+    build_ota();
+}
+
+/* ------------------------------------------------------------------ */
+/* Mise à jour par Wi-Fi                                                */
+/* ------------------------------------------------------------------ */
+static lv_timer_t *o_reboot_t;
+
+static void ota_reboot_cb(lv_timer_t *t) { ota_reboot_now(); }
+
+static void ota_ui_running(void)
+{
+    char b[200];
+    snprintf(b, sizeof(b), "1. Wi-Fi « %s »\n    mot de passe  %s\n2. Ouvrir 192.168.4.1\n3. Envoyer le fichier .bin",
+             ota_ssid(), ota_password());
+    lv_label_set_text(o_info, b);
+    lv_obj_set_style_text_color(o_status, C_DIM, 0);
+    lv_label_set_text(o_status, "En attente d'un appareil…");
+    lv_label_set_text(lv_obj_get_child(o_btn, 0), "Annuler");
+    lv_obj_set_style_bg_color(o_btn, C_OFF, 0);
+}
+
+static void ota_ui_idle(void)
+{
+    char b[220];
+    snprintf(b, sizeof(b), "Version installée : %s\n\nLa montre crée un réseau Wi-Fi ; le Bluetooth est coupé "
+             "le temps de la mise à jour.%s", esp_app_get_description()->version,
+             ota_rolled_back() ? "\n\nLa dernière mise à jour avait échoué : ancien firmware restauré." : "");
+    lv_label_set_text(o_info, b);
+    lv_label_set_text(o_status, "");
+    lv_obj_add_flag(o_bar, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(lv_obj_get_child(o_btn, 0), LV_SYMBOL_REFRESH "  Démarrer");
+    lv_obj_set_style_bg_color(o_btn, C_ACC, 0);
+}
+
+static void ota_btn_cb(lv_event_t *ev)
+{
+    if (ota_active()) { ota_cancel(); return; }
+    lv_label_set_text(o_status, "Démarrage du Wi-Fi…");
+    lv_refr_now(NULL);
+    const char *err = ota_start();
+    if (err) {
+        lv_obj_set_style_text_color(o_status, C_BAD, 0);
+        lv_label_set_text(o_status, err);
+        return;
+    }
+    ota_ui_running();
+}
+
+void ui_on_ota(int code)
+{
+    if (s_cur != SCR_OTA) show(SCR_OTA, LV_SCR_LOAD_ANIM_NONE);
+    if (!o_status) return;
+    char b[96];
+    if (code >= 0 && code <= OTA_EV_PROGRESS_MAX) {
+        lv_obj_remove_flag(o_bar, LV_OBJ_FLAG_HIDDEN);
+        lv_bar_set_value(o_bar, code, LV_ANIM_OFF);
+        snprintf(b, sizeof(b), "Réception… %d %%", code);
+        lv_obj_set_style_text_color(o_status, C_FG, 0);
+        lv_label_set_text(o_status, b);
+    } else if (code == OTA_EV_CLIENT) {
+        lv_label_set_text(o_status, "Appareil connecté : ouvrir 192.168.4.1");
+    } else if (code == OTA_EV_DONE) {
+        lv_bar_set_value(o_bar, 100, LV_ANIM_OFF);
+        snprintf(b, sizeof(b), LV_SYMBOL_OK " Version %s installée\nRedémarrage…", ota_new_version());
+        lv_obj_set_style_text_color(o_status, C_OK, 0);
+        lv_label_set_text(o_status, b);
+        lv_obj_add_flag(o_btn, LV_OBJ_FLAG_HIDDEN);
+        if (!o_reboot_t) o_reboot_t = lv_timer_create(ota_reboot_cb, 2000, NULL);
+    } else {
+        const char *m = code == OTA_EV_ERR_IMAGE ? "Fichier refusé (pas un firmware T-Watch ?)" :
+                        code == OTA_EV_ERR_SIZE ? "Fichier trop gros" :
+                        code == OTA_EV_ERR_NET ? "Transfert interrompu : réessayer" : "Erreur d'écriture";
+        lv_obj_set_style_text_color(o_status, C_BAD, 0);
+        lv_label_set_text(o_status, m);
+    }
+}
+
+static void build_ota(void)
+{
+    lv_obj_t *col = mk_page(SCR_OTA, "Mise à jour");
+    o_info = mk_label(col, &font_text_16, C_FG, "");
+    lv_label_set_long_mode(o_info, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(o_info, lv_pct(100));
+    o_bar = lv_bar_create(col);
+    lv_obj_set_size(o_bar, lv_pct(100), 8);
+    lv_bar_set_range(o_bar, 0, 100);
+    lv_obj_set_style_bg_color(o_bar, C_OFF, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(o_bar, C_ACC, LV_PART_INDICATOR);
+    bubble(o_bar);
+    o_status = mk_label(col, &font_text_16, C_DIM, "");
+    lv_label_set_long_mode(o_status, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(o_status, lv_pct(100));
+    o_btn = mk_button(col, "", C_ACC, ota_btn_cb, NULL);
+    lv_obj_set_size(o_btn, lv_pct(100), 44);
+    if (ota_active()) ota_ui_running();
+    else ota_ui_idle();
 }
 
 static void menu_sync_from_settings(void)
@@ -1094,20 +1202,18 @@ static void about_refresh(void)
     ble_get_info(&b);
     const esp_app_desc_t *d = esp_app_get_description();
     uint32_t up = (uint32_t)(esp_timer_get_time() / 1000000);
-    lv_mem_monitor_t mm;
-    lv_mem_monitor(&mm);
     static char s[1200];
     int n = snprintf(s, sizeof(s),
              "Firmware %s\nESP-IDF %s · LVGL %d.%d.%d\n"
              "BLE %02X:%02X:%02X:%02X:%02X:%02X\nAppareils appairés : %d\n"
-             "En marche depuis %luj %02luh%02lu\nTas libre %u Ko (min %u Ko)\nLVGL %u %% (pic %u Ko)\nReset : %d\n"
+             "En marche depuis %luj %02luh%02lu\nTas libre %u Ko (min %u Ko)\nPlus grand bloc %u Ko\nReset : %d\n"
              "Réveils écran éteint :\n tactile %lu · notif %lu\n média %lu · AXP %lu · BLE %lu",
              d->version, esp_get_idf_version(), LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH,
              b.addr[5], b.addr[4], b.addr[3], b.addr[2], b.addr[1], b.addr[0], b.bonds,
              (unsigned long)(up / 86400), (unsigned long)((up / 3600) % 24), (unsigned long)((up / 60) % 60),
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
              (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
-             (unsigned)mm.used_pct, (unsigned)(mm.max_used / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024),
              (int)esp_reset_reason(),
              (unsigned long)g_wake_cnt[EV_TOUCH_INT], (unsigned long)g_wake_cnt[EV_NOTIF],
              (unsigned long)g_wake_cnt[EV_MEDIA], (unsigned long)g_wake_cnt[EV_AXP_IRQ],
@@ -1342,13 +1448,14 @@ void ui_init(void)
 static void release_menu(void)
 {
     if (!s_scr[SCR_MENU] || is_menu_group(s_cur)) return;
-    static const scr_id_t grp[] = { SCR_MENU, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT };
+    static const scr_id_t grp[] = { SCR_MENU, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT, SCR_OTA };
     for (size_t i = 0; i < sizeof(grp) / sizeof(grp[0]); i++) {
         if (s_scr[grp[i]]) { lv_obj_delete(s_scr[grp[i]]); s_scr[grp[i]] = NULL; }
     }
     /* plus aucun pointeur vers des objets détruits */
     m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = NULL;
     m_bt_info = m_confirm = NULL;
+    o_info = o_bar = o_status = o_btn = NULL;
     memset(m_sum, 0, sizeof(m_sum));
 }
 
@@ -1380,6 +1487,7 @@ bool ui_is_home(void) { return s_cur == SCR_WATCH; }
 uint32_t ui_timeout_ms(void)
 {
     uint32_t base = settings_get()->screen_timeout_s * 1000u;
+    if (ota_active()) return 10u * 60 * 1000;   /* écran allumé pendant la mise à jour */
     switch (s_cur) {
     case SCR_DETAIL: return base > 15000 ? base : 15000;
     case SCR_CALL:   return 45000;

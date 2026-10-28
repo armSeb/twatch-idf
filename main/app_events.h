@@ -20,6 +20,7 @@ typedef enum {
     EV_TIME_SYNC,
     EV_TOUCH_INT,
     EV_MEDIA,           /* lecture en cours (AMS) modifiée : media_get()     */
+    EV_OTA,             /* a = code OTA_EV_* (progression, fin, erreur)      */
     EV_COUNT,       /* écran éteint : ligne INT du FT6336 basse (toucher) */       /* t = epoch UTC, a = offset local en minutes ou INT32_MIN */
 } app_ev_type_t;
 

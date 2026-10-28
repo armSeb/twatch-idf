@@ -16,4 +16,7 @@ if(DEFINED ENV{TW_DIAG_BARE})
     idf_build_set_property(COMPILE_DEFINITIONS "TW_DIAG_BARE=1" APPEND)
 endif()
 
+# Version affichée (À propos, page de mise à jour) et comparée lors d'une OTA
+set(PROJECT_VER "0.9.0")
+
 project(twatch)

@@ -21,6 +21,7 @@ void ui_on_notif_removed(uint32_t uid);
 void ui_on_ble_state(int st);
 void ui_on_power(void);                    /* batterie / charge changés */
 void ui_release_idle(void);                /* écran éteint : libère réglages/lecture */
+void ui_on_ota(int code);                  /* EV_OTA */
 void ui_on_media(void);                    /* EV_MEDIA : lecture en cours modifiée */
 void ui_on_time_changed(void);
 void ui_show_passkey(uint32_t pk);

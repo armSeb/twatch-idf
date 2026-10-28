@@ -37,20 +37,34 @@ Consommation mesurée : ~12,6 mA de moyenne **en utilisation** (≈ 30 h sur la 
 
 Binaires fournis par la CI (onglet *Releases* ou *Actions*).
 
+**Mise à jour sans câble (OTA Wi-Fi)** — le cas normal :
+
+1. Montre : *Réglages › Mise à jour › Démarrer*. Le Bluetooth se coupe, la montre crée le
+   réseau Wi-Fi **T-Watch-MAJ** et affiche son mot de passe.
+2. iPhone ou PC : se connecter à ce réseau, ouvrir **http://192.168.4.1**, choisir
+   `twatch2020v1-app.bin`, *Envoyer*.
+3. La montre vérifie l'image (firmware T-Watch, SHA-256), l'active et redémarre.
+
+L'image est écrite dans l'autre emplacement (`ota_0`/`ota_1`) : l'ancien firmware reste
+intact jusqu'au bout. Au premier démarrage, le nouveau est « en essai » : s'il plante avant
+30 s de fonctionnement, le bootloader revient automatiquement à l'ancien. Refus sous 30 %
+de batterie hors USB ; abandon automatique après 5 min sans envoi.
+
 **Première installation** (efface tout, y compris les appairages) :
 
 ```bash
 esptool.py --chip esp32 -b 921600 write_flash 0x0 twatch2020v1-full.bin
 ```
 
-**Mise à jour** (garde les appairages et réglages) :
+**Par USB en gardant les appairages** (ou migration depuis une version sans OTA) :
 
 ```bash
-esptool.py --chip esp32 -b 921600 write_flash 0x10000 twatch2020v1-app.bin
+esptool.py --chip esp32 -b 921600 write_flash \
+  0x1000 bootloader.bin 0x8000 partition-table.bin \
+  0x10000 ota_data_initial.bin 0x20000 twatch2020v1-app.bin
 ```
 
-Après une installation complète, oublier « T-Watch » dans *Réglages › Bluetooth* de
-l'iPhone avant de réappairer.
+(`ota_data_initial.bin` remet le démarrage sur `ota_0`, là où le `.bin` est écrit.)
 
 ## Compiler
 
@@ -93,7 +107,7 @@ Si l'iPhone oublie la montre, elle efface son propre bond et relance un appairag
 | Bouton (sur cadran) | appui court | Éteint l'écran |
 | Bouton | 4 s | Coupure matérielle AXP202 |
 
-Réglages (← depuis le cadran) : un accueil par catégories avec résumé de l'état, puis
+Réglages (← depuis le cadran) : un accueil par catégories (dont **Mise à jour**) avec résumé de l'état, puis
 **Affichage** (cadran Rétro/Pub/Digital, luminosité, extinction), **Alertes** (vibreur,
 allumage sur notif — sinon mode discret —, double tap), **Bluetooth** (mode avion,
 appairage, « Oublier les appareils » derrière une confirmation), **Énergie**, **À propos**.
@@ -197,6 +211,7 @@ Parseur ANCS, nettoyage UTF-8, stockage (dédup/tri/capacité), sous `-fsanitize
 | `main/power.c` / `axp202.c` | PMIC, batterie (OCV + compensation IR), verrous PM, rétroéclairage, vibreur |
 | `main/wclock.c` | PCF8563 (UTC), fuseau, resynchro de l'horloge système |
 | `main/settings.c` | réglages NVS |
+| `main/ota.c` | mise à jour Wi-Fi : point d'accès, page web, écriture OTA, validation / retour arrière |
 | `main/fonts/` | polices générées (`tools/gen_fonts.sh`) |
 
 ## Pistes

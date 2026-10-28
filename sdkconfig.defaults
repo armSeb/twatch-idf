@@ -73,8 +73,10 @@ CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
 # ---------- LVGL 9.2 (Kconfig, pas de lv_conf.h) ----------
 CONFIG_LV_CONF_SKIP=y
 CONFIG_LV_COLOR_DEPTH_16=y
-CONFIG_LV_USE_BUILTIN_MALLOC=y
-CONFIG_LV_MEM_SIZE_KILOBYTES=72
+# Objets LVGL alloués dans le tas ESP-IDF (malloc) plutôt qu'un pool statique :
+# la RAM non utilisée sert au Bluetooth, à l'UI ou au Wi-Fi (mise à jour) selon
+# le moment, au lieu de réserver 64–72 Ko en permanence.
+CONFIG_LV_USE_CLIB_MALLOC=y
 CONFIG_LV_DEF_REFR_PERIOD=33
 CONFIG_LV_DPI_DEF=130
 CONFIG_LV_OS_NONE=y
@@ -108,3 +110,20 @@ CONFIG_ESP_PHY_RF_CAL_FULL=y
 # changeait d'adresse privée (~15 min) : reconnexion impossible, SMP timeout.
 # Le bug de résolution du contrôleur est corrigé dans IDF 5.5.6 (919c7f4).
 CONFIG_BT_NIMBLE_HOST_BASED_PRIVACY=n
+
+# ---------- Mise à jour OTA (Wi-Fi, point d'accès de la montre) ----------
+# Retour automatique à l'ancien firmware si le nouveau ne se valide pas
+# (plantage avant esp_ota_mark_app_valid_cancel_rollback).
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Wi-Fi utilisé seulement pendant la mise à jour, Bluetooth arrêté :
+# tampons réduits, pas de code Wi-Fi en IRAM (IRAM déjà pleine).
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n
+CONFIG_LWIP_IRAM_OPTIMIZATION=n
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024

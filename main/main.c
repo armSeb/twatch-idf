@@ -27,6 +27,7 @@
 #include "display.h"
 #include "ui.h"
 #include "ble.h"
+#include "ota.h"
 #include "ancs.h"
 #include "notif_store.h"
 
@@ -134,6 +135,11 @@ static void handle_event(const app_event_t *ev)
     case EV_MEDIA:
         ui_on_media();
         break;
+    case EV_OTA:
+        if (ev->a == OTA_EV_TIMEOUT) { ota_cancel(); break; }
+        screen_wake();                    /* garder l'écran sur la progression */
+        ui_on_ota(ev->a);
+        break;
     case EV_TOUCH_INT:
         if (display_tap_begin()) s_tapping = true;
         break;
@@ -197,6 +203,7 @@ static void app_task(void *arg)
             } while (xQueueReceive(s_app_q, &ev, 0) == pdTRUE);
         }
 
+        ota_tick();                       /* validation du firmware après 30 s */
         if (s_tapping) {
             int r = display_tap_poll();
             if (r) s_tapping = false;
@@ -254,6 +261,7 @@ void app_main(void)
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
+    ota_boot_check();
     settings_load();
 #if CONFIG_BT_NIMBLE_LOG_LEVEL == 0
     esp_log_level_set("NimBLE", ESP_LOG_DEBUG);   /* build de diagnostic SMP */
