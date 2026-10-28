@@ -11,6 +11,7 @@ static settings_t s_set = {
     .tz_offset_min = 60,      /* Europe/Paris hiver, corrigé par le CTS */
     .watchface = 0,
     .notif_wake = true,
+    .tap_wake = true,
 };
 
 void settings_load(void)
@@ -25,6 +26,7 @@ void settings_load(void)
     if (nvs_get_i16(h, "tz", &i16) == ESP_OK) s_set.tz_offset_min = i16;
     if (nvs_get_u8(h, "face", &u8) == ESP_OK && u8 <= 2) s_set.watchface = u8;
     if (nvs_get_u8(h, "nwake", &u8) == ESP_OK) s_set.notif_wake = u8;
+    if (nvs_get_u8(h, "tap", &u8) == ESP_OK) s_set.tap_wake = u8;
     nvs_close(h);
     ESP_LOGI(TAG, "lum=%u veille=%us vib=%d bt=%d tz=%+d min", s_set.brightness,
              s_set.screen_timeout_s, s_set.vibrate, s_set.ble_enabled, s_set.tz_offset_min);
@@ -41,6 +43,7 @@ void settings_save(void)
     nvs_set_i16(h, "tz", s_set.tz_offset_min);
     nvs_set_u8(h, "face", s_set.watchface);
     nvs_set_u8(h, "nwake", s_set.notif_wake);
+    nvs_set_u8(h, "tap", s_set.tap_wake);
     nvs_commit(h);
     nvs_close(h);
 }

@@ -17,7 +17,8 @@ typedef enum {
     EV_BLE_STATE,       /* a = ble_state_t                                   */
     EV_PASSKEY,         /* a = code à 6 chiffres à afficher                  */
     EV_PAIRING_DONE,    /* a = 0 succès, sinon code d'erreur                 */
-    EV_TIME_SYNC,       /* t = epoch UTC, a = offset local en minutes ou INT32_MIN */
+    EV_TIME_SYNC,
+    EV_TOUCH_INT,       /* écran éteint : ligne INT du FT6336 basse (toucher) */       /* t = epoch UTC, a = offset local en minutes ou INT32_MIN */
 } app_ev_type_t;
 
 typedef struct {

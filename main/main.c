@@ -60,6 +60,8 @@ bool app_post_from_isr(const app_event_t *ev, BaseType_t *hp)
     return s_app_q && xQueueSendFromISR(s_app_q, ev, hp) == pdTRUE;
 }
 
+static void wake_to_pending_or_home(void);
+
 static void screen_wake(void)
 {
     if (!display_is_on()) {
@@ -75,8 +77,7 @@ static void handle_axp(void)
     uint64_t m = power_handle_irq();
     if (m & AXP_IRQ_PEK_SHORT) {
         if (!display_is_on()) {
-            if (!ui_open_pending()) ui_go_home();   /* dernière notif non vue, sinon cadran */
-            screen_wake();
+            wake_to_pending_or_home();
         } else if (!ui_is_home()) {
             ui_go_home();
             lv_display_trigger_activity(NULL);
@@ -114,11 +115,22 @@ static void handle_notifs(void)
     }
 }
 
+static bool s_tapping;
+
+static void wake_to_pending_or_home(void)
+{
+    if (!ui_open_pending()) ui_go_home();   /* dernière notif non vue, sinon cadran */
+    screen_wake();
+}
+
 static void handle_event(const app_event_t *ev)
 {
     switch (ev->type) {
     case EV_AXP_IRQ:
         handle_axp();
+        break;
+    case EV_TOUCH_INT:
+        if (display_tap_begin()) s_tapping = true;
         break;
     case EV_NOTIF:
         handle_notifs();
@@ -168,7 +180,7 @@ static void app_task(void *arg)
             wait_ms = (next == LV_NO_TIMER_READY || next > MAX_WAIT_ON_MS) ? MAX_WAIT_ON_MS : next;
             if (wait_ms == 0) wait_ms = 1;
         } else {
-            wait_ms = IDLE_WAIT_OFF_MS;
+            wait_ms = s_tapping ? display_tap_sample_ms() : IDLE_WAIT_OFF_MS;
         }
 
         app_event_t ev;
@@ -176,6 +188,12 @@ static void app_task(void *arg)
             do {
                 handle_event(&ev);
             } while (xQueueReceive(s_app_q, &ev, 0) == pdTRUE);
+        }
+
+        if (s_tapping) {
+            int r = display_tap_poll();
+            if (r) s_tapping = false;
+            if (r == 1) wake_to_pending_or_home();
         }
 
         int64_t now = esp_timer_get_time();

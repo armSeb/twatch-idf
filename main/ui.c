@@ -58,7 +58,7 @@ static uint32_t c_uid;
 static bool c_uid_valid;
 /* menu */
 static uint32_t s_pending_hash;   /* notif reçue écran éteint, pas encore vue */
-static lv_obj_t *m_sw_nwake;
+static lv_obj_t *m_sw_nwake, *m_sw_tap;
 static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_dd_tmo, *m_dd_face, *m_toast;
 static lv_timer_t *m_toast_t;
 /* énergie */
@@ -580,6 +580,14 @@ static void menu_nwake_cb(lv_event_t *ev)
     settings_save();
 }
 
+static void menu_tap_cb(lv_event_t *ev)
+{
+    bool on = lv_obj_has_state(m_sw_tap, LV_STATE_CHECKED);
+    settings_get()->tap_wake = on;
+    settings_save();
+    display_tap_enable(on);
+}
+
 static void menu_bt_cb(lv_event_t *ev)
 {
     bool on = lv_obj_has_state(m_sw_bt, LV_STATE_CHECKED);
@@ -686,6 +694,13 @@ static void build_menu(void)
     lv_obj_add_event_cb(m_sw_nwake, menu_nwake_cb, LV_EVENT_VALUE_CHANGED, NULL);
     bubble(m_sw_nwake);
 
+    r = mk_row(col, "Double tap réveil");
+    m_sw_tap = lv_switch_create(r);
+    style_switch(m_sw_tap);
+    lv_obj_align(m_sw_tap, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_add_event_cb(m_sw_tap, menu_tap_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    bubble(m_sw_tap);
+
     r = mk_row(col, "Bluetooth");
     m_sw_bt = lv_switch_create(r);
     style_switch(m_sw_bt);
@@ -741,6 +756,8 @@ static void menu_sync_from_settings(void)
     lv_slider_set_value(m_slider, st->brightness, LV_ANIM_OFF);
     if (st->vibrate) lv_obj_add_state(m_sw_vib, LV_STATE_CHECKED);
     else lv_obj_remove_state(m_sw_vib, LV_STATE_CHECKED);
+    if (st->tap_wake) lv_obj_add_state(m_sw_tap, LV_STATE_CHECKED);
+    else lv_obj_remove_state(m_sw_tap, LV_STATE_CHECKED);
     if (st->notif_wake) lv_obj_add_state(m_sw_nwake, LV_STATE_CHECKED);
     else lv_obj_remove_state(m_sw_nwake, LV_STATE_CHECKED);
     if (st->ble_enabled) lv_obj_add_state(m_sw_bt, LV_STATE_CHECKED);
