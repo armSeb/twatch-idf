@@ -308,7 +308,12 @@ static void watch_refresh_status(void)
     else lv_label_set_text(w_notif, "");
 
     if (w_classic) face_classic_set_status(p, power_charging(), bi.state == BLE_ST_READY, bi.state != BLE_ST_OFF, n);
-    if (w_pub) face_pub_set_status(p, power_charging(), bi.state == BLE_ST_READY, bi.state != BLE_ST_OFF, n);
+    if (w_pub) {
+        int link = bi.state == BLE_ST_READY ? PUB_LINK_READY :
+                   (bi.state == BLE_ST_CONNECTED || bi.state == BLE_ST_SECURED) ? PUB_LINK_WAIT :
+                   bi.state == BLE_ST_ADVERTISING ? PUB_LINK_ADV : PUB_LINK_OFF;
+        face_pub_set_status(p, power_charging(), link, n);
+    }
 }
 
 static void clock_timer_cb(lv_timer_t *t)

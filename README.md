@@ -21,8 +21,8 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
 - Heure et fuseau (DST compris) récupérés de l'iPhone (Current Time Service), RTC PCF8563
   en UTC comme référence.
 - Trois cadrans : **Classique** (cadran ivoire, aiguilles bleuies, réserve de marche =
-  batterie, guichet date, petite seconde), **Pub** (carré plein écran, cadre acajou,
-  cadran vert bouteille et laiton, mêmes complications) et **Numérique**.
+  batterie, guichet date, petite seconde), **Pub** (carré plein écran, vert bouteille et laiton, harpe, jauge FUEL,
+  enseigne OPEN/CLOSED pour la liaison iPhone) et **Numérique**.
 - Appairage sécurisé LE Secure Connections + code à 6 chiffres, reconnexion automatique.
 - Mode avion (Bluetooth coupé → vrai light sleep), écran **Énergie** (consommation moyenne
   mesurée par le compteur coulométrique de l'AXP202).
