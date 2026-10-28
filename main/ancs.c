@@ -596,11 +596,17 @@ static void co_setup_cb(struct ble_npl_event *ev)
 /* ------------------------------------------------------------------ */
 /* Commandes : Get Notification Attributes / Get App Attributes / Action */
 /* ------------------------------------------------------------------ */
+static int s_q_dropped;    /* notifs anciennes écartées (file pleine), loggé une fois */
+
 static void q_push(const cmd_t *cmd)
 {
     if (s_qn >= QLEN) {
-        ESP_LOGW(TAG, "file pleine, UID %lu ignoré", (unsigned long)cmd->uid);
-        return;
+        /* Au rabonnement, iOS rejoue TOUT son centre de notifications (parfois
+         * des centaines), des plus anciennes aux plus récentes. On garde les
+         * plus récentes : on écarte la plus ancienne de la file. */
+        s_qh = (s_qh + 1) % QLEN;
+        s_qn--;
+        s_q_dropped++;
     }
     s_q[(s_qh + s_qn) % QLEN] = *cmd;
     s_q[(s_qh + s_qn) % QLEN].valid = true;
@@ -609,6 +615,10 @@ static void q_push(const cmd_t *cmd)
 
 static bool q_pop(cmd_t *out)
 {
+    if (s_q_dropped) {
+        ESP_LOGI(TAG, "replay iOS : %d notifications anciennes écartées (file de %d)", s_q_dropped, QLEN);
+        s_q_dropped = 0;
+    }
     while (s_qn > 0) {
         cmd_t cmd = s_q[s_qh];
         s_qh = (s_qh + 1) % QLEN;
@@ -626,7 +636,7 @@ static void q_cancel_uid(uint32_t uid)
     }
 }
 
-static void q_clear(void) { s_qh = s_qn = 0; }
+static void q_clear(void) { s_qh = s_qn = 0; s_q_dropped = 0; }
 
 bool ancs_idle(void) { return c.st == SU_READY && f.ph == PH_NONE && s_qn == 0; }
 bool ancs_ready(void) { return c.st == SU_READY; }

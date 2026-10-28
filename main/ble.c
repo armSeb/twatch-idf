@@ -48,6 +48,7 @@ void ble_store_config_init(void);   /* fourni par NimBLE (store NVS), non export
 #define ECO_MAX_TRIES   3
 
 static volatile bool s_running;
+static volatile bool s_stopping;   /* nimble_port_stop en cours : pas de publicité */
 static volatile ble_state_t s_state = BLE_ST_OFF;
 static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static uint8_t s_own_addr_type;
@@ -199,7 +200,7 @@ int ble_diag_dump(char *out, size_t len)
 
 static void adv_start(bool fast, uint32_t fast_ms)
 {
-    if (s_conn != BLE_HS_CONN_HANDLE_NONE) return;
+    if (s_conn != BLE_HS_CONN_HANDLE_NONE || s_stopping) return;
     if (ble_gap_adv_active()) ble_gap_adv_stop();
 
     struct ble_gap_adv_params p = { 0 };
@@ -316,8 +317,8 @@ static int gap_event(struct ble_gap_event *event, void *arg)
                          o[5], o[4], o[3], o[2], o[1], o[0], desc.peer_ota_addr.type,
                          i[5], i[4], i[3], i[2], i[1], i[0], desc.peer_id_addr.type,
                          desc.sec_state.bonded);
-                ble_diag("conn %02x%02x%s b=%d", o[1], o[0],
-                         memcmp(o, i, 6) ? " résolu" : "", desc.sec_state.bonded);
+                /* b=… n'est connu qu'après chiffrement : voir la ligne « chiffré » */
+                ble_diag("conn %02x%02x%s", o[1], o[0], memcmp(o, i, 6) ? " résolu" : "");
             }
             refresh_conn_params(s_conn);
 #if BLE_DEBUG_RSSI
@@ -367,7 +368,11 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_ENC_CHANGE:
         if (event->enc_change.status == 0) {
             ESP_LOGI(TAG, "lien chiffré");
-            ble_diag("chiffré");
+            if (ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0) {
+                ble_diag("chiffré b=%d auth=%d", desc.sec_state.bonded, desc.sec_state.authenticated);
+            } else {
+                ble_diag("chiffré");
+            }
             refresh_bonds();
             if (s_pairing_in_progress) {
                 s_pairing_in_progress = false;
@@ -551,6 +556,7 @@ void ble_stop(void)
 {
     if (!s_running) return;
     ble_diag("arrêt BLE");
+    s_stopping = true;
     int rc = nimble_port_stop();          /* termine les connexions, arrête la tâche hôte */
     if (rc == 0) {
         ble_npl_callout_deinit(&s_co_adv);
@@ -562,6 +568,7 @@ void ble_stop(void)
         ESP_LOGE(TAG, "nimble_port_stop rc=%d", rc);
     }
     s_running = false;
+    s_stopping = false;
     s_conn = BLE_HS_CONN_HANDLE_NONE;
     s_itvl = s_lat = s_tmo = 0;
     set_state(BLE_ST_OFF);
