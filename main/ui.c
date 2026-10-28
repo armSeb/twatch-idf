@@ -10,6 +10,7 @@
 #include "ble.h"
 #include "ancs.h"
 #include "media.h"
+#include "app_events.h"
 #include "wclock.h"
 #include "settings.h"
 #include "display.h"
@@ -1099,14 +1100,18 @@ static void about_refresh(void)
     int n = snprintf(s, sizeof(s),
              "Firmware %s\nESP-IDF %s · LVGL %d.%d.%d\n"
              "BLE %02X:%02X:%02X:%02X:%02X:%02X\nAppareils appairés : %d\n"
-             "En marche depuis %luj %02luh%02lu\nTas libre %u Ko (min %u Ko)\nLVGL %u %% (pic %u Ko)\nReset : %d",
+             "En marche depuis %luj %02luh%02lu\nTas libre %u Ko (min %u Ko)\nLVGL %u %% (pic %u Ko)\nReset : %d\n"
+             "Réveils écran éteint :\n tactile %lu · notif %lu\n média %lu · AXP %lu · BLE %lu",
              d->version, esp_get_idf_version(), LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH,
              b.addr[5], b.addr[4], b.addr[3], b.addr[2], b.addr[1], b.addr[0], b.bonds,
              (unsigned long)(up / 86400), (unsigned long)((up / 3600) % 24), (unsigned long)((up / 60) % 60),
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
              (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
              (unsigned)mm.used_pct, (unsigned)(mm.max_used / 1024),
-             (int)esp_reset_reason());
+             (int)esp_reset_reason(),
+             (unsigned long)g_wake_cnt[EV_TOUCH_INT], (unsigned long)g_wake_cnt[EV_NOTIF],
+             (unsigned long)g_wake_cnt[EV_MEDIA], (unsigned long)g_wake_cnt[EV_AXP_IRQ],
+             (unsigned long)g_wake_cnt[EV_BLE_STATE]);
     if (n > 0 && n < (int)sizeof(s)) {
         n += snprintf(s + n, sizeof(s) - n, "\n\nJournal BLE (pub. %s) :\n",
                       b.adv_active ? "active" : "INACTIVE");

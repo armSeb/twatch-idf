@@ -117,6 +117,7 @@ static void handle_notifs(void)
 }
 
 static bool s_tapping;
+uint32_t g_wake_cnt[EV_COUNT];
 
 static void wake_to_pending_or_home(void)
 {
@@ -191,6 +192,7 @@ static void app_task(void *arg)
         app_event_t ev;
         if (xQueueReceive(s_app_q, &ev, pdMS_TO_TICKS(wait_ms)) == pdTRUE) {
             do {
+                if (!display_is_on() && ev.type < EV_COUNT) g_wake_cnt[ev.type]++;
                 handle_event(&ev);
             } while (xQueueReceive(s_app_q, &ev, 0) == pdTRUE);
         }

@@ -19,7 +19,8 @@ typedef enum {
     EV_PAIRING_DONE,    /* a = 0 succès, sinon code d'erreur                 */
     EV_TIME_SYNC,
     EV_TOUCH_INT,
-    EV_MEDIA,           /* lecture en cours (AMS) modifiée : media_get()     */       /* écran éteint : ligne INT du FT6336 basse (toucher) */       /* t = epoch UTC, a = offset local en minutes ou INT32_MIN */
+    EV_MEDIA,           /* lecture en cours (AMS) modifiée : media_get()     */
+    EV_COUNT,       /* écran éteint : ligne INT du FT6336 basse (toucher) */       /* t = epoch UTC, a = offset local en minutes ou INT32_MIN */
 } app_ev_type_t;
 
 typedef struct {
@@ -27,6 +28,9 @@ typedef struct {
     int32_t a;
     int64_t t;
 } app_event_t;
+
+/* diagnostic conso : événements traités écran éteint, par type (main.c) */
+extern uint32_t g_wake_cnt[EV_COUNT];
 
 bool app_post(const app_event_t *ev);
 bool app_post_from_isr(const app_event_t *ev, BaseType_t *hp_woken);
