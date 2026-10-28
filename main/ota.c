@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_random.h"
+#include "nvs.h"
 #include "esp_system.h"
 #include "esp_ota_ops.h"
 #include "esp_app_format.h"
@@ -185,6 +186,26 @@ static esp_err_t update_post(httpd_req_t *r)
 /* toute autre adresse renvoie la page (pratique si l'iPhone teste le réseau) */
 static esp_err_t any_get(httpd_req_t *r) { return page_get(r); }
 
+/* Mot de passe du point d'accès : tiré au sort une seule fois puis gardé
+ * en NVS, pour que l'iPhone se reconnecte tout seul aux mises à jour
+ * suivantes (conservé par les OTA et la mise à jour USB sans effacement). */
+static void load_or_create_password(void)
+{
+    nvs_handle_t h;
+    size_t len = sizeof(s_pass);
+    if (nvs_open("tw", NVS_READWRITE, &h) != ESP_OK) {
+        snprintf(s_pass, sizeof(s_pass), "%08lu", (unsigned long)(esp_random() % 100000000UL));
+        return;
+    }
+    if (nvs_get_str(h, "otapw", s_pass, &len) != ESP_OK || strlen(s_pass) != 8) {
+        snprintf(s_pass, sizeof(s_pass), "%08lu", (unsigned long)(esp_random() % 100000000UL));
+        nvs_set_str(h, "otapw", s_pass);
+        nvs_commit(h);
+        ESP_LOGI(TAG, "mot de passe du point d'accès créé");
+    }
+    nvs_close(h);
+}
+
 /* ------------------------------------------------------------------ */
 /* Point d'accès                                                        */
 /* ------------------------------------------------------------------ */
@@ -224,7 +245,7 @@ const char *ota_start(void)
     if (esp_wifi_init(&wc) != ESP_OK) return "Erreur Wi-Fi (mémoire ?)";
     esp_wifi_set_storage(WIFI_STORAGE_RAM);
 
-    snprintf(s_pass, sizeof(s_pass), "%08lu", (unsigned long)(esp_random() % 100000000UL));
+    load_or_create_password();
     wifi_config_t ap = { 0 };
     strlcpy((char *)ap.ap.ssid, OTA_SSID, sizeof(ap.ap.ssid));
     ap.ap.ssid_len = strlen(OTA_SSID);

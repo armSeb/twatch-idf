@@ -2,7 +2,7 @@
  * ota.h — mise à jour du firmware par Wi-Fi, sans câble.
  *
  * La montre coupe le Bluetooth, ouvre son propre point d'accès WPA2
- * (« T-Watch-MAJ », mot de passe affiché à l'écran) et sert une page web
+ * (« T-Watch-MAJ », mot de passe fixe affiché à l'écran) et sert une page web
  * sur http://192.168.4.1 pour envoyer le fichier twatch2020v1-app.bin.
  *
  * Sécurité :

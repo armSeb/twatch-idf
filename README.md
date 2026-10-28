@@ -40,7 +40,8 @@ Binaires fournis par la CI (onglet *Releases* ou *Actions*).
 **Mise à jour sans câble (OTA Wi-Fi)** — le cas normal :
 
 1. Montre : *Réglages › Mise à jour › Démarrer*. Le Bluetooth se coupe, la montre crée le
-   réseau Wi-Fi **T-Watch-MAJ** et affiche son mot de passe.
+   réseau Wi-Fi **T-Watch-MAJ** et affiche son mot de passe (tiré au sort une fois, puis
+   toujours le même : l'iPhone se reconnecte tout seul aux mises à jour suivantes).
 2. iPhone ou PC : se connecter à ce réseau, ouvrir **http://192.168.4.1**, choisir
    `twatch2020v1-app.bin`, *Envoyer*.
 3. La montre vérifie l'image (firmware T-Watch, SHA-256), l'active et redémarre.
