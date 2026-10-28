@@ -153,14 +153,6 @@ static void draw_line(lv_layer_t *layer, float x1, float y1, float x2, float y2,
     lv_draw_line(layer, &d);
 }
 
-static void draw_poly(lv_layer_t *layer, int ox, int oy, const float (*pt)[2], int n, int w, lv_color_t c)
-{
-    for (int i = 0; i + 1 < n; i++) {
-        draw_line(layer, ox + pt[i][0], oy + pt[i][1], ox + pt[i + 1][0], oy + pt[i + 1][1], w, c,
-                  LV_OPA_COVER, true);
-    }
-}
-
 /* point de la piste « squircle » à l'angle deg (horaire depuis 12 h) */
 static void track_pt(float deg, float h, float *x, float *y, float *ux, float *uy)
 {
