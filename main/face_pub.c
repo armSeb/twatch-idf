@@ -172,24 +172,69 @@ static void track_pt(float deg, float h, float *x, float *y, float *ux, float *u
     *ux = sx; *uy = sy;
 }
 
-/* Harpe celtique stylisée (dessin original) : colonne courbe à gauche,
- * console ondulée en haut, caisse de résonance en diagonale, cordes. */
+/* ------------------------------------------------------------------ */
+/* Harpe celtique (dessin original, courbes de Bézier) : colonne galbée */
+/* à gauche, console en S, caisse de résonance bombée qui s'affine vers  */
+/* le haut, volute au sommet de la colonne, cordes qui suivent la console */
+/* ------------------------------------------------------------------ */
+typedef struct { float x, y; } fpt_t;
+
+static fpt_t bez(fpt_t a, fpt_t b, fpt_t c, fpt_t d, float t)
+{
+    float u = 1 - t;
+    float k0 = u * u * u, k1 = 3 * u * u * t, k2 = 3 * u * t * t, k3 = t * t * t;
+    return (fpt_t){ k0 * a.x + k1 * b.x + k2 * c.x + k3 * d.x, k0 * a.y + k1 * b.y + k2 * c.y + k3 * d.y };
+}
+
+/* trait courbe, largeur interpolée w0 → w1, segments courts à bouts ronds */
+static void draw_bez(lv_layer_t *layer, float ox, float oy, fpt_t a, fpt_t b, fpt_t c, fpt_t d,
+                     float w0, float w1, lv_color_t col, int n)
+{
+    fpt_t p = bez(a, b, c, d, 0);
+    for (int i = 1; i <= n; i++) {
+        float t = (float)i / n;
+        fpt_t q = bez(a, b, c, d, t);
+        int w = (int)(w0 + (w1 - w0) * (t - 0.5f / n) + 0.5f);
+        draw_line(layer, ox + p.x, oy + p.y, ox + q.x, oy + q.y, w < 1 ? 1 : w, col, LV_OPA_COVER, true);
+        p = q;
+    }
+}
+
+static void draw_disc(lv_layer_t *layer, float cx, float cy, int r, lv_color_t c);
+
 static void draw_harp(lv_layer_t *layer, int ox, int oy)
 {
-    int x0 = ox + HP_X - 20, y0 = oy + HP_Y - 26;   /* boîte 40 × 52 */
-    static const float neck[][2]   = { {4, 6}, {10, 2}, {17, 5}, {24, 9}, {31, 4}, {36, 1} };
-    static const float pillar[][2] = { {4, 6}, {1, 18}, {2, 32}, {5, 44}, {9, 51} };
-    /* cordes : du dessous de la console jusqu'à la caisse */
-    for (int i = 0; i < 6; i++) {
-        float x = 10 + i * 4.3f;
-        float ytop = (x < 24) ? 4 + (x - 10) * 0.45f + 2 : 9 - (x - 24) * 0.6f + 2;
-        float ybot = 51 - (x - 9) * (50.0f / 27.0f);     /* caisse : (9,51) → (36,1) */
-        draw_line(layer, x0 + x, y0 + ytop, x0 + x, y0 + ybot - 1, 1, C_CREAM, LV_OPA_70, false);
+    float x0 = ox + HP_X - 21, y0 = oy + HP_Y - 29;          /* boîte 42 × 58 */
+    /* caisse : du pied (bas) jusque sous l'extrémité de la console (haut droite) */
+    const fpt_t sb0 = { 14, 55 }, sb1 = { 22, 40 }, sb2 = { 31, 22 }, sb3 = { 35, 6 };
+    /* colonne : du pied, galbe vers la gauche, jusqu'à la volute */
+    const fpt_t pl0 = { 13, 55 }, pl1 = { -2, 41 }, pl2 = { -1, 17 }, pl3 = { 7, 8 };
+    /* console : S élégant de la volute à la tête de la caisse */
+    const fpt_t nk0 = { 7, 8 }, nk1 = { 15, -5 }, nk2 = { 24, 18 }, nk3 = { 36, 4 };
+
+    /* cordes d'abord (sous la structure) : de la console à la caisse */
+    for (int i = 0; i < 8; i++) {
+        float t = 0.22f + i * 0.085f;
+        fpt_t top = bez(nk0, nk1, nk2, nk3, t);
+        /* point de la caisse à la même abscisse (recherche sur la courbe) */
+        float best = 1e9f, yb = top.y;
+        for (int k = 0; k <= 40; k++) {
+            fpt_t q = bez(sb0, sb1, sb2, sb3, k / 40.0f);
+            float dx = fabsf(q.x - top.x);
+            if (dx < best) { best = dx; yb = q.y; }
+        }
+        if (yb - top.y > 6) {
+            draw_line(layer, x0 + top.x, y0 + top.y + 2, x0 + top.x, y0 + yb - 2, 1, C_CREAM, LV_OPA_60, false);
+        }
     }
-    draw_line(layer, x0 + 9, y0 + 51, x0 + 36, y0 + 1, 5, C_BRASS, LV_OPA_COVER, true);   /* caisse */
-    draw_poly(layer, x0, y0, neck, 6, 3, C_BRASS);
-    draw_poly(layer, x0, y0, pillar, 5, 3, C_BRASS);
-    draw_line(layer, x0 + 13, y0 + 39, x0 + 27, y0 + 13, 1, C_BRASS_D, LV_OPA_COVER, false); /* filet caisse */
+    draw_bez(layer, x0, y0, sb0, sb1, sb2, sb3, 8.0f, 3.5f, C_BRASS, 14);   /* caisse */
+    draw_bez(layer, x0, y0, sb0, sb1, sb2, sb3, 1.0f, 1.0f, C_BRASS_D, 14); /* filet central */
+    draw_bez(layer, x0, y0, pl0, pl1, pl2, pl3, 4.0f, 3.0f, C_BRASS, 16);   /* colonne */
+    draw_bez(layer, x0, y0, nk0, nk1, nk2, nk3, 3.5f, 3.0f, C_BRASS, 16);   /* console */
+    draw_disc(layer, x0 + 6, y0 + 7, 3, C_BRASS);                           /* volute */
+    draw_disc(layer, x0 + 6, y0 + 7, 1, C_BRASS_D);
+    draw_disc(layer, x0 + 36, y0 + 4, 2, C_BRASS);                          /* tête de caisse */
+    draw_disc(layer, x0 + 13, y0 + 55, 3, C_BRASS);                         /* pied */
 }
 
 static void draw_disc(lv_layer_t *layer, float cx, float cy, int r, lv_color_t c)

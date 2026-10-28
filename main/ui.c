@@ -198,11 +198,15 @@ static bool is_menu_group(scr_id_t id)
     return id == SCR_MENU || id == SCR_SET_DISP || id == SCR_SET_ALERT || id == SCR_SET_BT;
 }
 
+static void release_menu(void);
+static void release_media(void);
+
 static void ensure_screen(scr_id_t id)
 {
     if (s_scr[id]) return;
-    if (is_menu_group(id)) { build_menu(); menu_sync_from_settings(); }
-    else if (id == SCR_MEDIA) build_media();
+    /* un seul groupe paresseux à la fois : on libère l'autre avant de construire */
+    if (is_menu_group(id)) { release_media(); build_menu(); menu_sync_from_settings(); }
+    else if (id == SCR_MEDIA) { release_menu(); build_media(); }
 }
 
 static void show(scr_id_t id, lv_screen_load_anim_t anim)
@@ -1330,21 +1334,35 @@ void ui_init(void)
     show(SCR_WATCH, LV_SCR_LOAD_ANIM_NONE);
 }
 
+static void release_menu(void)
+{
+    if (!s_scr[SCR_MENU] || is_menu_group(s_cur)) return;
+    static const scr_id_t grp[] = { SCR_MENU, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT };
+    for (size_t i = 0; i < sizeof(grp) / sizeof(grp[0]); i++) {
+        if (s_scr[grp[i]]) { lv_obj_delete(s_scr[grp[i]]); s_scr[grp[i]] = NULL; }
+    }
+    /* plus aucun pointeur vers des objets détruits */
+    m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = NULL;
+    m_bt_info = m_confirm = NULL;
+    memset(m_sum, 0, sizeof(m_sum));
+}
+
+static void release_media(void)
+{
+    if (!s_scr[SCR_MEDIA] || s_cur == SCR_MEDIA) return;
+    if (mu_timer) { lv_timer_delete(mu_timer); mu_timer = NULL; }
+    lv_obj_delete(s_scr[SCR_MEDIA]);
+    s_scr[SCR_MEDIA] = NULL;
+    mu_box = mu_empty = mu_player = mu_title = mu_artist = mu_album = NULL;
+    mu_bar = mu_pos = mu_dur = mu_play_lbl = mu_vol = NULL;
+    memset(mu_btn, 0, sizeof(mu_btn));
+    mu_seq = UINT32_MAX;
+}
+
 void ui_release_idle(void)
 {
-    if (is_menu_group(s_cur) || s_cur == SCR_MEDIA) return;
-    if (s_scr[SCR_MENU]) {
-        static const scr_id_t grp[] = { SCR_MENU, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT };
-        for (size_t i = 0; i < sizeof(grp) / sizeof(grp[0]); i++) {
-            if (s_scr[grp[i]]) { lv_obj_delete(s_scr[grp[i]]); s_scr[grp[i]] = NULL; }
-        }
-    }
-    if (s_scr[SCR_MEDIA]) {
-        if (mu_timer) { lv_timer_delete(mu_timer); mu_timer = NULL; }
-        lv_obj_delete(s_scr[SCR_MEDIA]);
-        s_scr[SCR_MEDIA] = NULL;
-        mu_seq = UINT32_MAX;
-    }
+    release_menu();
+    release_media();
 }
 
 void ui_go_home(void)
@@ -1449,9 +1467,8 @@ void ui_on_ble_state(int st)
         if (s_cur == SCR_CALL) show(SCR_WATCH, LV_SCR_LOAD_ANIM_NONE);
     }
     watch_refresh_status();
-    /* l'interrupteur suit l'état réel de la pile */
-    if (ble_running()) lv_obj_add_state(m_sw_bt, LV_STATE_CHECKED);
-    else lv_obj_remove_state(m_sw_bt, LV_STATE_CHECKED);
+    /* l'interrupteur suit l'état réel de la pile (page construite à la demande) */
+    if (m_sw_bt) lv_obj_set_state(m_sw_bt, LV_STATE_CHECKED, ble_running());
 }
 
 void ui_on_power(void) { watch_refresh_status(); }
