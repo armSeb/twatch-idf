@@ -13,6 +13,7 @@
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "esp_http_server.h"
+#include "lwip/sockets.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "app_events.h"
@@ -98,15 +99,82 @@ static const char PAGE_TAIL[] =
     "x.onerror=function(){m.className='ko';m.textContent='Connexion perdue.';b.disabled=false;};"
     "x.send(f);}</script></body></html>";
 
+/* Réponse d'un bloc avec Content-Length et « Connection: close » : Safari iOS
+ * garde sinon plusieurs connexions ouvertes et sature le serveur. */
 static esp_err_t page_get(httpd_req_t *r)
 {
+    static char page[sizeof(PAGE_HEAD) + sizeof(PAGE_TAIL) + 40];
     s_last_activity_us = esp_timer_get_time();
+    int n = snprintf(page, sizeof(page), "%s%s%s", PAGE_HEAD, esp_app_get_description()->version, PAGE_TAIL);
     httpd_resp_set_type(r, "text/html; charset=utf-8");
     httpd_resp_set_hdr(r, "Cache-Control", "no-store");
-    httpd_resp_send_chunk(r, PAGE_HEAD, HTTPD_RESP_USE_STRLEN);
-    httpd_resp_send_chunk(r, esp_app_get_description()->version, HTTPD_RESP_USE_STRLEN);
-    httpd_resp_send_chunk(r, PAGE_TAIL, HTTPD_RESP_USE_STRLEN);
-    return httpd_resp_send_chunk(r, NULL, 0);
+    httpd_resp_set_hdr(r, "Connection", "close");
+    return httpd_resp_send(r, page, n);
+}
+
+/* Sondes « y a-t-il Internet ? » d'iOS / Android : on répond « oui », sinon le
+ * téléphone traite le réseau comme un portail captif ou le boude. */
+static esp_err_t probe_apple(httpd_req_t *r)
+{
+    httpd_resp_set_type(r, "text/html");
+    httpd_resp_set_hdr(r, "Connection", "close");
+    return httpd_resp_sendstr(r, "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
+}
+
+static esp_err_t probe_204(httpd_req_t *r)
+{
+    httpd_resp_set_status(r, "204 No Content");
+    httpd_resp_set_hdr(r, "Connection", "close");
+    return httpd_resp_send(r, NULL, 0);
+}
+
+static esp_err_t not_found(httpd_req_t *r)
+{
+    httpd_resp_set_status(r, "404 Not Found");
+    httpd_resp_set_hdr(r, "Connection", "close");
+    return httpd_resp_send(r, NULL, 0);
+}
+
+/* ------------------------------------------------------------------ */
+/* Mini serveur DNS : toute question de type A → 192.168.4.1.           */
+/* Le téléphone résout ainsi captive.apple.com vers la montre, voit la   */
+/* réponse « Success » et considère le réseau comme normal.             */
+/* ------------------------------------------------------------------ */
+static TaskHandle_t s_dns_task;
+
+static void dns_task(void *arg)
+{
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock < 0) { s_dns_task = NULL; vTaskDelete(NULL); return; }
+    struct sockaddr_in a = { .sin_family = AF_INET, .sin_port = htons(53), .sin_addr.s_addr = htonl(INADDR_ANY) };
+    struct timeval tv = { .tv_sec = 1 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    if (bind(sock, (struct sockaddr *)&a, sizeof(a)) < 0) { close(sock); s_dns_task = NULL; vTaskDelete(NULL); return; }
+    static uint8_t b[512];
+    while (s_active) {
+        struct sockaddr_in from;
+        socklen_t fl = sizeof(from);
+        int n = recvfrom(sock, b, sizeof(b), 0, (struct sockaddr *)&from, &fl);
+        if (n < 12 || (b[2] & 0x80) || b[4] != 0 || b[5] != 1) continue;   /* une seule question */
+        int q = 12;
+        while (q < n && b[q] != 0) q += b[q] + 1;                          /* nom de domaine */
+        q += 5;                                                              /* 0 final + type + classe */
+        if (q > n || q + 16 > (int)sizeof(b)) continue;
+        bool is_a = b[q - 4] == 0 && b[q - 3] == 1;
+        b[2] = 0x81; b[3] = 0x80;                                            /* réponse, sans erreur */
+        b[6] = 0; b[7] = is_a ? 1 : 0;                                       /* nb de réponses */
+        b[8] = b[9] = b[10] = b[11] = 0;
+        int len = q;
+        if (is_a) {
+            static const uint8_t ans[] = { 0xC0, 0x0C, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 192, 168, 4, 1 };
+            memcpy(b + q, ans, sizeof(ans));
+            len += sizeof(ans);
+        }
+        sendto(sock, b, len, 0, (struct sockaddr *)&from, fl);
+    }
+    close(sock);
+    s_dns_task = NULL;
+    vTaskDelete(NULL);
 }
 
 static void post_ev(int32_t code)
@@ -184,7 +252,6 @@ static esp_err_t update_post(httpd_req_t *r)
 }
 
 /* toute autre adresse renvoie la page (pratique si l'iPhone teste le réseau) */
-static esp_err_t any_get(httpd_req_t *r) { return page_get(r); }
 
 /* Mot de passe du point d'accès : tiré au sort une seule fois puis gardé
  * en NVS, pour que l'iPhone se reconnecte tout seul aux mises à jour
@@ -237,7 +304,16 @@ const char *ota_start(void)
         esp_netif_init();
         esp_err_t e = esp_event_loop_create_default();
         if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) return "Erreur réseau (boucle d'événements)";
-        esp_netif_create_default_wifi_ap();
+        esp_netif_t *apif = esp_netif_create_default_wifi_ap();
+        /* le DHCP annonce la montre comme serveur DNS (voir dns_task) */
+        esp_netif_dhcps_stop(apif);
+        esp_netif_dns_info_t dns = { 0 };
+        dns.ip.type = ESP_IPADDR_TYPE_V4;
+        dns.ip.u_addr.ip4.addr = ESP_IP4TOADDR(192, 168, 4, 1);
+        esp_netif_set_dns_info(apif, ESP_NETIF_DNS_MAIN, &dns);
+        uint8_t offer_dns = 1;
+        esp_netif_dhcps_option(apif, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER, &offer_dns, sizeof(offer_dns));
+        esp_netif_dhcps_start(apif);
         esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_AP_STACONNECTED, wifi_event, NULL);
         net_inited = true;
     }
@@ -259,14 +335,23 @@ const char *ota_start(void)
 
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
     hc.stack_size = 6144;
-    hc.max_uri_handlers = 4;
+    hc.max_uri_handlers = 8;
     hc.recv_wait_timeout = 10;
+    hc.lru_purge_enable = true;        /* Safari ouvre des connexions en avance : on recycle */
     hc.uri_match_fn = httpd_uri_match_wildcard;
     if (httpd_start(&s_httpd, &hc) != ESP_OK) return "Le serveur web n'a pas démarré";
-    static const httpd_uri_t u_upd = { .uri = "/update", .method = HTTP_POST, .handler = update_post };
-    static const httpd_uri_t u_any = { .uri = "/*", .method = HTTP_GET, .handler = any_get };
-    httpd_register_uri_handler(s_httpd, &u_upd);
-    httpd_register_uri_handler(s_httpd, &u_any);
+    static const httpd_uri_t uris[] = {
+        { .uri = "/update", .method = HTTP_POST, .handler = update_post },
+        { .uri = "/", .method = HTTP_GET, .handler = page_get },
+        { .uri = "/index.html", .method = HTTP_GET, .handler = page_get },
+        { .uri = "/hotspot-detect.html", .method = HTTP_GET, .handler = probe_apple },
+        { .uri = "/library/test/success.html", .method = HTTP_GET, .handler = probe_apple },
+        { .uri = "/generate_204", .method = HTTP_GET, .handler = probe_204 },
+        { .uri = "/*", .method = HTTP_GET, .handler = not_found },
+    };
+    for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) httpd_register_uri_handler(s_httpd, &uris[i]);
+    s_active = true;                   /* avant la tâche DNS, qui boucle tant que actif */
+    xTaskCreate(dns_task, "dns", 3072, NULL, 4, &s_dns_task);
 
     s_last_activity_us = esp_timer_get_time();
     if (!s_idle_timer) {

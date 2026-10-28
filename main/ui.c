@@ -993,7 +993,7 @@ static void ota_reboot_cb(lv_timer_t *t) { ota_reboot_now(); }
 static void ota_ui_running(void)
 {
     char b[200];
-    snprintf(b, sizeof(b), "1. Wi-Fi « %s »\n    mot de passe  %s\n2. Ouvrir 192.168.4.1\n3. Envoyer le fichier .bin",
+    snprintf(b, sizeof(b), "1. Wi-Fi « %s »\n    mot de passe  %s\n2. Ouvrir http://192.168.4.1\n3. Envoyer le fichier .bin",
              ota_ssid(), ota_password());
     lv_label_set_text(o_info, b);
     lv_obj_set_style_text_color(o_status, C_DIM, 0);
@@ -1041,7 +1041,7 @@ void ui_on_ota(int code)
         lv_obj_set_style_text_color(o_status, C_FG, 0);
         lv_label_set_text(o_status, b);
     } else if (code == OTA_EV_CLIENT) {
-        lv_label_set_text(o_status, "Appareil connecté : ouvrir 192.168.4.1");
+        lv_label_set_text(o_status, "Appareil connecté : ouvrir http://192.168.4.1");
     } else if (code == OTA_EV_DONE) {
         lv_bar_set_value(o_bar, 100, LV_ANIM_OFF);
         snprintf(b, sizeof(b), LV_SYMBOL_OK " Version %s installée\nRedémarrage…", ota_new_version());
