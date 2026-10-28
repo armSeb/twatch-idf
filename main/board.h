@@ -66,7 +66,11 @@
  * LVGL on prend un verrou CPU_FREQ_MAX. Si instabilité BLE constatée, passer
  * MIN à 80 pour isoler le problème. */
 #define POWER_CPU_MAX_MHZ       240   /* uniquement écran allumé (verrou CPU_FREQ_MAX) */
-#define POWER_CPU_MIN_MHZ       40   /* 80 si doute : la vraie cause du 0x208 était le contrôleur d'IDF 5.5.3 */
+/* 10 MHz = quartz 40 MHz / 4. Le contrôleur BT relâche son verrou APB_MAX
+ * pendant le modem sleep (bt.c, btdm_sleep_enter_phase2) : écran éteint et
+ * radio endormie, le CPU tombe à 10 MHz au lieu de 40. Mini accepté par
+ * esp_pm sur ESP32 : 10 MHz (REF_TICK). Revenir à 40 si le BLE devient instable. */
+#define POWER_CPU_MIN_MHZ       10
 
 /* Batterie d'origine T-Watch 2020 */
 #define BATTERY_CAPACITY_MAH    380
