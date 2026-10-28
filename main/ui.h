@@ -20,6 +20,7 @@ bool ui_open_pending(void);                /* écran éteint : prépare la derni
 void ui_on_notif_removed(uint32_t uid);
 void ui_on_ble_state(int st);
 void ui_on_power(void);                    /* batterie / charge changés */
+void ui_on_media(void);                    /* EV_MEDIA : lecture en cours modifiée */
 void ui_on_time_changed(void);
 void ui_show_passkey(uint32_t pk);
 void ui_pairing_done(int status);

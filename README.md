@@ -15,6 +15,9 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
 - Notifications iOS (ANCS) : liste triée, détail, actions iOS (*Effacer*, *Répondre*,
   *Accepter*/*Refuser* un appel), suppression synchronisée dans les deux sens, vibreur.
 - Écran d'appel entrant dédié.
+- **Lecture en cours** (Apple Media Service) : titre, artiste, album, progression, volume et
+  commandes lecture/pause/précédent/suivant/volume, pour toute app audio iOS (Spotify,
+  Musique, Deezer, podcasts…). AMS ne transmet pas la pochette.
 - Heure et fuseau (DST compris) récupérés de l'iPhone (Current Time Service), RTC PCF8563
   en UTC comme référence.
 - Trois cadrans : **Classique** (cadran ivoire, aiguilles bleuies, réserve de marche =
@@ -82,6 +85,7 @@ Si l'iPhone oublie la montre, elle efface son propre bond et relance un appairag
 |---|---|---|
 | Cadran | ↑ | Liste des notifications |
 | Cadran | ← | Réglages |
+| Cadran | ↓ | Lecture en cours |
 | Partout | → | Retour |
 | Écran éteint | double tap | Allume l'écran (comme le bouton) |
 | Bouton (écran éteint) | appui court | Allume l'écran (sur la dernière notif non vue en mode discret) |
@@ -183,7 +187,7 @@ Parseur ANCS, nettoyage UTF-8, stockage (dédup/tri/capacité), sous `-fsanitize
 |---|---|
 | `main/main.c` | `app_main`, tâche app, boucle d'événements, veille écran |
 | `main/ble.c` | NimBLE : GAP, sécurité, publicité, params éco, service batterie, mode avion |
-| `main/ancs.c` / `ancs_parse.c` | client ANCS + CTS ; réassemblage Data Source |
+| `main/ancs.c` / `ancs_parse.c` | client ANCS + CTS + AMS (`media.h`) ; réassemblage Data Source |
 | `main/notif_store.c` | stockage, tri par date, dédup, nettoyage UTF-8 |
 | `main/ui.c` / `face_classic.c` / `face_pub.c` | écrans LVGL, navigation ; cadrans analogiques |
 | `main/display.c` | ST7789 (`esp_lcd`, SPI DMA), FT6336, glue LVGL, DFS écran allumé |

@@ -129,6 +129,9 @@ static void handle_event(const app_event_t *ev)
     case EV_AXP_IRQ:
         handle_axp();
         break;
+    case EV_MEDIA:
+        ui_on_media();
+        break;
     case EV_TOUCH_INT:
         if (display_tap_begin()) s_tapping = true;
         break;

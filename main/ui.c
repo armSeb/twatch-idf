@@ -9,6 +9,7 @@
 #include "power.h"
 #include "ble.h"
 #include "ancs.h"
+#include "media.h"
 #include "wclock.h"
 #include "settings.h"
 #include "display.h"
@@ -34,7 +35,7 @@
 #define ANIM_MS 140
 
 typedef enum {
-    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_COUNT
+    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_MEDIA, SCR_COUNT
 } scr_id_t;
 
 static lv_obj_t *s_scr[SCR_COUNT];
@@ -64,6 +65,8 @@ static lv_timer_t *m_toast_t;
 /* énergie */
 static lv_obj_t *p_lbl[6];
 static lv_timer_t *p_timer;
+static lv_timer_t *mu_timer;
+static void media_refresh(bool full);
 /* appairage */
 static lv_obj_t *pa_code, *pa_hint;
 static lv_timer_t *pa_timer;
@@ -184,6 +187,8 @@ static void show(scr_id_t id, lv_screen_load_anim_t anim)
     if (id == SCR_LIST && l_dirty) list_rebuild();
     if (id == SCR_POWER) { power_refresh(); lv_timer_resume(p_timer); }
     else lv_timer_pause(p_timer);
+    if (id == SCR_MEDIA) { media_refresh(true); lv_timer_resume(mu_timer); }
+    else lv_timer_pause(mu_timer);
     if (id == SCR_ABOUT) about_refresh();
     if (id == SCR_WATCH) { watch_update_time(true); watch_refresh_status(); }
     s_cur = id;
@@ -202,6 +207,12 @@ static void gesture_cb(lv_event_t *e)
     case SCR_WATCH:
         if (dir == LV_DIR_TOP) show(SCR_LIST, LV_SCR_LOAD_ANIM_MOVE_TOP);
         else if (dir == LV_DIR_LEFT) show(SCR_MENU, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+        else if (dir == LV_DIR_BOTTOM) show(SCR_MEDIA, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
+        else handled = false;
+        break;
+    case SCR_MEDIA:
+        if (dir == LV_DIR_TOP) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_TOP);
+        else if (dir == LV_DIR_RIGHT) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
         else handled = false;
         break;
     case SCR_LIST:
@@ -910,6 +921,190 @@ static void build_about(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* Lecture en cours (AMS)                                               */
+/* ------------------------------------------------------------------ */
+static lv_obj_t *mu_box, *mu_empty, *mu_player, *mu_title, *mu_artist, *mu_album;
+static lv_obj_t *mu_bar, *mu_pos, *mu_dur, *mu_play_lbl, *mu_vol;
+static lv_obj_t *mu_btn[5];          /* prev, play, next, vol-, vol+ */
+static uint32_t mu_seq = UINT32_MAX;
+
+static void fmt_mmss(char *b, size_t n, float sec)
+{
+    int t = sec > 0 ? (int)sec : 0;
+    if (t >= 3600) snprintf(b, n, "%d:%02d:%02d", t / 3600, (t / 60) % 60, t % 60);
+    else snprintf(b, n, "%d:%02d", t / 60, t % 60);
+}
+
+static void set_clean_text(lv_obj_t *l, const char *src)
+{
+    char b[MEDIA_TXT_MAX];
+    strlcpy(b, src, sizeof(b));
+    text_sanitize(b);              /* UTF-8 tronqué, émojis : comme les notifications */
+    lv_label_set_text(l, b);
+}
+
+static void media_btn_cb(lv_event_t *ev)
+{
+    media_command((uint8_t)(uintptr_t)lv_event_get_user_data(ev));
+}
+
+static void media_refresh(bool full)
+{
+    media_info_t m;
+    media_get(&m);
+    bool has = m.available && (m.title[0] || m.player[0]);
+    if (!has) {
+        lv_obj_add_flag(mu_box, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(mu_empty, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(mu_empty, m.available ? LV_SYMBOL_AUDIO "\n\nAucune lecture en cours"
+                                                : LV_SYMBOL_AUDIO "\n\niPhone non connecté");
+        mu_seq = UINT32_MAX;
+        return;
+    }
+    lv_obj_remove_flag(mu_box, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(mu_empty, LV_OBJ_FLAG_HIDDEN);
+
+    char b[24];
+    if (full || m.seq != mu_seq) {
+        char pl[sizeof(m.player)], pl2[sizeof(m.player) + 8];
+        strlcpy(pl, m.player[0] ? m.player : "Lecture", sizeof(pl));
+        text_sanitize(pl);             /* avant l'icône : le nettoyage retire les glyphes privés */
+        snprintf(pl2, sizeof(pl2), LV_SYMBOL_AUDIO "  %s", pl);
+        lv_label_set_text(mu_player, pl2);
+        set_clean_text(mu_title, m.title[0] ? m.title : "—");
+        set_clean_text(mu_artist, m.artist);
+        set_clean_text(mu_album, m.album);
+        bool playing = m.state == MEDIA_PLAYING || m.state == MEDIA_FFWD || m.state == MEDIA_REWINDING;
+        lv_label_set_text(mu_play_lbl, playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+        if (m.duration_s > 0) fmt_mmss(b, sizeof(b), m.duration_s);
+        else b[0] = 0;
+        lv_label_set_text(mu_dur, b);
+        if (m.volume >= 0) {
+            lv_obj_remove_flag(mu_vol, LV_OBJ_FLAG_HIDDEN);
+            lv_bar_set_value(mu_vol, (int32_t)(m.volume * 100 + 0.5f), LV_ANIM_OFF);
+        } else {
+            lv_obj_add_flag(mu_vol, LV_OBJ_FLAG_HIDDEN);
+        }
+        /* commandes annoncées par l'app (liste vide = inconnue : tout permis) */
+        static const uint8_t ids[5] = { MEDIA_CMD_PREV, MEDIA_CMD_TOGGLE, MEDIA_CMD_NEXT,
+                                        MEDIA_CMD_VOL_DOWN, MEDIA_CMD_VOL_UP };
+        for (int i = 0; i < 5; i++) {
+            bool ok = !m.cmds || (m.cmds & (1u << ids[i])) ||
+                      (ids[i] == MEDIA_CMD_TOGGLE && (m.cmds & ((1u << MEDIA_CMD_PLAY) | (1u << MEDIA_CMD_PAUSE))));
+            if (ok) lv_obj_remove_state(mu_btn[i], LV_STATE_DISABLED);
+            else lv_obj_add_state(mu_btn[i], LV_STATE_DISABLED);
+        }
+        mu_seq = m.seq;
+    }
+    float pos = media_position_s(&m);
+    fmt_mmss(b, sizeof(b), pos);
+    lv_label_set_text(mu_pos, b);
+    lv_bar_set_value(mu_bar, m.duration_s > 0 ? (int32_t)(pos * 1000 / m.duration_s) : 0, LV_ANIM_OFF);
+}
+
+static void media_timer_cb(lv_timer_t *t) { media_refresh(false); }
+
+static lv_obj_t *media_button(lv_obj_t *p, const char *sym, int size, lv_color_t bg, uint8_t cmd,
+                              const lv_font_t *font, lv_obj_t **lbl_out)
+{
+    lv_obj_t *b = lv_button_create(p);
+    lv_obj_set_size(b, size, size);
+    lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(b, bg, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_bg_opa(b, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_add_event_cb(b, media_btn_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)cmd);
+    lv_obj_set_ext_click_area(b, 6);
+    bubble(b);
+    lv_obj_t *l = mk_label(b, font, C_FG, sym);
+    lv_obj_center(l);
+    if (lbl_out) *lbl_out = l;
+    return b;
+}
+
+static void build_media(void)
+{
+    lv_obj_t *s = s_scr[SCR_MEDIA] = mk_screen();
+
+    mu_empty = mk_label(s, &font_text_16, C_DIM, "");
+    lv_label_set_long_mode(mu_empty, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(mu_empty, 210);
+    lv_obj_set_style_text_align(mu_empty, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_center(mu_empty);
+
+    mu_box = mk_container(s);
+    lv_obj_set_size(mu_box, BOARD_LCD_W, BOARD_LCD_H);
+    lv_obj_remove_flag(mu_box, LV_OBJ_FLAG_SCROLLABLE);
+
+    mu_player = mk_label(mu_box, &font_text_16, C_DIM, "");
+    lv_label_set_long_mode(mu_player, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(mu_player, 200);
+    lv_obj_set_style_text_align(mu_player, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(mu_player, LV_ALIGN_TOP_MID, 0, 6);
+
+    mu_title = mk_label(mu_box, &font_title_20, C_FG, "");
+    lv_label_set_long_mode(mu_title, LV_LABEL_LONG_DOT);
+    lv_obj_set_size(mu_title, 216, 2 * lv_font_get_line_height(&font_title_20));
+    lv_obj_set_style_text_align(mu_title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(mu_title, LV_ALIGN_TOP_MID, 0, 28);
+
+    mu_artist = mk_label(mu_box, &font_text_16, C_ACC, "");
+    lv_label_set_long_mode(mu_artist, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(mu_artist, 216);
+    lv_obj_set_style_text_align(mu_artist, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(mu_artist, LV_ALIGN_TOP_MID, 0, 80);
+
+    mu_album = mk_label(mu_box, &font_small_11, C_DIM, "");
+    lv_label_set_long_mode(mu_album, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(mu_album, 216);
+    lv_obj_set_style_text_align(mu_album, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(mu_album, LV_ALIGN_TOP_MID, 0, 101);
+
+    mu_bar = lv_bar_create(mu_box);
+    lv_obj_set_size(mu_bar, 200, 5);
+    lv_obj_align(mu_bar, LV_ALIGN_TOP_MID, 0, 122);
+    lv_bar_set_range(mu_bar, 0, 1000);
+    lv_obj_set_style_bg_color(mu_bar, C_OFF, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(mu_bar, C_FG, LV_PART_INDICATOR);
+    bubble(mu_bar);
+    mu_pos = mk_label(mu_box, &font_small_11, C_DIM, "");
+    lv_obj_align(mu_pos, LV_ALIGN_TOP_LEFT, 20, 130);
+    mu_dur = mk_label(mu_box, &font_small_11, C_DIM, "");
+    lv_obj_align(mu_dur, LV_ALIGN_TOP_RIGHT, -20, 130);
+
+    mu_btn[1] = media_button(mu_box, LV_SYMBOL_PLAY, 62, C_ACC, MEDIA_CMD_TOGGLE, &font_title_20, &mu_play_lbl);
+    lv_obj_align(mu_btn[1], LV_ALIGN_TOP_MID, 0, 148);
+    mu_btn[0] = media_button(mu_box, LV_SYMBOL_PREV, 48, C_CARD, MEDIA_CMD_PREV, &font_text_16, NULL);
+    lv_obj_align(mu_btn[0], LV_ALIGN_TOP_MID, -70, 155);
+    mu_btn[2] = media_button(mu_box, LV_SYMBOL_NEXT, 48, C_CARD, MEDIA_CMD_NEXT, &font_text_16, NULL);
+    lv_obj_align(mu_btn[2], LV_ALIGN_TOP_MID, 70, 155);
+
+    mu_btn[3] = media_button(mu_box, LV_SYMBOL_VOLUME_MID, 30, C_CARD, MEDIA_CMD_VOL_DOWN, &font_small_11, NULL);
+    lv_obj_align(mu_btn[3], LV_ALIGN_BOTTOM_LEFT, 22, -4);
+    lv_obj_t *l3 = lv_obj_get_child(mu_btn[3], 0);
+    lv_obj_set_style_text_font(l3, &font_text_16, 0);
+    lv_label_set_text(l3, "-");
+    mu_btn[4] = media_button(mu_box, LV_SYMBOL_VOLUME_MAX, 30, C_CARD, MEDIA_CMD_VOL_UP, &font_text_16, NULL);
+    lv_obj_align(mu_btn[4], LV_ALIGN_BOTTOM_RIGHT, -22, -4);
+    lv_label_set_text(lv_obj_get_child(mu_btn[4], 0), "+");
+    mu_vol = lv_bar_create(mu_box);
+    lv_obj_set_size(mu_vol, 110, 4);
+    lv_obj_align(mu_vol, LV_ALIGN_BOTTOM_MID, 0, -17);
+    lv_bar_set_range(mu_vol, 0, 100);
+    lv_obj_set_style_bg_color(mu_vol, C_OFF, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(mu_vol, C_DIM, LV_PART_INDICATOR);
+    bubble(mu_vol);
+
+    mu_timer = lv_timer_create(media_timer_cb, 1000, NULL);
+    lv_timer_pause(mu_timer);
+}
+
+void ui_on_media(void)
+{
+    if (s_cur == SCR_MEDIA) media_refresh(false);
+}
+
+/* ------------------------------------------------------------------ */
 /* API                                                                  */
 /* ------------------------------------------------------------------ */
 void ui_init(void)
@@ -926,6 +1121,7 @@ void ui_init(void)
     build_power();
     build_pair();
     build_about();
+    build_media();
     menu_sync_from_settings();
     show(SCR_WATCH, LV_SCR_LOAD_ANIM_NONE);
 }
