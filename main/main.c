@@ -83,6 +83,7 @@ static void handle_axp(void)
             lv_display_trigger_activity(NULL);
         } else {
             display_set_on(false);
+            ui_release_idle();
         }
     }
     if (m & AXP_IRQ_PEK_LONG) {
@@ -178,6 +179,7 @@ static void app_task(void *arg)
             if (lv_display_get_inactive_time(NULL) > ui_timeout_ms()) {
                 display_set_on(false);
                 ui_go_home();            /* sans animation : écran éteint */
+                ui_release_idle();
                 continue;
             }
             wait_ms = (next == LV_NO_TIMER_READY || next > MAX_WAIT_ON_MS) ? MAX_WAIT_ON_MS : next;

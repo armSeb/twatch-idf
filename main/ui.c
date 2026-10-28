@@ -31,11 +31,12 @@
 #define C_BAD   lv_color_hex(0xEF4444)
 
 #define SYM_COMMENTS "\xEF\x82\x86"   /* U+F086 */
+#define SYM_EYE      "\xEF\x81\xAE"   /* U+F06E */
 
 #define ANIM_MS 140
 
 typedef enum {
-    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_MEDIA, SCR_COUNT
+    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_MEDIA, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT, SCR_COUNT
 } scr_id_t;
 
 static lv_obj_t *s_scr[SCR_COUNT];
@@ -60,7 +61,11 @@ static bool c_uid_valid;
 /* menu */
 static uint32_t s_pending_hash;   /* notif reçue écran éteint, pas encore vue */
 static lv_obj_t *m_sw_nwake, *m_sw_tap;
-static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_dd_tmo, *m_dd_face, *m_toast;
+static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_toast;
+static lv_obj_t *m_sum[5], *m_bt_info, *m_confirm;
+static void menu_bt_refresh(void);
+static scr_id_t menu_parent(scr_id_t id);
+static void menu_refresh_summaries(void);
 static lv_timer_t *m_toast_t;
 /* énergie */
 static lv_obj_t *p_lbl[6];
@@ -182,14 +187,35 @@ static void fmt_when(const char *d, char *out, size_t osz)
 static void power_refresh(void);
 static void about_refresh(void);
 
+static void build_menu(void);
+static void build_media(void);
+static void menu_sync_from_settings(void);
+
+/* Réglages et lecture en cours : construits à la demande, libérés écran
+ * éteint (ui_release_idle) pour ménager le pool LVGL de 64 Ko. */
+static bool is_menu_group(scr_id_t id)
+{
+    return id == SCR_MENU || id == SCR_SET_DISP || id == SCR_SET_ALERT || id == SCR_SET_BT;
+}
+
+static void ensure_screen(scr_id_t id)
+{
+    if (s_scr[id]) return;
+    if (is_menu_group(id)) { build_menu(); menu_sync_from_settings(); }
+    else if (id == SCR_MEDIA) build_media();
+}
+
 static void show(scr_id_t id, lv_screen_load_anim_t anim)
 {
+    ensure_screen(id);
     if (id == SCR_LIST && l_dirty) list_rebuild();
     if (id == SCR_POWER) { power_refresh(); lv_timer_resume(p_timer); }
     else lv_timer_pause(p_timer);
     if (id == SCR_MEDIA) { media_refresh(true); lv_timer_resume(mu_timer); }
-    else lv_timer_pause(mu_timer);
+    else if (mu_timer) lv_timer_pause(mu_timer);
     if (id == SCR_ABOUT) about_refresh();
+    if (id == SCR_MENU) menu_refresh_summaries();
+    if (id == SCR_SET_BT) { menu_bt_refresh(); lv_obj_add_flag(m_confirm, LV_OBJ_FLAG_HIDDEN); }
     if (id == SCR_WATCH) { watch_update_time(true); watch_refresh_status(); }
     s_cur = id;
     if (!display_is_on() || lv_screen_active() == s_scr[id]) anim = LV_SCR_LOAD_ANIM_NONE;
@@ -226,12 +252,12 @@ static void gesture_cb(lv_event_t *e)
         break;
     case SCR_MENU:
     case SCR_PAIR:
-        if (dir == LV_DIR_RIGHT) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
-        else handled = false;
-        break;
     case SCR_POWER:
     case SCR_ABOUT:
-        if (dir == LV_DIR_RIGHT) show(SCR_MENU, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
+    case SCR_SET_DISP:
+    case SCR_SET_ALERT:
+    case SCR_SET_BT:
+        if (dir == LV_DIR_RIGHT) show(menu_parent(s_cur), LV_SCR_LOAD_ANIM_MOVE_RIGHT);
         else handled = false;
         break;
     default:
@@ -613,9 +639,13 @@ static void menu_bt_cb(lv_event_t *ev)
     else { ble_stop(); toast("Mode avion"); }
 }
 
+/* Faces dans l'ordre du sélecteur → valeur settings.watchface */
+static const uint8_t FACE_ORDER[3] = { FACE_CLASSIC, FACE_PUB, FACE_DIGITAL };
+static const char *const FACE_NAMES[3] = { "Rétro", "Pub", "Digital" };
+
 static void menu_tmo_cb(lv_event_t *ev)
 {
-    uint32_t i = lv_dropdown_get_selected(m_dd_tmo);
+    uint32_t i = lv_buttonmatrix_get_selected_button(m_bm_tmo);
     if (i < sizeof(TMO_VALUES)) {
         settings_get()->screen_timeout_s = TMO_VALUES[i];
         settings_save();
@@ -624,7 +654,9 @@ static void menu_tmo_cb(lv_event_t *ev)
 
 static void menu_face_cb(lv_event_t *ev)
 {
-    settings_get()->watchface = (uint8_t)lv_dropdown_get_selected(m_dd_face);
+    uint32_t i = lv_buttonmatrix_get_selected_button(m_bm_face);
+    if (i >= 3) return;
+    settings_get()->watchface = FACE_ORDER[i];
     settings_save();
     apply_face();
     watch_update_time(true);
@@ -635,7 +667,7 @@ static void menu_nav_cb(lv_event_t *ev)
 {
     scr_id_t id = (scr_id_t)(uintptr_t)lv_event_get_user_data(ev);
     if (id == SCR_PAIR) {
-        if (!ble_running()) { toast("Activez le Bluetooth"); return; }
+        if (!ble_running()) { toast("Activez d'abord le Bluetooth"); return; }
         lv_label_set_text(pa_code, "------");
         lv_obj_set_style_text_color(pa_code, C_DIM, 0);
         lv_label_set_text(pa_hint, "iPhone : Réglages > Bluetooth\n> T-Watch, puis « Jumeler »");
@@ -644,16 +676,39 @@ static void menu_nav_cb(lv_event_t *ev)
     show(id, LV_SCR_LOAD_ANIM_MOVE_LEFT);
 }
 
-static void menu_forget_cb(lv_event_t *ev)
+/* écran parent (retour) de chaque page de réglages */
+static scr_id_t menu_parent(scr_id_t id)
 {
-    if (lv_event_get_code(ev) == LV_EVENT_LONG_PRESSED) {
-        ble_forget_all();
-        ns_invalidate_uids();
-        power_vibrate(VIB_SHORT);
-        toast("Appairages effacés");
-    } else {
-        toast("Appui long pour confirmer");
+    switch (id) {
+    case SCR_SET_DISP: case SCR_SET_ALERT: case SCR_SET_BT:
+    case SCR_POWER: case SCR_ABOUT:        return SCR_MENU;
+    case SCR_PAIR:                         return SCR_SET_BT;
+    default:                               return SCR_WATCH;
     }
+}
+
+static void back_cb(lv_event_t *ev)
+{
+    show(menu_parent(s_cur), LV_SCR_LOAD_ANIM_MOVE_RIGHT);
+}
+
+/* Confirmation « oublier les appareils » (boîte modale) */
+static void confirm_cb(lv_event_t *ev)
+{
+    bool ok = (uintptr_t)lv_event_get_user_data(ev) != 0;
+    lv_obj_add_flag(m_confirm, LV_OBJ_FLAG_HIDDEN);
+    if (!ok) return;
+    ble_forget_all();
+    ns_invalidate_uids();
+    power_vibrate(VIB_SHORT);
+    toast("Appareils oubliés");
+    menu_bt_refresh();
+}
+
+static void forget_cb(lv_event_t *ev)
+{
+    lv_obj_remove_flag(m_confirm, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(m_confirm);
 }
 
 static void style_switch(lv_obj_t *sw)
@@ -664,123 +719,269 @@ static void style_switch(lv_obj_t *sw)
     lv_obj_set_style_bg_color(sw, C_FG, LV_PART_KNOB);
 }
 
-static lv_obj_t *mk_row(lv_obj_t *p, const char *txt)
+/* Page de réglages : en-tête « ‹ Titre » cliquable + colonne défilante */
+static lv_obj_t *mk_page(scr_id_t id, const char *title)
 {
-    lv_obj_t *r = mk_container(p);
-    lv_obj_set_size(r, lv_pct(100), 40);
-    lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *l = mk_label(r, &font_text_16, C_FG, txt);
-    lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, 0);
-    return r;
-}
+    lv_obj_t *s = s_scr[id] = mk_screen();
+    lv_obj_t *hdr = lv_button_create(s);
+    lv_obj_remove_style_all(hdr);
+    lv_obj_set_size(hdr, BOARD_LCD_W, 40);
+    lv_obj_set_pos(hdr, 0, 0);
+    lv_obj_add_event_cb(hdr, back_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_style_bg_color(hdr, C_CARD, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(hdr, LV_OPA_COVER, LV_STATE_PRESSED);
+    bubble(hdr);
+    lv_obj_t *ar = mk_label(hdr, &font_title_20, C_ACC, LV_SYMBOL_LEFT);
+    lv_obj_align(ar, LV_ALIGN_LEFT_MID, 12, 0);
+    lv_obj_t *t = mk_label(hdr, &font_title_20, C_FG, title);
+    lv_obj_align(t, LV_ALIGN_LEFT_MID, 36, 0);
 
-static void build_menu(void)
-{
-    lv_obj_t *s = s_scr[SCR_MENU] = mk_screen();
     lv_obj_t *col = mk_container(s);
-    lv_obj_set_size(col, BOARD_LCD_W, BOARD_LCD_H);
-    lv_obj_set_style_pad_hor(col, 14, 0);
-    lv_obj_set_style_pad_ver(col, 10, 0);
+    lv_obj_set_size(col, BOARD_LCD_W, BOARD_LCD_H - 40);
+    lv_obj_set_pos(col, 0, 40);
+    lv_obj_set_style_pad_hor(col, 12, 0);
+    lv_obj_set_style_pad_top(col, 2, 0);
+    lv_obj_set_style_pad_bottom(col, 12, 0);
     lv_obj_set_style_pad_row(col, 6, 0);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_scroll_dir(col, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(col, LV_SCROLLBAR_MODE_ACTIVE);
+    return col;
+}
 
-    mk_label(col, &font_title_20, C_FG, LV_SYMBOL_SETTINGS "  Réglages");
+/* Entrée de l'accueil des réglages : icône, titre, résumé, chevron */
+static lv_obj_t *mk_entry(lv_obj_t *col, const char *icon, const char *title, scr_id_t target,
+                          lv_obj_t **sum_out)
+{
+    lv_obj_t *b = lv_button_create(col);
+    lv_obj_set_size(b, lv_pct(100), 50);
+    lv_obj_set_style_bg_color(b, C_CARD, 0);
+    lv_obj_set_style_bg_color(b, C_OFF, LV_STATE_PRESSED);
+    lv_obj_set_style_radius(b, 10, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_pad_all(b, 0, 0);
+    lv_obj_add_event_cb(b, menu_nav_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)target);
+    bubble(b);
+    lv_obj_t *ic = mk_label(b, &font_title_20, C_ACC, icon);
+    lv_obj_align(ic, LV_ALIGN_LEFT_MID, 12, 0);
+    lv_obj_t *t = mk_label(b, &font_text_16, C_FG, title);
+    lv_obj_align(t, LV_ALIGN_TOP_LEFT, 44, 7);
+    lv_obj_t *sm = mk_label(b, &font_small_11, C_DIM, "");
+    lv_label_set_long_mode(sm, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(sm, 140);
+    lv_obj_align(sm, LV_ALIGN_TOP_LEFT, 44, 28);
+    lv_obj_t *ch = mk_label(b, &font_text_16, C_OFF, LV_SYMBOL_RIGHT);
+    lv_obj_align(ch, LV_ALIGN_RIGHT_MID, -10, 0);
+    if (sum_out) *sum_out = sm;
+    return b;
+}
 
-    mk_label(col, &font_text_16, C_DIM, "Luminosité");
-    m_slider = lv_slider_create(col);
-    lv_obj_set_width(m_slider, lv_pct(92));
-    lv_slider_set_range(m_slider, 10, 255);
-    lv_obj_add_event_cb(m_slider, menu_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    lv_obj_add_event_cb(m_slider, menu_slider_cb, LV_EVENT_RELEASED, NULL);
-    lv_obj_set_style_margin_bottom(m_slider, 8, 0);
-    bubble(m_slider);
+/* Ligne interrupteur : titre + explication courte, interrupteur à droite */
+static lv_obj_t *mk_switch_row(lv_obj_t *col, const char *title, const char *desc, lv_event_cb_t cb)
+{
+    lv_obj_t *r = mk_container(col);
+    lv_obj_set_size(r, lv_pct(100), 46);
+    lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *t = mk_label(r, &font_text_16, C_FG, title);
+    lv_obj_align(t, LV_ALIGN_TOP_LEFT, 0, 4);
+    lv_obj_t *d = mk_label(r, &font_small_11, C_DIM, desc);
+    lv_obj_align(d, LV_ALIGN_TOP_LEFT, 0, 26);
+    lv_obj_t *sw = lv_switch_create(r);
+    style_switch(sw);
+    lv_obj_align(sw, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_ext_click_area(sw, 8);
+    bubble(sw);
+    return sw;
+}
 
-    lv_obj_t *r = mk_row(col, "Vibration");
-    m_sw_vib = lv_switch_create(r);
-    style_switch(m_sw_vib);
-    lv_obj_align(m_sw_vib, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_event_cb(m_sw_vib, menu_vib_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    bubble(m_sw_vib);
+static lv_obj_t *mk_section(lv_obj_t *col, const char *txt)
+{
+    lv_obj_t *l = mk_label(col, &font_small_11, C_DIM, txt);
+    lv_obj_set_style_pad_top(l, 6, 0);
+    return l;
+}
 
-    r = mk_row(col, "Allumer si notif");
-    m_sw_nwake = lv_switch_create(r);
-    style_switch(m_sw_nwake);
-    lv_obj_align(m_sw_nwake, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_event_cb(m_sw_nwake, menu_nwake_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    bubble(m_sw_nwake);
+/* Sélecteur segmenté (remplace les listes déroulantes, peu pratiques au doigt) */
+static lv_obj_t *mk_segmented(lv_obj_t *col, const char *const *map, lv_event_cb_t cb)
+{
+    lv_obj_t *m = lv_buttonmatrix_create(col);
+    lv_buttonmatrix_set_map(m, map);
+    lv_buttonmatrix_set_button_ctrl_all(m, LV_BUTTONMATRIX_CTRL_CHECKABLE);
+    lv_buttonmatrix_set_one_checked(m, true);
+    lv_obj_set_size(m, lv_pct(100), 38);
+    lv_obj_set_style_pad_all(m, 3, 0);
+    lv_obj_set_style_pad_gap(m, 3, 0);
+    lv_obj_set_style_bg_color(m, C_CARD, 0);
+    lv_obj_set_style_border_width(m, 0, 0);
+    lv_obj_set_style_radius(m, 10, 0);
+    lv_obj_set_style_bg_color(m, C_CARD, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(m, C_ACC, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(m, C_FG, LV_PART_ITEMS);
+    lv_obj_set_style_text_font(m, &font_text_16, LV_PART_ITEMS);
+    lv_obj_set_style_radius(m, 8, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(m, 0, LV_PART_ITEMS);
+    lv_obj_set_style_border_width(m, 0, LV_PART_ITEMS);
+    lv_obj_add_event_cb(m, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    bubble(m);
+    return m;
+}
 
-    r = mk_row(col, "Double tap réveil");
-    m_sw_tap = lv_switch_create(r);
-    style_switch(m_sw_tap);
-    lv_obj_align(m_sw_tap, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_event_cb(m_sw_tap, menu_tap_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    bubble(m_sw_tap);
+static void menu_bt_refresh(void)
+{
+    ble_info_t bi;
+    ble_get_info(&bi);
+    const char *st;
+    if (!settings_get()->ble_enabled || bi.state == BLE_ST_OFF) st = "Coupé (mode avion)";
+    else if (bi.state == BLE_ST_READY) st = "Connecté à l'iPhone";
+    else if (bi.state == BLE_ST_ADVERTISING) st = "En attente de l'iPhone";
+    else st = "Connexion en cours…";
+    char b[96];
+    snprintf(b, sizeof(b), "%s\n%d appareil%s appairé%s", st, bi.bonds, bi.bonds > 1 ? "s" : "",
+             bi.bonds > 1 ? "s" : "");
+    lv_label_set_text(m_bt_info, b);
+}
 
-    r = mk_row(col, "Bluetooth");
-    m_sw_bt = lv_switch_create(r);
-    style_switch(m_sw_bt);
-    lv_obj_align(m_sw_bt, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_event_cb(m_sw_bt, menu_bt_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    bubble(m_sw_bt);
+/* résumés de l'accueil des réglages */
+static void menu_refresh_summaries(void)
+{
+    settings_t *st = settings_get();
+    char b[64];
+    const char *face = "Rétro";
+    for (int i = 0; i < 3; i++) if (FACE_ORDER[i] == st->watchface) face = FACE_NAMES[i];
+    snprintf(b, sizeof(b), "Cadran %s · veille %u s", face, st->screen_timeout_s);
+    lv_label_set_text(m_sum[0], b);
 
-    r = mk_row(col, "Veille écran");
-    m_dd_tmo = lv_dropdown_create(r);
-    lv_dropdown_set_options(m_dd_tmo, "5 s\n8 s\n10 s\n15 s\n30 s");
-    lv_obj_set_width(m_dd_tmo, 84);
-    lv_obj_align(m_dd_tmo, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_event_cb(m_dd_tmo, menu_tmo_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    bubble(m_dd_tmo);
+    snprintf(b, sizeof(b), "%s%s%s", st->vibrate ? "Vibreur" : "Sans vibreur",
+             st->notif_wake ? "" : " · discret", st->tap_wake ? " · double tap" : "");
+    lv_label_set_text(m_sum[1], b);
 
-    r = mk_row(col, "Cadran");
-    m_dd_face = lv_dropdown_create(r);
-    lv_dropdown_set_options(m_dd_face, "Classique\nNumérique\nPub");
-    lv_obj_set_width(m_dd_face, 120);
-    lv_obj_align(m_dd_face, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_event_cb(m_dd_face, menu_face_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    bubble(m_dd_face);
+    ble_info_t bi;
+    ble_get_info(&bi);
+    lv_label_set_text(m_sum[2], !st->ble_enabled ? "Mode avion" :
+                      bi.state == BLE_ST_READY ? "Connecté" :
+                      bi.state == BLE_ST_ADVERTISING ? "En attente de l'iPhone" : "Connexion…");
 
-    struct { const char *t; scr_id_t id; } nav[] = {
-        { LV_SYMBOL_BLUETOOTH "  Appairer un iPhone", SCR_PAIR },
-        { LV_SYMBOL_CHARGE "  Énergie", SCR_POWER },
-        { LV_SYMBOL_LIST "  À propos", SCR_ABOUT },
-    };
-    for (size_t i = 0; i < sizeof(nav) / sizeof(nav[0]); i++) {
-        lv_obj_t *b = mk_button(col, nav[i].t, C_CARD, menu_nav_cb, (void *)(uintptr_t)nav[i].id);
-        lv_obj_set_size(b, lv_pct(100), 44);
-    }
-    lv_obj_t *fg = mk_button(col, LV_SYMBOL_TRASH "  Oublier les appareils", lv_color_hex(0x3F1D1D), NULL, NULL);
-    lv_obj_set_size(fg, lv_pct(100), 44);
-    lv_obj_add_event_cb(fg, menu_forget_cb, LV_EVENT_SHORT_CLICKED, NULL);
-    lv_obj_add_event_cb(fg, menu_forget_cb, LV_EVENT_LONG_PRESSED, NULL);
+    power_telemetry_t t;
+    power_get_telemetry(&t);
+    if (t.avg_ma > 0.1f) snprintf(b, sizeof(b), "%d %% · moyenne %.1f mA", t.percent, t.avg_ma);
+    else snprintf(b, sizeof(b), "%d %%%s", t.percent, t.charging ? " · en charge" : "");
+    lv_label_set_text(m_sum[3], b);
 
-    m_toast = mk_label(s, &font_text_16, C_FG, "");
+    lv_label_set_text(m_sum[4], esp_app_get_description()->version);
+}
+
+static void build_toast(void)
+{
+    /* toast sur la couche supérieure : visible quel que soit l'écran */
+    m_toast = mk_label(lv_layer_top(), &font_text_16, C_FG, "");
     lv_obj_set_style_bg_color(m_toast, lv_color_hex(0x27272A), 0);
     lv_obj_set_style_bg_opa(m_toast, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(m_toast, 8, 0);
     lv_obj_set_style_radius(m_toast, 8, 0);
-    lv_obj_align(m_toast, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_align(m_toast, LV_ALIGN_BOTTOM_MID, 0, -12);
     lv_obj_add_flag(m_toast, LV_OBJ_FLAG_HIDDEN);
     m_toast_t = lv_timer_create(toast_hide_cb, 1800, NULL);
     lv_timer_set_repeat_count(m_toast_t, -1);
     lv_timer_pause(m_toast_t);
 }
 
+static void build_menu(void)
+{
+
+    /* ---- accueil ---- */
+    lv_obj_t *col = mk_page(SCR_MENU, "Réglages");
+    mk_entry(col, SYM_EYE, "Affichage", SCR_SET_DISP, &m_sum[0]);
+    mk_entry(col, LV_SYMBOL_BELL, "Alertes et réveil", SCR_SET_ALERT, &m_sum[1]);
+    mk_entry(col, LV_SYMBOL_BLUETOOTH, "Bluetooth", SCR_SET_BT, &m_sum[2]);
+    mk_entry(col, LV_SYMBOL_CHARGE, "Énergie", SCR_POWER, &m_sum[3]);
+    mk_entry(col, LV_SYMBOL_LIST, "À propos", SCR_ABOUT, &m_sum[4]);
+
+    /* ---- affichage ---- */
+    col = mk_page(SCR_SET_DISP, "Affichage");
+    mk_section(col, "CADRAN");
+    static const char *face_map[] = { "Rétro", "Pub", "Digital", "" };
+    m_bm_face = mk_segmented(col, face_map, menu_face_cb);
+    mk_section(col, "LUMINOSITÉ");
+    m_slider = lv_slider_create(col);
+    lv_obj_set_width(m_slider, lv_pct(90));
+    lv_obj_set_style_margin_left(m_slider, 8, 0);
+    lv_obj_set_style_margin_top(m_slider, 6, 0);
+    lv_obj_set_style_margin_bottom(m_slider, 6, 0);
+    lv_slider_set_range(m_slider, 10, 255);
+    lv_obj_set_ext_click_area(m_slider, 10);
+    lv_obj_add_event_cb(m_slider, menu_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(m_slider, menu_slider_cb, LV_EVENT_RELEASED, NULL);
+    bubble(m_slider);
+    mk_section(col, "EXTINCTION DE L'ÉCRAN");
+    static const char *tmo_map[] = { "5 s", "8 s", "10 s", "15 s", "30 s", "" };
+    m_bm_tmo = mk_segmented(col, tmo_map, menu_tmo_cb);
+
+    /* ---- alertes et réveil ---- */
+    col = mk_page(SCR_SET_ALERT, "Alertes");
+    m_sw_vib = mk_switch_row(col, "Vibration", "Notifications et appels", menu_vib_cb);
+    m_sw_nwake = mk_switch_row(col, "Allumer l'écran", "Sinon : vibreur seul", menu_nwake_cb);
+    m_sw_tap = mk_switch_row(col, "Double tap", "2 tapes sur l'écran éteint", menu_tap_cb);
+
+    /* ---- bluetooth ---- */
+    col = mk_page(SCR_SET_BT, "Bluetooth");
+    m_sw_bt = mk_switch_row(col, "Bluetooth", "Coupé = mode avion", menu_bt_cb);
+    m_bt_info = mk_label(col, &font_small_11, C_DIM, "");
+    lv_obj_set_style_pad_bottom(m_bt_info, 4, 0);
+    lv_obj_t *pb = mk_button(col, LV_SYMBOL_BLUETOOTH "  Appairer un iPhone", C_CARD, menu_nav_cb,
+                             (void *)(uintptr_t)SCR_PAIR);
+    lv_obj_set_size(pb, lv_pct(100), 44);
+    lv_obj_t *sp = mk_container(col);                 /* écart : action destructive à part */
+    lv_obj_set_size(sp, 10, 14);
+    lv_obj_t *fg = mk_button(col, LV_SYMBOL_TRASH "  Oublier les appareils", lv_color_hex(0x3F1D1D),
+                             forget_cb, NULL);
+    lv_obj_set_size(fg, lv_pct(100), 44);
+    lv_obj_set_style_text_color(lv_obj_get_child(fg, 0), lv_color_hex(0xFCA5A5), 0);
+
+    /* boîte de confirmation */
+    m_confirm = lv_obj_create(s_scr[SCR_SET_BT]);
+    lv_obj_remove_style_all(m_confirm);
+    lv_obj_set_size(m_confirm, BOARD_LCD_W, BOARD_LCD_H);
+    lv_obj_set_style_bg_color(m_confirm, C_BG, 0);
+    lv_obj_set_style_bg_opa(m_confirm, LV_OPA_80, 0);
+    lv_obj_add_flag(m_confirm, LV_OBJ_FLAG_CLICKABLE);          /* bloque les touches dessous */
+    lv_obj_t *card = lv_obj_create(m_confirm);
+    lv_obj_set_size(card, 216, 150);
+    lv_obj_center(card);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_width(card, 0, 0);
+    lv_obj_set_style_radius(card, 14, 0);
+    lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *q = mk_label(card, &font_text_16, C_FG, "Oublier tous les\nappareils appairés ?");
+    lv_obj_set_style_text_align(q, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(q, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_t *q2 = mk_label(card, &font_small_11, C_DIM, "Il faudra réappairer l'iPhone.");
+    lv_obj_align(q2, LV_ALIGN_TOP_MID, 0, 46);
+    lv_obj_t *no = mk_button(card, "Annuler", C_OFF, confirm_cb, (void *)0);
+    lv_obj_set_size(no, 88, 40);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_t *yes = mk_button(card, "Oublier", C_BAD, confirm_cb, (void *)1);
+    lv_obj_set_size(yes, 88, 40);
+    lv_obj_align(yes, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+    lv_obj_add_flag(m_confirm, LV_OBJ_FLAG_HIDDEN);
+}
+
 static void menu_sync_from_settings(void)
 {
     settings_t *st = settings_get();
     lv_slider_set_value(m_slider, st->brightness, LV_ANIM_OFF);
-    if (st->vibrate) lv_obj_add_state(m_sw_vib, LV_STATE_CHECKED);
-    else lv_obj_remove_state(m_sw_vib, LV_STATE_CHECKED);
-    if (st->tap_wake) lv_obj_add_state(m_sw_tap, LV_STATE_CHECKED);
-    else lv_obj_remove_state(m_sw_tap, LV_STATE_CHECKED);
-    if (st->notif_wake) lv_obj_add_state(m_sw_nwake, LV_STATE_CHECKED);
-    else lv_obj_remove_state(m_sw_nwake, LV_STATE_CHECKED);
-    if (st->ble_enabled) lv_obj_add_state(m_sw_bt, LV_STATE_CHECKED);
-    else lv_obj_remove_state(m_sw_bt, LV_STATE_CHECKED);
-    lv_dropdown_set_selected(m_dd_face, st->watchface <= 2 ? st->watchface : 0);
+    lv_obj_set_state(m_sw_vib, LV_STATE_CHECKED, st->vibrate);
+    lv_obj_set_state(m_sw_tap, LV_STATE_CHECKED, st->tap_wake);
+    lv_obj_set_state(m_sw_nwake, LV_STATE_CHECKED, st->notif_wake);
+    lv_obj_set_state(m_sw_bt, LV_STATE_CHECKED, st->ble_enabled);
+    for (int i = 0; i < 3; i++) {
+        if (FACE_ORDER[i] == st->watchface) lv_buttonmatrix_set_button_ctrl(m_bm_face, i, LV_BUTTONMATRIX_CTRL_CHECKED);
+    }
     for (size_t i = 0; i < sizeof(TMO_VALUES); i++) {
-        if (TMO_VALUES[i] >= st->screen_timeout_s) { lv_dropdown_set_selected(m_dd_tmo, i); break; }
+        if (TMO_VALUES[i] >= st->screen_timeout_s) {
+            lv_buttonmatrix_set_button_ctrl(m_bm_tmo, i, LV_BUTTONMATRIX_CTRL_CHECKED);
+            break;
+        }
     }
 }
 
@@ -1122,13 +1323,28 @@ void ui_init(void)
     build_list();
     build_detail();
     build_call();
-    build_menu();
+    build_toast();
     build_power();
     build_pair();
     build_about();
-    build_media();
-    menu_sync_from_settings();
     show(SCR_WATCH, LV_SCR_LOAD_ANIM_NONE);
+}
+
+void ui_release_idle(void)
+{
+    if (is_menu_group(s_cur) || s_cur == SCR_MEDIA) return;
+    if (s_scr[SCR_MENU]) {
+        static const scr_id_t grp[] = { SCR_MENU, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT };
+        for (size_t i = 0; i < sizeof(grp) / sizeof(grp[0]); i++) {
+            if (s_scr[grp[i]]) { lv_obj_delete(s_scr[grp[i]]); s_scr[grp[i]] = NULL; }
+        }
+    }
+    if (s_scr[SCR_MEDIA]) {
+        if (mu_timer) { lv_timer_delete(mu_timer); mu_timer = NULL; }
+        lv_obj_delete(s_scr[SCR_MEDIA]);
+        s_scr[SCR_MEDIA] = NULL;
+        mu_seq = UINT32_MAX;
+    }
 }
 
 void ui_go_home(void)
@@ -1225,6 +1441,8 @@ void ui_on_notif_removed(uint32_t uid)
 
 void ui_on_ble_state(int st)
 {
+    if (s_cur == SCR_SET_BT) menu_bt_refresh();
+    else if (s_cur == SCR_MENU) menu_refresh_summaries();
     if (st != BLE_ST_READY && st != BLE_ST_SECURED && st != BLE_ST_CONNECTED) {
         ns_invalidate_uids();
         c_uid_valid = false;

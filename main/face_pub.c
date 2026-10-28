@@ -35,6 +35,8 @@
 #define SG_Y 120
 #define HP_X 60               /* harpe (centre de la boîte) */
 #define HP_Y 180
+#define SH_X 178              /* trèfle, symétrique de la harpe */
+#define SH_Y 174
 
 static lv_obj_t *s_root;
 static lv_obj_t *s_hour, *s_hour_in, *s_min, *s_min_in, *s_sec, *s_fuel_hand;
@@ -190,6 +192,36 @@ static void draw_harp(lv_layer_t *layer, int ox, int oy)
     draw_line(layer, x0 + 13, y0 + 39, x0 + 27, y0 + 13, 1, C_BRASS_D, LV_OPA_COVER, false); /* filet caisse */
 }
 
+static void draw_disc(lv_layer_t *layer, float cx, float cy, int r, lv_color_t c)
+{
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.radius = LV_RADIUS_CIRCLE;
+    d.bg_color = c;
+    d.bg_opa = LV_OPA_COVER;
+    lv_area_t a = { (int32_t)(cx - r), (int32_t)(cy - r), (int32_t)(cx + r), (int32_t)(cy + r) };
+    lv_draw_rect(layer, &d, &a);
+}
+
+/* Trèfle à trois feuilles en cœur + tige, pendant de la harpe */
+static void draw_shamrock(lv_layer_t *layer, float cx, float cy)
+{
+    static const float ang[3] = { -90.0f, 30.0f, 150.0f };     /* haut, bas-droite, bas-gauche */
+    for (int i = 0; i < 3; i++) {
+        float a = ang[i] * (float)M_PI / 180.0f;
+        float ux = cosf(a), uy = sinf(a);           /* direction de la feuille */
+        float px = -uy, py = ux;                    /* perpendiculaire */
+        float lx = cx + ux * 9, ly = cy + uy * 9;   /* centre de la feuille */
+        /* cœur : deux lobes + pointe vers le centre */
+        draw_disc(layer, lx + px * 4 + ux * 2, ly + py * 4 + uy * 2, 6, C_BRASS);
+        draw_disc(layer, lx - px * 4 + ux * 2, ly - py * 4 + uy * 2, 6, C_BRASS);
+        draw_line(layer, lx, ly, cx + ux * 2, cy + uy * 2, 7, C_BRASS, LV_OPA_COVER, true);
+        draw_line(layer, lx + ux * 6, ly + uy * 6, cx + ux * 3, cy + uy * 3, 1, C_BRASS_D, LV_OPA_COVER, false);
+    }
+    draw_line(layer, cx, cy + 2, cx + 5, cy + 18, 3, C_BRASS, LV_OPA_COVER, true);   /* tige */
+    draw_line(layer, cx + 5, cy + 18, cx + 9, cy + 22, 2, C_BRASS, LV_OPA_COVER, true);
+}
+
 static void track_draw_cb(lv_event_t *e)
 {
     lv_layer_t *layer = lv_event_get_layer(e);
@@ -231,6 +263,7 @@ static void track_draw_cb(lv_event_t *e)
     lv_draw_arc(layer, &a);
 
     draw_harp(layer, ox, oy);
+    draw_shamrock(layer, ox + SH_X, oy + SH_Y);
 }
 
 /* ------------------------------------------------------------------ */

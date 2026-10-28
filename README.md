@@ -20,7 +20,7 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
   Musique, Deezer, podcasts…). AMS ne transmet pas la pochette.
 - Heure et fuseau (DST compris) récupérés de l'iPhone (Current Time Service), RTC PCF8563
   en UTC comme référence.
-- Trois cadrans : **Classique** (cadran ivoire, aiguilles bleuies, réserve de marche =
+- Trois cadrans : **Rétro** (cadran ivoire, aiguilles bleuies, réserve de marche =
   batterie, guichet date, petite seconde), **Pub** (carré plein écran, vert bouteille et laiton, harpe, jauge FUEL,
   enseigne OPEN/CLOSED pour la liaison iPhone) et **Numérique**.
 - Appairage sécurisé LE Secure Connections + code à 6 chiffres, reconnexion automatique.
@@ -93,10 +93,13 @@ Si l'iPhone oublie la montre, elle efface son propre bond et relance un appairag
 | Bouton (sur cadran) | appui court | Éteint l'écran |
 | Bouton | 4 s | Coupure matérielle AXP202 |
 
-Réglages : luminosité, vibreur, **Double tap réveil** (FT6336 en mode monitor, déjà actif
-en veille : coût quasi nul), **Allumer si notif** (désactivé = mode discret : la
-montre vibre sans allumer l'écran, les appels allument toujours), Bluetooth (mode avion), délai d'extinction, cadran,
-appairage, Énergie, À propos ; appui long sur « Oublier les appareils » pour effacer les bonds.
+Réglages (← depuis le cadran) : un accueil par catégories avec résumé de l'état, puis
+**Affichage** (cadran Rétro/Pub/Digital, luminosité, extinction), **Alertes** (vibreur,
+allumage sur notif — sinon mode discret —, double tap), **Bluetooth** (mode avion,
+appairage, « Oublier les appareils » derrière une confirmation), **Énergie**, **À propos**.
+Retour par l'en-tête « ‹ » ou en glissant vers la droite.
+
+![réglages](docs/reglages.png)
 
 ---
 
