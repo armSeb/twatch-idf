@@ -62,7 +62,11 @@ static bool s_fast_adv;
 static int s_eco_tries;
 static bool s_eco_pending;
 
-static struct ble_npl_callout s_co_adv, s_co_eco, s_co_rssi, s_co_enc;
+static struct ble_npl_callout s_co_adv, s_co_eco, s_co_rssi, s_co_enc, s_co_sec, s_co_readv;
+static int64_t s_conn_t0_us;       /* instant de connexion (diag délai de chiffrement) */
+static bool    s_cut_noenc;        /* coupure « pas chiffré » : pause avant republication */
+#define SEC_DELAY_MS   500       /* Security Request seule, un peu après la connexion */
+#define READV_DELAY_MS 3000      /* après une coupure « pas chiffré » */
 /* Chiffrement attendu peu après la connexion (< 1 s d'habitude). Constaté :
  * parfois l'iPhone ne répond pas à la Security Request et SMP n'abandonne
  * qu'au bout de 30 s. On coupe plus tôt : l'iPhone se reconnecte aussitôt. */
@@ -271,8 +275,26 @@ static void co_enc_cb(struct ble_npl_event *ev)
     if (ble_gap_conn_find(s_conn, &d) == 0 && !d.sec_state.encrypted) {
         ESP_LOGW(TAG, "pas de chiffrement après %d s : déconnexion pour réessai", ENC_WATCHDOG_MS / 1000);
         ble_diag("pas chiffré : coupe");
+        s_cut_noenc = true;
         ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
     }
+}
+
+/* Demande de sécurité envoyée seule, 0,5 s après la connexion : constaté,
+ * l'iPhone ignorait parfois celle émise dans la même milliseconde que la
+ * demande de paramètres de liaison. */
+static void co_sec_cb(struct ble_npl_event *ev)
+{
+    struct ble_gap_conn_desc d;
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE) return;
+    if (ble_gap_conn_find(s_conn, &d) == 0 && d.sec_state.encrypted) return;   /* l'iPhone a devancé */
+    int rc = ble_gap_security_initiate(s_conn);
+    if (rc && rc != BLE_HS_EALREADY) ESP_LOGW(TAG, "security_initiate rc=%d", rc);
+}
+
+static void co_readv_cb(struct ble_npl_event *ev)
+{
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE) adv_start(true, ADV_FAST_MS);
 }
 
 static void co_rssi_cb(struct ble_npl_event *ev)
@@ -341,23 +363,13 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 #endif
             set_state(BLE_ST_CONNECTED);
             ancs_on_connect(s_conn);
-            {
-                /* Comme My-TTGO-Watch : dès la connexion, on demande un
-                 * supervision timeout de 4 s au lieu des 720 ms d'iOS, pour
-                 * survivre à quelques événements de connexion manqués pendant
-                 * l'appairage et la découverte GATT. 30–45 ms, latence 0. */
-                struct ble_gap_upd_params up = {
-                    .itvl_min = 24, .itvl_max = 36, .latency = 0,
-                    .supervision_timeout = 400, .min_ce_len = 0, .max_ce_len = 0,
-                };
-                int urc = ble_gap_update_params(s_conn, &up);
-                ESP_LOGI(TAG, "demande timeout 4 s, rc=%d", urc);
-            }
-            /* demande de sécurité : chiffrement direct si déjà appairé,
-             * sinon appairage passkey (le code s'affiche sur la montre) */
+            /* demande de sécurité (chiffrement direct si déjà appairé, sinon
+             * appairage passkey) envoyée seule après SEC_DELAY_MS ; la demande
+             * de paramètres de liaison attend que le lien soit chiffré */
+            s_conn_t0_us = esp_timer_get_time();
+            s_cut_noenc = false;
+            ble_npl_callout_reset(&s_co_sec, ble_npl_time_ms_to_ticks32(SEC_DELAY_MS));
             ble_npl_callout_reset(&s_co_enc, ble_npl_time_ms_to_ticks32(ENC_WATCHDOG_MS));
-            int rc = ble_gap_security_initiate(s_conn);
-            if (rc && rc != BLE_HS_EALREADY) ESP_LOGW(TAG, "security_initiate rc=%d", rc);
         } else {
             ESP_LOGW(TAG, "échec connexion status=%d", event->connect.status);
             ble_diag("échec conn st=%d", event->connect.status);
@@ -374,22 +386,40 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         ble_npl_callout_stop(&s_co_eco);
         ble_npl_callout_stop(&s_co_rssi);
         ble_npl_callout_stop(&s_co_enc);
+        ble_npl_callout_stop(&s_co_sec);
         ancs_on_disconnect();
         if (s_pairing_in_progress) {
             s_pairing_in_progress = false;
             app_post_simple(EV_PAIRING_DONE, -1);
         }
-        adv_start(true, ADV_FAST_MS);
+        if (s_cut_noenc) {          /* laisser l'iPhone oublier la tentative ratée */
+            s_cut_noenc = false;
+            ble_npl_callout_reset(&s_co_readv, ble_npl_time_ms_to_ticks32(READV_DELAY_MS));
+        } else {
+            adv_start(true, ADV_FAST_MS);
+        }
         return 0;
 
     case BLE_GAP_EVENT_ENC_CHANGE:
         if (event->enc_change.status == 0) {
             ESP_LOGI(TAG, "lien chiffré");
             ble_npl_callout_stop(&s_co_enc);
+            ble_npl_callout_stop(&s_co_sec);
+            int ms = (int)((esp_timer_get_time() - s_conn_t0_us) / 1000);
             if (ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0) {
-                ble_diag("chiffré b=%d auth=%d", desc.sec_state.bonded, desc.sec_state.authenticated);
+                ble_diag("chiffré b=%d en %d.%d s", desc.sec_state.bonded, ms / 1000, (ms % 1000) / 100);
             } else {
                 ble_diag("chiffré");
+            }
+            {
+                /* supervision timeout 4 s au lieu des 720 ms d'iOS, pour la
+                 * découverte GATT ; les paramètres éco viendront après ANCS */
+                struct ble_gap_upd_params up = {
+                    .itvl_min = 24, .itvl_max = 36, .latency = 0,
+                    .supervision_timeout = 400, .min_ce_len = 0, .max_ce_len = 0,
+                };
+                int urc = ble_gap_update_params(event->enc_change.conn_handle, &up);
+                ESP_LOGI(TAG, "demande timeout 4 s, rc=%d", urc);
             }
             refresh_bonds();
             if (s_pairing_in_progress) {
@@ -560,6 +590,8 @@ esp_err_t ble_start(void)
     ble_npl_callout_init(&s_co_eco, q, co_eco_cb, NULL);
     ble_npl_callout_init(&s_co_rssi, q, co_rssi_cb, NULL);
     ble_npl_callout_init(&s_co_enc, q, co_enc_cb, NULL);
+    ble_npl_callout_init(&s_co_sec, q, co_sec_cb, NULL);
+    ble_npl_callout_init(&s_co_readv, q, co_readv_cb, NULL);
     ble_npl_event_init(&s_ev_batt, ev_batt_cb, NULL);
     ble_npl_event_init(&s_ev_forget, ev_forget_cb, NULL);
     ble_npl_event_init(&s_ev_pair, ev_pair_cb, NULL);
@@ -582,6 +614,8 @@ void ble_stop(void)
         ble_npl_callout_deinit(&s_co_eco);
         ble_npl_callout_deinit(&s_co_rssi);
         ble_npl_callout_deinit(&s_co_enc);
+        ble_npl_callout_deinit(&s_co_sec);
+        ble_npl_callout_deinit(&s_co_readv);
         ancs_host_deinit();
         nimble_port_deinit();             /* désactive et libère le contrôleur */
     } else {
