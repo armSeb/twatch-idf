@@ -62,7 +62,11 @@ static bool s_fast_adv;
 static int s_eco_tries;
 static bool s_eco_pending;
 
-static struct ble_npl_callout s_co_adv, s_co_eco, s_co_rssi;
+static struct ble_npl_callout s_co_adv, s_co_eco, s_co_rssi, s_co_enc;
+/* Chiffrement attendu peu après la connexion (< 1 s d'habitude). Constaté :
+ * parfois l'iPhone ne répond pas à la Security Request et SMP n'abandonne
+ * qu'au bout de 30 s. On coupe plus tôt : l'iPhone se reconnecte aussitôt. */
+#define ENC_WATCHDOG_MS 8000
 static struct ble_npl_event s_ev_batt, s_ev_forget, s_ev_pair;
 
 static int gap_event(struct ble_gap_event *event, void *arg);
@@ -260,6 +264,17 @@ static void co_eco_cb(struct ble_npl_event *ev)
 }
 
 /* Qualité de liaison : RSSI vu par la montre toutes les 5 s (diagnostic) */
+static void co_enc_cb(struct ble_npl_event *ev)
+{
+    struct ble_gap_conn_desc d;
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE || s_pairing_in_progress) return;
+    if (ble_gap_conn_find(s_conn, &d) == 0 && !d.sec_state.encrypted) {
+        ESP_LOGW(TAG, "pas de chiffrement après %d s : déconnexion pour réessai", ENC_WATCHDOG_MS / 1000);
+        ble_diag("pas chiffré : coupe");
+        ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+    }
+}
+
 static void co_rssi_cb(struct ble_npl_event *ev)
 {
     if (s_conn == BLE_HS_CONN_HANDLE_NONE) return;
@@ -340,6 +355,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             }
             /* demande de sécurité : chiffrement direct si déjà appairé,
              * sinon appairage passkey (le code s'affiche sur la montre) */
+            ble_npl_callout_reset(&s_co_enc, ble_npl_time_ms_to_ticks32(ENC_WATCHDOG_MS));
             int rc = ble_gap_security_initiate(s_conn);
             if (rc && rc != BLE_HS_EALREADY) ESP_LOGW(TAG, "security_initiate rc=%d", rc);
         } else {
@@ -357,6 +373,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         s_eco_pending = false;
         ble_npl_callout_stop(&s_co_eco);
         ble_npl_callout_stop(&s_co_rssi);
+        ble_npl_callout_stop(&s_co_enc);
         ancs_on_disconnect();
         if (s_pairing_in_progress) {
             s_pairing_in_progress = false;
@@ -368,6 +385,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_ENC_CHANGE:
         if (event->enc_change.status == 0) {
             ESP_LOGI(TAG, "lien chiffré");
+            ble_npl_callout_stop(&s_co_enc);
             if (ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0) {
                 ble_diag("chiffré b=%d auth=%d", desc.sec_state.bonded, desc.sec_state.authenticated);
             } else {
@@ -541,6 +559,7 @@ esp_err_t ble_start(void)
     ble_npl_callout_init(&s_co_adv, q, co_adv_cb, NULL);
     ble_npl_callout_init(&s_co_eco, q, co_eco_cb, NULL);
     ble_npl_callout_init(&s_co_rssi, q, co_rssi_cb, NULL);
+    ble_npl_callout_init(&s_co_enc, q, co_enc_cb, NULL);
     ble_npl_event_init(&s_ev_batt, ev_batt_cb, NULL);
     ble_npl_event_init(&s_ev_forget, ev_forget_cb, NULL);
     ble_npl_event_init(&s_ev_pair, ev_pair_cb, NULL);
@@ -562,6 +581,7 @@ void ble_stop(void)
         ble_npl_callout_deinit(&s_co_adv);
         ble_npl_callout_deinit(&s_co_eco);
         ble_npl_callout_deinit(&s_co_rssi);
+        ble_npl_callout_deinit(&s_co_enc);
         ancs_host_deinit();
         nimble_port_deinit();             /* désactive et libère le contrôleur */
     } else {
