@@ -28,8 +28,9 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
   mesurée par le compteur coulométrique de l'AXP202).
 - Démarrage quasi instantané, coredump en flash en cas de crash.
 
-Consommation mesurée : ~12,6 mA de moyenne **en utilisation** (≈ 30 h sur la batterie de
-380 mAh d'origine). Voir [Autonomie](#autonomie).
+Consommation mesurée : ~8,6 mA de moyenne **en utilisation réelle** (3 % du temps écran
+allumé, notifications iPhone connectées), soit ≈ 44 h sur la batterie de 380 mAh d'origine.
+Voir [Autonomie](#autonomie).
 
 ---
 
@@ -127,7 +128,7 @@ sur tout le reste :
 
 | Levier | Réglage |
 |---|---|
-| DFS | CPU à **40 MHz** au repos ; **240 MHz** seulement pendant une interaction (toucher, animation), retour à 40 MHz après 1,5 s d'inactivité même écran allumé |
+| DFS | CPU à **10 MHz** au repos (le contrôleur BT relâche son verrou de fréquence pendant le modem sleep) ; **240 MHz** seulement pendant une interaction (toucher, animation), retour au minimum après 1,5 s d'inactivité même écran allumé |
 | BLE | modem sleep + un seul passage en paramètres éco après la synchro ANCS : 150–300 ms, latence 4, timeout 6 s (règles Apple respectées) |
 | Publicité | 160 ms pendant 30 s après déconnexion, puis ~1 s |
 | Tâches | aucun timer périodique écran éteint : la tâche app dort jusqu'à un événement (max 60 s) ; tick LVGL lu à la demande |
