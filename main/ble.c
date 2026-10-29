@@ -67,6 +67,7 @@ static int64_t s_conn_t0_us;       /* instant de connexion (diag délai de chiff
 static bool    s_cut_noenc;        /* coupure « pas chiffré » : pause avant republication */
 #define SEC_DELAY_MS   500       /* Security Request seule, un peu après la connexion */
 #define READV_DELAY_MS 3000      /* après une coupure « pas chiffré » */
+#define ADV_RETRY_MS   1000      /* publicité refusée : nouvel essai */
 /* Chiffrement attendu peu après la connexion (< 1 s d'habitude). Constaté :
  * parfois l'iPhone ne répond pas à la Security Request et SMP n'abandonne
  * qu'au bout de 30 s. On coupe plus tôt : l'iPhone se reconnecte aussitôt. */
@@ -223,7 +224,11 @@ static void adv_start(bool fast, uint32_t fast_ms)
     int rc = ble_gap_adv_start(s_own_addr_type, NULL, BLE_HS_FOREVER, &p, gap_event, NULL);
     if (rc) {
         ESP_LOGE(TAG, "adv_start rc=%d", rc);
-        ble_diag("ERREUR pub. rc=%d", rc);
+        ble_diag("ERREUR pub. rc=%d, nouvel essai", rc);
+        /* Sans nouvel essai, la montre restait invisible jusqu'à un
+         * redémarrage du Bluetooth. Cas vu : ENOMEM (6) juste après un échec
+         * de connexion, la place de connexion n'étant pas encore libérée. */
+        ble_npl_callout_reset(&s_co_readv, ble_npl_time_ms_to_ticks32(ADV_RETRY_MS));
         return;
     }
     s_fast_adv = fast;
@@ -378,7 +383,8 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         } else {
             ESP_LOGW(TAG, "échec connexion status=%d", event->connect.status);
             ble_diag("échec conn st=%d", event->connect.status);
-            adv_start(true, ADV_FAST_MS);
+            /* laisser la pile libérer la connexion avortée avant de republier */
+            ble_npl_callout_reset(&s_co_readv, ble_npl_time_ms_to_ticks32(300));
         }
         return 0;
 
