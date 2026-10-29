@@ -146,6 +146,8 @@ static power_hist_t s_last;
 static bool s_last_valid;
 static uint16_t s_cap_learned;    /* 0 = inconnue */
 static uint8_t s_pct_start = 255;
+static bool    s_chg_active;      /* session de charge mesurée (USB branché) */
+static int     s_chg_start_pct = -1;
 static int64_t s_hist_last_us;
 
 static bool hist_get(nvs_handle_t h, const char *k, bhist_t *b)
@@ -231,6 +233,7 @@ uint16_t power_capacity_mah(void)
 }
 
 bool power_capacity_learned(void) { return s_cap_learned != 0; }
+int  power_charge_start_pct(void)  { return s_chg_active ? s_chg_start_pct : -1; }
 
 uint64_t power_handle_irq(void)
 {
@@ -243,6 +246,12 @@ uint64_t power_handle_irq(void)
             /* fin d'une période sur batterie : dernier instantané, archivé */
             hist_snapshot(POWER_HIST_CHARGED);
             hist_promote(POWER_HIST_CHARGED);
+            /* début d'une session de charge : le compteur mesure ce qui entre */
+            axp_coulomb_reset();
+            s_period_start_us = esp_timer_get_time();
+            meter_reset();
+            s_chg_active = true;
+            s_chg_start_pct = s_percent;          /* dernière valeur sur batterie : fiable */
         }
         if (was_vbus && !s_vbus) {
             s_pct_start = 255;
@@ -394,6 +403,7 @@ esp_err_t power_init(void)
         esp_reset_reason_t rr = esp_reset_reason();
         hist_promote((rr == ESP_RST_POWERON || rr == ESP_RST_BROWNOUT) ? POWER_HIST_EMPTY
                                                                        : POWER_HIST_REBOOT);
+        s_chg_active = s_vbus;                /* démarrage sur USB : la charge est mesurée */
     }
 
     axp_irq_enable(AXP_IRQ_VBUS_CONNECT | AXP_IRQ_VBUS_REMOVED | AXP_IRQ_CHG_START |
@@ -452,6 +462,27 @@ void power_update(void)
     s_ocv_filt = (s_ocv_filt < 0) ? ocv : (0.75f * s_ocv_filt + 0.25f * ocv);
     int p = ocv_to_pct(s_ocv_filt);
     if (s_vbus && !s_charging && v > 4100) p = 100;   /* charge terminée : 100 %, pas l'OCV au repos */
+    if (s_vbus && s_chg_active && s_chg_start_pct < 0) s_chg_start_pct = p;   /* démarrage sur USB */
+    if (s_vbus && s_chg_active && !s_charging && v > 4100) {
+        /* charge complète : si elle partait de presque vide, les mAh entrés
+         * donnent la capacité réelle (rendement coulombique LiPo ≈ 99 %) */
+        s_chg_active = false;
+        float in = -axp_coulomb_used_mah();
+        ESP_LOGI(TAG, "charge terminée : %.0f mAh depuis %d %%", in, s_chg_start_pct);
+        if (s_chg_start_pct >= 0 && s_chg_start_pct <= 20 && in > 30) {
+            float cap = in * 100.0f / (100 - s_chg_start_pct);
+            if (cap >= 50 && cap <= 500) {
+                s_cap_learned = (uint16_t)(cap + 0.5f);
+                nvs_handle_t h;
+                if (nvs_open("tw", NVS_READWRITE, &h) == ESP_OK) {
+                    nvs_set_u16(h, "bcap", s_cap_learned);
+                    nvs_commit(h);
+                    nvs_close(h);
+                }
+                ESP_LOGW(TAG, "capacité batterie mesurée à la charge : ~%u mAh", s_cap_learned);
+            }
+        }
+    }
     if (s_percent < 0 || s_vbus) {
         s_percent = p;
     } else if (p < s_percent) {

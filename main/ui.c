@@ -1120,8 +1120,13 @@ static void power_refresh(void)
     }
     lv_label_set_text(p_lbl[1], s);
 
-    snprintf(s, sizeof(s), "Conso  %.2f mAh en %luh%02lu", t.used_mah,
-             (unsigned long)(t.since_s / 3600), (unsigned long)((t.since_s / 60) % 60));
+    if (t.vbus) {   /* en charge, le compteur mesure ce qui entre dans la batterie */
+        snprintf(s, sizeof(s), "Chargé  %.0f mAh en %luh%02lu", t.used_mah < 0 ? -t.used_mah : 0.0f,
+                 (unsigned long)(t.since_s / 3600), (unsigned long)((t.since_s / 60) % 60));
+    } else {
+        snprintf(s, sizeof(s), "Conso  %.2f mAh en %luh%02lu", t.used_mah,
+                 (unsigned long)(t.since_s / 3600), (unsigned long)((t.since_s / 60) % 60));
+    }
     lv_label_set_text(p_lbl[2], s);
 
     if (t.vbus) {
@@ -1152,7 +1157,13 @@ static void power_refresh(void)
     }
     lv_label_set_text(p_lbl[5], s);
     power_hist_t h;
-    if (power_last_discharge(&h)) {
+    int cs = power_charge_start_pct();
+    if (t.vbus && cs >= 0) {
+        char cap[24] = "";
+        if (power_capacity_learned()) snprintf(cap, sizeof(cap), " · capa ~%u mAh", power_capacity_mah());
+        snprintf(s, sizeof(s), "Charge partie de %d %%%s%s", cs, cap,
+                 cs <= 20 ? "\nCapacité mesurée en fin de charge" : "");
+    } else if (power_last_discharge(&h)) {
         static const char *const END[] = { "", "rechargée", "coupure", "redémarrage" };
         char cap[24] = "";
         if (power_capacity_learned()) snprintf(cap, sizeof(cap), " · capa ~%u mAh", power_capacity_mah());
