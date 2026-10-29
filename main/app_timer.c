@@ -10,6 +10,7 @@
 #include "i18n.h"
 #include "esp_timer.h"
 #include "power.h"
+#include "sound.h"
 
 #define EV_DONE  1
 #define BUZZ_MAX 12              /* vibrations (toutes les 2,5 s) avant abandon */
@@ -142,6 +143,7 @@ static void tick_cb(lv_timer_t *t)
         n = 0;
         s_buzz++;
         power_vibrate(VIB_CALL);
+        sound_beeps(4, 2700, 90, 70);
     }
 }
 
@@ -202,6 +204,7 @@ static bool on_event(int code)
     s_left_us = 0;
     s_buzz = 1;
     power_vibrate(VIB_CALL);
+    sound_beeps(4, 2700, 90, 70);
     refresh();
     return true;                       /* ouvrir l'app et allumer l'écran */
 }

@@ -26,7 +26,7 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
 - Appairage sécurisé LE Secure Connections + code à 6 chiffres, reconnexion automatique.
 - Mode avion (Bluetooth coupé → vrai light sleep), écran **Énergie** (consommation moyenne
   mesurée par le compteur coulométrique de l'AXP202).
-- **Apps** : lanceur (← depuis le cadran) avec **Chrono** (tours), **Minuteur** (sonne même
+- **Apps** : lanceur (← depuis le cadran) avec **Chrono** (tours), **Minuteur** (bipe et vibre même
   écran éteint, l'app se rouvre), **Lampe** (blanc / rouge) et **TV-B-Gone** (éteint la plupart des téléviseurs par la LED infrarouge,
 codes Europe / USA). Un chrono ou un minuteur
   en marche garde la main : l'écran s'éteint dessus et le réveil y revient. Un petit cadre d'applications
