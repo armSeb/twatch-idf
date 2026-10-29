@@ -172,6 +172,14 @@ static const tr_t EN[] = {
     { "Viser la télé, puis appuyer", "Aim at the TV, then press" },
     { "Tous", "All" },
     { "Tester le haut-parleur", "Test the speaker" },
+    { "Revenir à la %s", "Go back to %s" },
+    { "Revenir à la version précédente ?", "Go back to the previous version?" },
+    { "La montre redémarre dessus. Réglages et appairage sont conservés.", "The watch restarts on it. Settings and pairing are kept." },
+    { "Revenir", "Go back" },
+    { "Vérification de l'image…", "Checking the image…" },
+    { "Aucune version précédente utilisable", "No usable previous version" },
+    { "Version précédente abîmée", "Previous version is damaged" },
+    { "Impossible d'activer la version précédente", "Could not activate the previous version" },
     { "Erreur audio 0x%x", "Audio error 0x%x" },
 };
 

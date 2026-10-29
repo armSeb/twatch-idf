@@ -59,7 +59,8 @@ Binaires fournis par la CI (onglet *Releases* ou *Actions*).
 3. La montre vérifie l'image (firmware T-Watch, SHA-256), l'active et redémarre.
 
 L'image est écrite dans l'autre emplacement (`ota_0`/`ota_1`) : l'ancien firmware reste
-intact jusqu'au bout. Au premier démarrage, le nouveau est « en essai » : s'il plante avant
+intact jusqu'au bout. Il reste ensuite disponible : *Réglages › Mise à jour › Revenir à la x.y.z*
+(après confirmation, image vérifiée puis redémarrage dessus ; réglages et appairage conservés). Au premier démarrage, le nouveau est « en essai » : s'il plante avant
 30 s de fonctionnement, le bootloader revient automatiquement à l'ancien. Refus sous 30 %
 de batterie hors USB ; abandon automatique après 5 min sans envoi.
 

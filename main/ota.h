@@ -39,3 +39,5 @@ const char *ota_ssid(void);
 const char *ota_password(void);
 const char *ota_new_version(void);         /* version de l'image reçue (après OTA_EV_DONE) */
 void        ota_reboot_now(void);
+const char *ota_other_version(void);       /* version de l'autre emplacement, NULL si inutilisable */
+const char *ota_boot_other(void);          /* y revenir (redémarre) ; sinon raison de l'échec */

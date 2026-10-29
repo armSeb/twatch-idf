@@ -65,7 +65,7 @@ static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_bm_lan
 static void menu_lang_cb(lv_event_t *ev);
 static lv_timer_t *w_clock_t;
 static lv_obj_t *m_sum[6], *m_bt_info, *m_confirm;
-static lv_obj_t *o_info, *o_bar, *o_status, *o_btn, *o_pw;
+static lv_obj_t *o_info, *o_bar, *o_status, *o_btn, *o_pw, *o_prev, *o_prev_modal;
 static void ota_ui_idle(void);
 static void build_ota(void);
 static void back_cb(lv_event_t *ev);
@@ -1157,6 +1157,7 @@ static void ota_ui_running(void)
     lv_label_set_text(o_status, _("Puis ouvrir\nhttp://192.168.4.1"));
     lv_label_set_text(lv_obj_get_child(o_btn, 0), _("Annuler"));
     lv_obj_set_style_bg_color(o_btn, C_OFF, 0);
+    if (o_prev) lv_obj_add_flag(o_prev, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void ota_ui_idle(void)
@@ -1173,6 +1174,73 @@ static void ota_ui_idle(void)
     lv_obj_add_flag(o_bar, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(lv_obj_get_child(o_btn, 0), with_sym(LV_SYMBOL_REFRESH, _("Démarrer")));
     lv_obj_set_style_bg_color(o_btn, C_ACC, 0);
+    const char *pv = ota_other_version();
+    if (o_prev && pv) {
+        char t[64];
+        snprintf(t, sizeof(t), _("Revenir à la %s"), pv);
+        lv_label_set_text(lv_obj_get_child(o_prev, 0), with_sym(LV_SYMBOL_LEFT, t));
+        lv_obj_remove_flag(o_prev, LV_OBJ_FLAG_HIDDEN);
+    } else if (o_prev) {
+        lv_obj_add_flag(o_prev, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+/* Retour à la version précédente : confirmation, puis vérification de
+ * l'image et redémarrage dessus. */
+static void prev_confirm_cb(lv_event_t *ev)
+{
+    bool ok = (uintptr_t)lv_event_get_user_data(ev) != 0;
+    lv_obj_add_flag(o_prev_modal, LV_OBJ_FLAG_HIDDEN);
+    if (!ok) return;
+    lv_label_set_text(o_status, _("Vérification de l'image…"));
+    lv_obj_set_style_text_color(o_status, C_DIM, 0);
+    lv_refr_now(NULL);
+    const char *err = ota_boot_other();          /* ne revient qu'en cas d'échec */
+    lv_obj_set_style_text_color(o_status, C_BAD, 0);
+    lv_label_set_text(o_status, _(err));
+}
+
+static void prev_cb(lv_event_t *ev)
+{
+    if (ota_active()) return;
+    lv_obj_remove_flag(o_prev_modal, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(o_prev_modal);
+}
+
+static lv_obj_t *mk_modal(lv_obj_t *parent, const char *q, const char *sub, const char *ok_txt,
+                          lv_color_t ok_col, lv_event_cb_t cb)
+{
+    lv_obj_t *m = lv_obj_create(parent);
+    lv_obj_remove_style_all(m);
+    lv_obj_set_size(m, BOARD_LCD_W, BOARD_LCD_H);
+    lv_obj_add_flag(m, LV_OBJ_FLAG_FLOATING);
+    lv_obj_set_pos(m, 0, 0);
+    lv_obj_set_style_bg_color(m, C_BG, 0);
+    lv_obj_set_style_bg_opa(m, LV_OPA_80, 0);
+    lv_obj_add_flag(m, LV_OBJ_FLAG_CLICKABLE);              /* bloque les touches dessous */
+    lv_obj_t *card = lv_obj_create(m);
+    lv_obj_set_size(card, 220, 176);
+    lv_obj_center(card);
+    lv_obj_set_style_bg_color(card, C_CARD, 0);
+    lv_obj_set_style_border_width(card, 0, 0);
+    lv_obj_set_style_radius(card, 14, 0);
+    lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *l = mk_label(card, &font_text_16, C_FG, q);
+    lv_obj_set_width(l, 190);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(l, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_t *l2 = mk_label(card, &font_small_11, C_DIM, sub);
+    lv_obj_set_width(l2, 190);
+    lv_obj_set_style_text_align(l2, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(l2, LV_ALIGN_TOP_MID, 0, 48);
+    lv_obj_t *no = mk_button(card, _("Annuler"), C_OFF, cb, (void *)0);
+    lv_obj_set_size(no, 88, 40);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_t *yes = mk_button(card, ok_txt, ok_col, cb, (void *)1);
+    lv_obj_set_size(yes, 88, 40);
+    lv_obj_align(yes, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+    lv_obj_add_flag(m, LV_OBJ_FLAG_HIDDEN);
+    return m;
 }
 
 static void ota_btn_cb(lv_event_t *ev)
@@ -1241,6 +1309,15 @@ static void build_ota(void)
     lv_obj_set_width(o_status, lv_pct(100));
     o_btn = mk_button(col, "", C_ACC, ota_btn_cb, NULL);
     lv_obj_set_size(o_btn, lv_pct(100), 44);
+    /* retour à la version précédente : à part, sous une confirmation */
+    lv_obj_t *sp = mk_container(col);
+    lv_obj_set_size(sp, 10, 10);
+    o_prev = mk_button(col, "", C_CARD, prev_cb, NULL);
+    lv_obj_set_size(o_prev, lv_pct(100), 44);
+    lv_obj_add_flag(o_prev, LV_OBJ_FLAG_HIDDEN);
+    o_prev_modal = mk_modal(s_scr[SCR_OTA], _("Revenir à la version précédente ?"),
+                            _("La montre redémarre dessus. Réglages et appairage sont conservés."),
+                            _("Revenir"), C_WARN, prev_confirm_cb);
     if (ota_active()) ota_ui_running();
     else ota_ui_idle();
 }
@@ -1963,7 +2040,7 @@ static void release_menu(void)
     /* plus aucun pointeur vers des objets détruits */
     m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = m_bm_lang = NULL;
     m_bt_info = m_confirm = NULL;
-    o_info = o_bar = o_status = o_btn = o_pw = NULL;
+    o_info = o_bar = o_status = o_btn = o_pw = o_prev = o_prev_modal = NULL;
     memset(m_sum, 0, sizeof(m_sum));
 }
 

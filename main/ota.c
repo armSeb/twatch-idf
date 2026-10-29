@@ -9,6 +9,7 @@
 #include "esp_system.h"
 #include "esp_ota_ops.h"
 #include "esp_app_format.h"
+#include "esp_image_format.h"
 #include "esp_app_desc.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
@@ -68,6 +69,48 @@ void ota_tick(void)
 }
 
 bool ota_rolled_back(void) { return s_rolled_back; }
+
+/* ------------------------------------------------------------------ */
+/* Retour à la version précédente (l'autre emplacement OTA)             */
+/* ------------------------------------------------------------------ */
+static const esp_partition_t *other_slot(void)
+{
+    const esp_partition_t *run = esp_ota_get_running_partition();
+    const esp_partition_t *o = esp_ota_get_next_update_partition(NULL);
+    return (o && run && o->address != run->address) ? o : NULL;
+}
+
+/* Version de l'autre emplacement si c'est un firmware T-Watch qui n'a pas
+ * été marqué invalide ; NULL sinon (vide, effacé, transfert interrompu…). */
+const char *ota_other_version(void)
+{
+    static char ver[32];
+    const esp_partition_t *o = other_slot();
+    if (!o) return NULL;
+    esp_app_desc_t d;
+    if (esp_ota_get_partition_description(o, &d) != ESP_OK) return NULL;
+    if (strncmp(d.project_name, esp_app_get_description()->project_name, sizeof(d.project_name))) return NULL;
+    esp_ota_img_states_t st;
+    if (esp_ota_get_state_partition(o, &st) == ESP_OK &&
+        (st == ESP_OTA_IMG_INVALID || st == ESP_OTA_IMG_ABORTED)) return NULL;
+    strlcpy(ver, d.version, sizeof(ver));
+    return ver;
+}
+
+/* Vérifie l'image complète (somme + SHA-256), l'active et redémarre.
+ * Ne revient qu'en cas d'échec (message à afficher). */
+const char *ota_boot_other(void)
+{
+    const esp_partition_t *o = other_slot();
+    if (!o || !ota_other_version()) return N_("Aucune version précédente utilisable");
+    const esp_partition_pos_t pos = { .offset = o->address, .size = o->size };
+    esp_image_metadata_t md;
+    if (esp_image_verify(ESP_IMAGE_VERIFY, &pos, &md) != ESP_OK) return N_("Version précédente abîmée");
+    if (esp_ota_set_boot_partition(o) != ESP_OK) return N_("Impossible d'activer la version précédente");
+    ESP_LOGI(TAG, "retour à la version précédente (%s)", o->label);
+    ota_reboot_now();
+    return NULL;
+}
 
 /* ------------------------------------------------------------------ */
 /* Page web (en flash)                                                  */

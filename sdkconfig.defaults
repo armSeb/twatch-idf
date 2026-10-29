@@ -129,8 +129,8 @@ CONFIG_LWIP_IRAM_OPTIMIZATION=n
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 
 # PSRAM IPS6404 8 Mo (4 Mo adressables sans himem), alimentée par VDD_SDIO avec la flash
-# Désactivée en 0.13.4 : coupures BLE 0x208 apparues avec la 0.13.0 (enquête en cours)
-# CONFIG_SPIRAM is not set
+# (0.13.4–0.13.5 sans PSRAM : les coupures 0x208 ne venaient pas d'elle)
+CONFIG_SPIRAM=y
 CONFIG_SPIRAM_TYPE_AUTO=y
 CONFIG_SPIRAM_SPEED_40M=y
 CONFIG_SPIRAM_IGNORE_NOTFOUND=y
