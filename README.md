@@ -26,6 +26,11 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
 - Appairage sécurisé LE Secure Connections + code à 6 chiffres, reconnexion automatique.
 - Mode avion (Bluetooth coupé → vrai light sleep), écran **Énergie** (consommation moyenne
   mesurée par le compteur coulométrique de l'AXP202).
+- **Apps** : lanceur (← depuis le cadran) avec **Chrono** (tours), **Minuteur** (sonne même
+  écran éteint, l'app se rouvre) et **Lampe** (blanc / rouge). Un petit cadre d'applications
+  (`app.h`) permet d'en ajouter en un fichier.
+- **Contrôles rapides** (↓ depuis le cadran) : Bluetooth, **Ne pas déranger**, Lampe,
+  Lecture, luminosité.
 - Démarrage quasi instantané, coredump en flash en cas de crash.
 
 Consommation mesurée : ~8,6 mA de moyenne **en utilisation réelle** (3 % du temps écran
@@ -88,7 +93,7 @@ idf.py build flash monitor          # ESP-IDF 5.5.6
 
 ## Appairage iPhone
 
-1. Montre : glisser ← → *Réglages* → **Appairer un iPhone**.
+1. Montre : glisser ← → *Réglages* → *Bluetooth* → **Appairer un iPhone**.
 2. iPhone : *Réglages › Bluetooth* → **T-Watch**.
 3. Saisir sur l'iPhone le **code à 6 chiffres affiché sur la montre**.
 4. Accepter « Autoriser les notifications » (la montre réessaie pendant ~1 min).
@@ -99,17 +104,21 @@ Si l'iPhone oublie la montre, elle efface son propre bond et relance un appairag
 
 | Où | Geste / bouton | Effet |
 |---|---|---|
-| Cadran | ↑ | Liste des notifications |
-| Cadran | ← | Réglages |
-| Cadran | ↓ | Lecture en cours |
-| Partout | → | Retour |
+| Cadran | ↑ | Notifications (refermer : ↓ ou →) |
+| Cadran | ↓ | Contrôles rapides (refermer : ↑ ou →) |
+| Cadran | ← | Apps : Lecture, Chrono, Minuteur, Lampe, Énergie, Réglages |
+| Cadran | appui long | Choix du cadran (Affichage) |
+| Partout ailleurs | → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Allume l'écran (comme le bouton) |
 | Bouton (écran éteint) | appui court | Allume l'écran (sur la dernière notif non vue en mode discret) |
 | Bouton (hors cadran) | appui court | Retour cadran |
 | Bouton (sur cadran) | appui court | Éteint l'écran |
 | Bouton | 4 s | Coupure matérielle AXP202 |
 
-Réglages (← depuis le cadran) : un accueil par catégories (dont **Mise à jour**) avec résumé de l'état, puis
+**Ne pas déranger** (contrôles rapides) : ni vibration ni allumage pour les notifications,
+qui attendent dans la liste ; les appels sonnent toujours. Une lune le signale sur le cadran.
+
+Réglages (← puis *Réglages*) : un accueil par catégories (dont **Mise à jour**) avec résumé de l'état, puis
 **Affichage** (cadran Rétro/Pub/Digital, luminosité, extinction), **Alertes** (vibreur,
 allumage sur notif — sinon mode discret —, double tap), **Bluetooth** (mode avion,
 appairage, « Oublier les appareils » derrière une confirmation), **Énergie**, **À propos**.
@@ -201,6 +210,20 @@ pas de lib AXP/BMA/FT (quelques registres suffisent), `esp_lcd` natif, `i2c_mast
 - Le signal TE du ST7789 n'est pas câblé : pas de synchro anti-tearing possible, d'où
   flash QIO 80 MHz, double tampon DMA de 60 lignes et animations courtes.
 
+## Écrire une app
+
+Une app est un fichier `main/app_xxx.c` qui définit un `const app_t` (nom, icône, couleur,
+`create(scr)`, et au besoin `destroy`, `on_show`, `on_hide`, `on_event`,
+`screen_timeout_ms`), puis une ligne dans `main/apps.c`. Le système lui fournit un écran vide
+où le geste → ramène déjà à l'écran d'origine ; `ui_kit.h` donne la palette, les icônes et
+les briques (`ui_label`, `ui_button`, `ui_header`, `ui_toast`…).
+
+La vue est **détruite à l'extinction de l'écran** (RAM) : l'état durable vit dans des
+variables statiques, jamais dans les objets LVGL. Pour agir écran éteint (minuteur), l'app
+arme un `esp_timer` et appelle `app_post_event(&app_xxx, code)` ; si `on_event` renvoie
+`true`, le système rouvre l'app et allume l'écran. Voir `app_chrono.c`, `app_timer.c`,
+`app_lamp.c`.
+
 ## Tests PC
 
 ```bash
@@ -222,13 +245,15 @@ Parseur ANCS, nettoyage UTF-8, stockage (dédup/tri/capacité), sous `-fsanitize
 | `main/power.c` / `axp202.c` | PMIC, batterie (OCV + compensation IR), verrous PM, rétroéclairage, vibreur |
 | `main/wclock.c` | PCF8563 (UTC), fuseau, resynchro de l'horloge système |
 | `main/settings.c` | réglages NVS |
+| `main/app.h` / `apps.c` / `app_*.c` / `ui_kit.h` | cadre d'apps, registre, apps livrées, briques d'UI partagées |
+| `main/gauge.c` | jauge adaptative (compteur coulométrique, apprentissage de la capacité) |
 | `main/ota.c` | mise à jour Wi-Fi : point d'accès, page web, écriture OTA, validation / retour arrière |
 | `main/fonts/` | polices générées (`tools/gen_fonts.sh`) |
 
 ## Pistes
 
 - Réveil au poignet / double tape (config BMA423 à charger, ~150–500 µA).
-- Historique de consommation en NVS.
+- Interface en anglais (choix FR/EN).
 - Répondre aux SMS : impossible via ANCS (seules les actions iOS positive/négative existent).
 
 ---

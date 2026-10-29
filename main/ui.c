@@ -21,31 +21,26 @@
 #include "esp_app_desc.h"
 #include "esp_idf_version.h"
 
-/* ------------------------------------------------------------------ */
-#define C_BG    lv_color_hex(0x000000)
-#define C_FG    lv_color_hex(0xF2F2F2)
-#define C_DIM   lv_color_hex(0x8A8F98)
-#define C_OFF   lv_color_hex(0x3A3D44)
-#define C_CARD  lv_color_hex(0x1A1D23)
-#define C_ACC   lv_color_hex(0x3B82F6)
-#define C_OK    lv_color_hex(0x22C55E)
-#define C_WARN  lv_color_hex(0xF59E0B)
-#define C_BAD   lv_color_hex(0xEF4444)
+#include "ui_kit.h"
+#include "app.h"
 
-#define SYM_COMMENTS "\xEF\x82\x86"   /* U+F086 */
-#define SYM_EYE      "\xEF\x81\xAE"   /* U+F06E */
-
-#define ANIM_MS 140
+#define ANIM_MS UI_ANIM_MS
 
 typedef enum {
-    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_MEDIA, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT, SCR_OTA, SCR_COUNT
+    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_MEDIA, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT, SCR_OTA,
+    SCR_LAUNCHER, SCR_QUICK, SCR_APP, SCR_COUNT
 } scr_id_t;
 
 static lv_obj_t *s_scr[SCR_COUNT];
 static scr_id_t s_cur = SCR_WATCH;
+/* écran d'où l'on vient (retour par « ‹ » ou →), posé à chaque ouverture */
+static scr_id_t s_origin[SCR_COUNT];
+static const app_t *s_app_cur;           /* app hébergée sur SCR_APP */
+/* lanceur / contrôles rapides */
+static lv_obj_t *q_info, *q_bri;
 
 /* cadran */
-static lv_obj_t *w_digital, *w_classic, *w_pub, *w_scr;
+static lv_obj_t *w_digital, *w_classic, *w_pub, *w_scr, *w_dnd;
 enum { FACE_CLASSIC = 0, FACE_DIGITAL = 1, FACE_PUB = 2 };
 static lv_obj_t *w_time, *w_date, *w_ble, *w_batt, *w_notif;
 /* liste */
@@ -71,6 +66,7 @@ static void build_ota(void);
 static void back_cb(lv_event_t *ev);
 static void menu_bt_refresh(void);
 static scr_id_t menu_parent(scr_id_t id);
+static void nav_open(scr_id_t id, lv_screen_load_anim_t anim);
 static void menu_refresh_summaries(void);
 static lv_timer_t *m_toast_t;
 /* énergie */
@@ -145,6 +141,13 @@ static lv_obj_t *mk_button(lv_obj_t *p, const char *txt, lv_color_t bg, lv_event
     return b;
 }
 
+/* exports ui_kit.h (apps) */
+lv_obj_t *ui_screen(void) { return mk_screen(); }
+lv_obj_t *ui_label(lv_obj_t *p, const lv_font_t *f, lv_color_t c, const char *t) { return mk_label(p, f, c, t); }
+lv_obj_t *ui_button(lv_obj_t *p, const char *t, lv_color_t bg, lv_event_cb_t cb, void *ud) { return mk_button(p, t, bg, cb, ud); }
+lv_obj_t *ui_container(lv_obj_t *p) { return mk_container(p); }
+void      ui_bubble(lv_obj_t *o) { bubble(o); }
+
 static const char *cat_icon(uint8_t cat)
 {
     switch (cat) {
@@ -197,27 +200,55 @@ static void build_menu(void);
 static void build_media(void);
 static void menu_sync_from_settings(void);
 
-/* Réglages et lecture en cours : construits à la demande, libérés écran
- * éteint (ui_release_idle) pour ménager le pool LVGL de 64 Ko. */
-static bool is_menu_group(scr_id_t id)
-{
-    return id == SCR_MENU || id == SCR_SET_DISP || id == SCR_SET_ALERT || id == SCR_SET_BT || id == SCR_OTA;
-}
+/* Écrans construits à la demande et libérés écran éteint (ui_release_idle)
+ * pour ménager la RAM. Avant d'en construire un, on libère les autres
+ * groupes, sauf celui affiché (il peut être en train de s'animer). */
+enum { G_NONE = 0, G_MENU, G_MEDIA, G_LAUNCHER, G_QUICK, G_APP };
 
-static void release_menu(void);
-static void release_media(void);
+static int group_of(scr_id_t id)
+{
+    switch (id) {
+    case SCR_MENU: case SCR_SET_DISP: case SCR_SET_ALERT: case SCR_SET_BT: case SCR_OTA: return G_MENU;
+    case SCR_MEDIA:    return G_MEDIA;
+    case SCR_LAUNCHER: return G_LAUNCHER;
+    case SCR_QUICK:    return G_QUICK;
+    case SCR_APP:      return G_APP;
+    default:           return G_NONE;
+    }
+}
+static bool is_menu_group(scr_id_t id) { return group_of(id) == G_MENU; }
+
+static void release_group(int g);
+static void build_launcher(void);
+static void watch_long_cb(lv_event_t *ev);
+static void build_quick(void);
+static void app_build(const app_t *a);
 
 static void ensure_screen(scr_id_t id)
 {
-    if (s_scr[id]) return;
-    /* un seul groupe paresseux à la fois : on libère l'autre avant de construire */
-    if (is_menu_group(id)) { release_media(); build_menu(); menu_sync_from_settings(); }
-    else if (id == SCR_MEDIA) { release_menu(); build_media(); }
+    int g = group_of(id);
+    if (g == G_NONE || s_scr[id]) return;
+    for (int o = G_MENU; o <= G_APP; o++) {
+        if (o != g && o != group_of(s_cur)) release_group(o);
+    }
+    switch (g) {
+    case G_MENU:     build_menu(); menu_sync_from_settings(); break;
+    case G_MEDIA:    build_media(); break;
+    case G_LAUNCHER: build_launcher(); break;
+    case G_QUICK:    build_quick(); break;
+    case G_APP:      if (s_app_cur) app_build(s_app_cur); break;
+    }
 }
+
+static void quick_refresh(void);
 
 static void show(scr_id_t id, lv_screen_load_anim_t anim)
 {
     ensure_screen(id);
+    if (!s_scr[id]) id = SCR_WATCH;                    /* sécurité : rien à afficher */
+    if (s_cur == SCR_APP && id != SCR_APP && s_app_cur && s_app_cur->on_hide) s_app_cur->on_hide();
+    if (id == SCR_APP && s_cur != SCR_APP && s_app_cur && s_app_cur->on_show) s_app_cur->on_show();
+    if (id == SCR_QUICK) quick_refresh();
     if (id == SCR_LIST && l_dirty) list_rebuild();
     if (id == SCR_POWER) { power_refresh(); lv_timer_resume(p_timer); }
     else lv_timer_pause(p_timer);
@@ -240,39 +271,32 @@ static void gesture_cb(lv_event_t *e)
     lv_dir_t dir = lv_indev_get_gesture_dir(indev);
     bool handled = true;
     switch (s_cur) {
-    case SCR_WATCH:
-        if (dir == LV_DIR_TOP) show(SCR_LIST, LV_SCR_LOAD_ANIM_MOVE_TOP);
-        else if (dir == LV_DIR_LEFT) show(SCR_MENU, LV_SCR_LOAD_ANIM_MOVE_LEFT);
-        else if (dir == LV_DIR_BOTTOM) show(SCR_MEDIA, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
+    case SCR_WATCH:            /* ↑ notifications · ↓ contrôles rapides · ← apps */
+        if (dir == LV_DIR_TOP) nav_open(SCR_LIST, LV_SCR_LOAD_ANIM_MOVE_TOP);
+        else if (dir == LV_DIR_BOTTOM) nav_open(SCR_QUICK, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
+        else if (dir == LV_DIR_LEFT) nav_open(SCR_LAUNCHER, LV_SCR_LOAD_ANIM_MOVE_LEFT);
         else handled = false;
         break;
-    case SCR_MEDIA:
-        if (dir == LV_DIR_TOP) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_TOP);
+    case SCR_LIST:             /* fermé par le geste inverse ou → */
+        if (dir == LV_DIR_BOTTOM) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
         else if (dir == LV_DIR_RIGHT) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
         else handled = false;
         break;
-    case SCR_LIST:
-        if (dir == LV_DIR_RIGHT) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
-        else if (dir == LV_DIR_BOTTOM) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
+    case SCR_QUICK:
+        if (dir == LV_DIR_TOP) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_TOP);
+        else if (dir == LV_DIR_RIGHT) show(SCR_WATCH, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
         else handled = false;
         break;
     case SCR_DETAIL:
         if (dir == LV_DIR_RIGHT) show(d_return, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
         else handled = false;
         break;
-    case SCR_MENU:
-    case SCR_PAIR:
-    case SCR_POWER:
-    case SCR_ABOUT:
-    case SCR_SET_DISP:
-    case SCR_SET_ALERT:
-    case SCR_SET_BT:
-    case SCR_OTA:
+    case SCR_CALL:
+        handled = false;       /* l'appel se traite par ses boutons */
+        break;
+    default:                   /* partout ailleurs : → = retour à l'origine */
         if (dir == LV_DIR_RIGHT) back_cb(NULL);
         else handled = false;
-        break;
-    default:
-        handled = false;
         break;
     }
     if (handled) lv_indev_wait_release(indev);
@@ -315,6 +339,15 @@ static void apply_face(void)
     if (f == FACE_PUB && !w_pub)         w_pub = face_pub_create(w_scr);
     if (f == FACE_DIGITAL) lv_obj_remove_flag(w_digital, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(w_digital, LV_OBJ_FLAG_HIDDEN);
+    /* lune « ne pas déranger » des cadrans analogiques, sous le guichet date */
+    if (!w_dnd) {
+        w_dnd = mk_label(w_scr, &font_text_16, C_DIM, SYM_MOON);
+        lv_obj_set_pos(w_dnd, 170, 136);
+    }
+    lv_obj_set_style_text_color(w_dnd, lv_color_hex(f == FACE_PUB ? 0xC9A24A : 0x23407E), 0);
+    lv_obj_move_foreground(w_dnd);
+    if (f != FACE_DIGITAL && settings_get()->dnd) lv_obj_remove_flag(w_dnd, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(w_dnd, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void watch_refresh_status(void)
@@ -341,8 +374,13 @@ static void watch_refresh_status(void)
     lv_obj_set_style_text_color(w_batt, (p <= 15 && !power_vbus()) ? C_BAD : C_FG, 0);
 
     int n = ns_count();
-    if (n > 0) lv_label_set_text_fmt(w_notif, LV_SYMBOL_BELL " %d", n);
-    else lv_label_set_text(w_notif, "");
+    const char *dnd = settings_get()->dnd ? SYM_MOON " " : "";
+    if (w_dnd) {
+        if (settings_get()->dnd && settings_get()->watchface != FACE_DIGITAL) lv_obj_remove_flag(w_dnd, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(w_dnd, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (n > 0) lv_label_set_text_fmt(w_notif, "%s" LV_SYMBOL_BELL " %d", dnd, n);
+    else lv_label_set_text(w_notif, settings_get()->dnd ? SYM_MOON : "");
 
     if (w_classic) face_classic_set_status(p, power_charging(), bi.state == BLE_ST_READY, bi.state != BLE_ST_OFF, n);
     if (w_pub) {
@@ -365,7 +403,7 @@ static void build_watch(void)
     /* cadran numérique */
     w_digital = mk_container(s);
     lv_obj_set_size(w_digital, BOARD_LCD_W, BOARD_LCD_H);
-    lv_obj_remove_flag(w_digital, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(w_digital, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_t *d = w_digital;
     w_ble = mk_label(d, &font_title_20, C_OFF, LV_SYMBOL_BLUETOOTH);
     lv_obj_align(w_ble, LV_ALIGN_TOP_LEFT, 14, 10);
@@ -382,6 +420,7 @@ static void build_watch(void)
 
     /* cadrans analogiques : créés par apply_face() selon le réglage */
     w_scr = s;
+    lv_obj_add_event_cb(s, watch_long_cb, LV_EVENT_LONG_PRESSED, NULL);
     apply_face();
     lv_timer_create(clock_timer_cb, 1000, NULL);
 }
@@ -610,6 +649,8 @@ static void toast(const char *txt)
     lv_timer_resume(m_toast_t);
 }
 
+void ui_toast(const char *txt) { toast(txt); }
+
 static const uint8_t TMO_VALUES[] = { 5, 8, 10, 15, 30 };
 
 static void menu_slider_cb(lv_event_t *ev)
@@ -674,6 +715,13 @@ static void menu_face_cb(lv_event_t *ev)
     watch_refresh_status();
 }
 
+/* ouvre un écran en mémorisant d'où l'on vient (pour « ‹ » et →) */
+static void nav_open(scr_id_t id, lv_screen_load_anim_t anim)
+{
+    if (id != s_cur) s_origin[id] = s_cur;
+    show(id, anim);
+}
+
 static void menu_nav_cb(lv_event_t *ev)
 {
     scr_id_t id = (scr_id_t)(uintptr_t)lv_event_get_user_data(ev);
@@ -684,18 +732,14 @@ static void menu_nav_cb(lv_event_t *ev)
         lv_label_set_text(pa_hint, "iPhone : Réglages > Bluetooth\n> T-Watch, puis « Jumeler »");
         ble_pairing_mode();
     }
-    show(id, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+    nav_open(id, LV_SCR_LOAD_ANIM_MOVE_LEFT);
 }
 
-/* écran parent (retour) de chaque page de réglages */
+/* écran de retour : celui d'où l'on est venu */
 static scr_id_t menu_parent(scr_id_t id)
 {
-    switch (id) {
-    case SCR_SET_DISP: case SCR_SET_ALERT: case SCR_SET_BT: case SCR_OTA:
-    case SCR_POWER: case SCR_ABOUT:        return SCR_MENU;
-    case SCR_PAIR:                         return SCR_SET_BT;
-    default:                               return SCR_WATCH;
-    }
+    scr_id_t o = s_origin[id];
+    return (o == id || o >= SCR_COUNT || o == SCR_CALL) ? SCR_WATCH : o;
 }
 
 static void back_cb(lv_event_t *ev)
@@ -732,9 +776,8 @@ static void style_switch(lv_obj_t *sw)
 }
 
 /* Page de réglages : en-tête « ‹ Titre » cliquable + colonne défilante */
-static lv_obj_t *mk_page(scr_id_t id, const char *title)
+int ui_header(lv_obj_t *s, const char *title)
 {
-    lv_obj_t *s = s_scr[id] = mk_screen();
     lv_obj_t *hdr = lv_button_create(s);
     lv_obj_remove_style_all(hdr);
     lv_obj_set_size(hdr, BOARD_LCD_W, 40);
@@ -747,7 +790,13 @@ static lv_obj_t *mk_page(scr_id_t id, const char *title)
     lv_obj_align(ar, LV_ALIGN_LEFT_MID, 12, 0);
     lv_obj_t *t = mk_label(hdr, &font_title_20, C_FG, title);
     lv_obj_align(t, LV_ALIGN_LEFT_MID, 36, 0);
+    return 40;
+}
 
+static lv_obj_t *mk_page(scr_id_t id, const char *title)
+{
+    lv_obj_t *s = s_scr[id] = mk_screen();
+    ui_header(s, title);
     lv_obj_t *col = mk_container(s);
     lv_obj_set_size(col, BOARD_LCD_W, BOARD_LCD_H - 40);
     lv_obj_set_pos(col, 0, 40);
@@ -1447,6 +1496,318 @@ void ui_on_media(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* Lanceur d'apps (← depuis le cadran)                                  */
+/* ------------------------------------------------------------------ */
+typedef struct {
+    const char *name, *icon;
+    uint32_t color;
+    scr_id_t scr;            /* écran système, ou SCR_APP */
+    const app_t *app;
+} launch_t;
+
+#define LAUNCH_MAX 16
+static launch_t s_launch[LAUNCH_MAX];
+static int s_launch_n;
+
+static void launch_cb(lv_event_t *ev)
+{
+    int i = (int)(uintptr_t)lv_event_get_user_data(ev);
+    if (i < 0 || i >= s_launch_n) return;
+    if (s_launch[i].app) app_open(s_launch[i].app);
+    else nav_open(s_launch[i].scr, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+}
+
+static void launch_add(const char *name, const char *icon, uint32_t color, scr_id_t scr, const app_t *app)
+{
+    if (s_launch_n >= LAUNCH_MAX) return;
+    s_launch[s_launch_n++] = (launch_t){ name, icon, color, scr, app };
+}
+
+static void build_launcher(void)
+{
+    s_launch_n = 0;
+    launch_add("Lecture", LV_SYMBOL_AUDIO, 0x1DB954, SCR_MEDIA, NULL);
+    for (int i = 0; i < g_app_count; i++)
+        launch_add(g_apps[i]->name, g_apps[i]->icon, g_apps[i]->color, SCR_APP, g_apps[i]);
+    launch_add("Énergie", LV_SYMBOL_BATTERY_FULL, 0x22C55E, SCR_POWER, NULL);
+    launch_add("Réglages", LV_SYMBOL_SETTINGS, 0x8A8F98, SCR_MENU, NULL);
+
+    lv_obj_t *s = s_scr[SCR_LAUNCHER] = mk_screen();
+    lv_obj_t *t = mk_label(s, &font_text_16, C_DIM, "Apps");
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 6);
+
+    lv_obj_t *grid = mk_container(s);
+    lv_obj_set_size(grid, BOARD_LCD_W, BOARD_LCD_H - 30);
+    lv_obj_align(grid, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_flex_align(grid, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_hor(grid, 4, 0);
+    lv_obj_set_style_pad_row(grid, 4, 0);
+    lv_obj_set_style_pad_column(grid, 4, 0);
+    lv_obj_set_scroll_dir(grid, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_OFF);
+
+    for (int i = 0; i < s_launch_n; i++) {
+        lv_obj_t *cell = mk_container(grid);
+        lv_obj_set_size(cell, 74, 98);
+        lv_obj_remove_flag(cell, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(cell, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_opa(cell, LV_OPA_20, LV_STATE_PRESSED);
+        lv_obj_set_style_bg_color(cell, C_FG, LV_STATE_PRESSED);
+        lv_obj_set_style_radius(cell, 14, 0);
+        lv_obj_add_event_cb(cell, launch_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)i);
+
+        lv_obj_t *disc = lv_obj_create(cell);
+        lv_obj_set_size(disc, 58, 58);
+        lv_obj_align(disc, LV_ALIGN_TOP_MID, 0, 6);
+        lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(disc, 0, 0);
+        lv_obj_set_style_bg_color(disc, lv_color_hex(s_launch[i].color), 0);
+        lv_obj_set_style_bg_opa(disc, LV_OPA_COVER, 0);
+        lv_obj_remove_flag(disc, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        bubble(disc);
+        lv_obj_t *ic = mk_label(disc, &font_title_20, lv_color_hex(0x000000), s_launch[i].icon);
+        lv_obj_center(ic);
+
+        lv_obj_t *nm = mk_label(cell, &font_small_11, C_FG, s_launch[i].name);
+        lv_obj_align(nm, LV_ALIGN_BOTTOM_MID, 0, -6);
+    }
+}
+
+static void release_launcher(void)
+{
+    if (!s_scr[SCR_LAUNCHER] || s_cur == SCR_LAUNCHER) return;
+    lv_obj_delete(s_scr[SCR_LAUNCHER]);
+    s_scr[SCR_LAUNCHER] = NULL;
+}
+
+/* ------------------------------------------------------------------ */
+/* Contrôles rapides (↓ depuis le cadran)                               */
+/* ------------------------------------------------------------------ */
+enum { Q_BT, Q_DND, Q_LAMP, Q_MEDIA, Q_N };
+static lv_obj_t *q_tile[Q_N];
+
+static const app_t *find_app(const char *name)
+{
+    for (int i = 0; i < g_app_count; i++)
+        if (!strcmp(g_apps[i]->name, name)) return g_apps[i];
+    return NULL;
+}
+
+static void q_set_tile(int i, bool on)
+{
+    if (!q_tile[i]) return;
+    lv_obj_set_style_bg_color(q_tile[i], on ? C_ACC : C_CARD, 0);
+}
+
+static void quick_refresh(void)
+{
+    if (!s_scr[SCR_QUICK]) return;
+    ble_info_t bi;
+    ble_get_info(&bi);
+    const char *lk = bi.state == BLE_ST_READY ? "iPhone connecté" :
+                     (bi.state == BLE_ST_CONNECTED || bi.state == BLE_ST_SECURED) ? "Connexion…" :
+                     bi.state == BLE_ST_OFF ? "Bluetooth coupé" : "iPhone absent";
+    lv_label_set_text_fmt(q_info, "%s%d%%  ·  %s", power_charging() ? LV_SYMBOL_CHARGE " " : "",
+                          power_percent(), lk);
+    q_set_tile(Q_BT, ble_running());
+    q_set_tile(Q_DND, settings_get()->dnd);
+    lv_bar_set_value(q_bri, settings_get()->brightness, LV_ANIM_OFF);
+}
+
+static void quick_tile_cb(lv_event_t *ev)
+{
+    int i = (int)(uintptr_t)lv_event_get_user_data(ev);
+    settings_t *st = settings_get();
+    switch (i) {
+    case Q_BT:
+        st->ble_enabled = !ble_running();
+        settings_save();
+        if (st->ble_enabled) { ble_start(); toast("Bluetooth activé"); }
+        else { ble_stop(); toast("Mode avion"); }
+        break;
+    case Q_DND:
+        st->dnd = !st->dnd;
+        settings_save();
+        toast(st->dnd ? "Ne pas déranger" : "Notifications actives");
+        watch_refresh_status();
+        break;
+    case Q_LAMP: {
+        const app_t *a = find_app("Lampe");
+        if (a) app_open(a);
+        return;
+    }
+    case Q_MEDIA:
+        nav_open(SCR_MEDIA, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+        return;
+    }
+    quick_refresh();
+}
+
+static void quick_bri_cb(lv_event_t *ev)
+{
+    int d = (int)(intptr_t)lv_event_get_user_data(ev);
+    int v = settings_get()->brightness + d;
+    if (v < 10) v = 10;
+    if (v > 255) v = 255;
+    settings_get()->brightness = (uint8_t)v;
+    display_set_brightness((uint8_t)v);
+    settings_save();
+    quick_refresh();
+}
+
+static lv_obj_t *q_mk_tile(lv_obj_t *p, int i, const char *icon, const char *txt, int x, int y)
+{
+    lv_obj_t *t = lv_obj_create(p);
+    lv_obj_set_size(t, 104, 62);
+    lv_obj_set_pos(t, x, y);
+    lv_obj_set_style_radius(t, 16, 0);
+    lv_obj_set_style_border_width(t, 0, 0);
+    lv_obj_set_style_bg_color(t, C_CARD, 0);
+    lv_obj_set_style_bg_opa(t, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(t, C_OFF, LV_STATE_PRESSED);
+    lv_obj_set_style_pad_all(t, 0, 0);
+    lv_obj_remove_flag(t, LV_OBJ_FLAG_SCROLLABLE);
+    bubble(t);
+    lv_obj_add_event_cb(t, quick_tile_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)i);
+    lv_obj_t *ic = mk_label(t, &font_title_20, C_FG, icon);
+    lv_obj_align(ic, LV_ALIGN_TOP_MID, 0, 8);
+    lv_obj_t *l = mk_label(t, &font_small_11, C_FG, txt);
+    lv_obj_align(l, LV_ALIGN_BOTTOM_MID, 0, -7);
+    q_tile[i] = t;
+    return t;
+}
+
+static void build_quick(void)
+{
+    lv_obj_t *s = s_scr[SCR_QUICK] = mk_screen();
+    q_info = mk_label(s, &font_text_16, C_DIM, "");
+    lv_obj_align(q_info, LV_ALIGN_TOP_MID, 0, 8);
+
+    q_mk_tile(s, Q_BT, LV_SYMBOL_BLUETOOTH, "Bluetooth", 12, 36);
+    q_mk_tile(s, Q_DND, SYM_MOON, "Ne pas déranger", 124, 36);
+    q_mk_tile(s, Q_LAMP, SYM_BULB, "Lampe", 12, 106);
+    q_mk_tile(s, Q_MEDIA, LV_SYMBOL_AUDIO, "Lecture", 124, 106);
+
+    /* luminosité : − [barre] + (gros boutons, faciles au doigt) */
+    lv_obj_t *mn = mk_button(s, "-", C_CARD, quick_bri_cb, (void *)(intptr_t)-49);
+    lv_obj_set_style_text_font(lv_obj_get_child(mn, 0), &font_title_20, 0);
+    lv_obj_set_size(mn, 48, 44);
+    lv_obj_set_pos(mn, 12, 180);
+    lv_obj_t *pl = mk_button(s, "+", C_CARD, quick_bri_cb, (void *)(intptr_t)49);
+    lv_obj_set_style_text_font(lv_obj_get_child(pl, 0), &font_title_20, 0);
+    lv_obj_set_size(pl, 48, 44);
+    lv_obj_set_pos(pl, 180, 180);
+    q_bri = lv_bar_create(s);
+    lv_obj_set_size(q_bri, 100, 10);
+    lv_obj_set_pos(q_bri, 70, 197);
+    lv_bar_set_range(q_bri, 10, 255);
+    lv_obj_set_style_bg_color(q_bri, C_OFF, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(q_bri, C_FG, LV_PART_INDICATOR);
+    bubble(q_bri);
+    lv_obj_t *sun = mk_label(s, &font_small_11, C_DIM, "Luminosité");
+    lv_obj_align(sun, LV_ALIGN_TOP_MID, 0, 178);
+}
+
+static void release_quick(void)
+{
+    if (!s_scr[SCR_QUICK] || s_cur == SCR_QUICK) return;
+    lv_obj_delete(s_scr[SCR_QUICK]);
+    s_scr[SCR_QUICK] = NULL;
+    q_info = q_bri = NULL;
+    memset(q_tile, 0, sizeof(q_tile));
+}
+
+/* ------------------------------------------------------------------ */
+/* Hébergement des apps                                                 */
+/* ------------------------------------------------------------------ */
+static int app_index(const app_t *a)
+{
+    for (int i = 0; i < g_app_count; i++) if (g_apps[i] == a) return i;
+    return -1;
+}
+
+static void app_build(const app_t *a)
+{
+    lv_obj_t *s = s_scr[SCR_APP] = mk_screen();
+    a->create(s);
+}
+
+static void app_drop_screen(void)
+{
+    if (!s_scr[SCR_APP]) return;
+    if (s_app_cur && s_app_cur->destroy) s_app_cur->destroy();
+    lv_obj_delete(s_scr[SCR_APP]);
+    s_scr[SCR_APP] = NULL;
+}
+
+static void release_app(void)
+{
+    if (s_cur == SCR_APP) return;
+    app_drop_screen();
+}
+
+void app_open(const app_t *a)
+{
+    if (!a || app_index(a) < 0) return;
+    if (s_cur == SCR_APP) {
+        if (s_app_cur == a) return;
+        /* remplacer l'app affichée sans repasser par l'écran d'origine */
+        if (s_app_cur && s_app_cur->on_hide) s_app_cur->on_hide();
+        if (s_app_cur && s_app_cur->destroy) s_app_cur->destroy();
+        lv_obj_t *old = s_scr[SCR_APP];
+        s_app_cur = a;
+        app_build(a);
+        if (a->on_show) a->on_show();
+        lv_screen_load(s_scr[SCR_APP]);
+        lv_obj_delete(old);
+        return;
+    }
+    if (s_app_cur != a) app_drop_screen();   /* vue d'une autre app, en réserve */
+    s_app_cur = a;
+    nav_open(SCR_APP, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+}
+
+void app_close(void)
+{
+    if (s_cur == SCR_APP) show(menu_parent(SCR_APP), LV_SCR_LOAD_ANIM_MOVE_RIGHT);
+}
+
+bool app_is_open(const app_t *a) { return s_cur == SCR_APP && s_app_cur == a; }
+
+void app_post_event(const app_t *a, int code)
+{
+    int i = app_index(a);
+    if (i < 0) return;
+    app_post_simple(EV_APP, (int32_t)((i << 16) | (code & 0xFFFF)));
+}
+
+bool ui_on_app_event(int32_t ev)
+{
+    int i = (int)(ev >> 16), code = (int)(ev & 0xFFFF);
+    if (i < 0 || i >= g_app_count || !g_apps[i]->on_event) return false;
+    const app_t *a = g_apps[i];
+    if (!a->on_event(code)) return false;
+    /* l'app demande à être montrée (alarme) : écran d'origine = cadran
+     * si on vient d'ailleurs que de l'app elle-même */
+    if (!app_is_open(a)) {
+        if (!display_is_on()) show(SCR_WATCH, LV_SCR_LOAD_ANIM_NONE);
+        app_open(a);
+    }
+    return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Appui long sur le cadran : choix du cadran (Affichage)               */
+/* ------------------------------------------------------------------ */
+static void watch_long_cb(lv_event_t *ev)
+{
+    if (s_cur != SCR_WATCH) return;
+    power_vibrate(VIB_SHORT);
+    nav_open(SCR_SET_DISP, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+}
+
+/* ------------------------------------------------------------------ */
 /* API                                                                  */
 /* ------------------------------------------------------------------ */
 void ui_init(void)
@@ -1492,10 +1853,20 @@ static void release_media(void)
     mu_seq = UINT32_MAX;
 }
 
+static void release_group(int g)
+{
+    switch (g) {
+    case G_MENU:     release_menu(); break;
+    case G_MEDIA:    release_media(); break;
+    case G_LAUNCHER: release_launcher(); break;
+    case G_QUICK:    release_quick(); break;
+    case G_APP:      release_app(); break;
+    }
+}
+
 void ui_release_idle(void)
 {
-    release_menu();
-    release_media();
+    for (int g = G_MENU; g <= G_APP; g++) release_group(g);
 }
 
 void ui_go_home(void)
@@ -1510,6 +1881,11 @@ uint32_t ui_timeout_ms(void)
     uint32_t base = settings_get()->screen_timeout_s * 1000u;
     if (ota_active()) return 10u * 60 * 1000;   /* écran allumé pendant la mise à jour */
     switch (s_cur) {
+    case SCR_APP:
+        if (s_app_cur && s_app_cur->screen_timeout_ms) return s_app_cur->screen_timeout_ms;
+        return base;
+    case SCR_LAUNCHER:
+    case SCR_QUICK:  return base > 10000 ? base : 10000;
     case SCR_DETAIL: return base > 15000 ? base : 15000;
     case SCR_CALL:   return 45000;
     case SCR_MENU:   return base > 20000 ? base : 20000;
@@ -1533,6 +1909,13 @@ bool ui_on_notif(notif_entry_t *e, bool alert)
     watch_refresh_status();
     if (s_cur == SCR_DETAIL && e->hash == d_hash) detail_fill(e);
     if (!alert) return false;
+
+    /* Ne pas déranger : rien (ni vibration ni écran), la notif attend dans
+     * la liste et le double tap la montre. Les appels passent toujours. */
+    if (settings_get()->dnd && e->n.category != ANCS_CAT_INCOMING_CALL) {
+        if (!display_is_on()) s_pending_hash = e->hash;
+        return false;
+    }
 
     /* Mode discret : écran éteint → on vibre seulement ; le bouton affichera
      * cette notif. Les appels allument toujours (décrocher/refuser). */
@@ -1601,11 +1984,16 @@ void ui_on_ble_state(int st)
         if (s_cur == SCR_CALL) show(SCR_WATCH, LV_SCR_LOAD_ANIM_NONE);
     }
     watch_refresh_status();
+    if (s_cur == SCR_QUICK) quick_refresh();
     /* l'interrupteur suit l'état réel de la pile (page construite à la demande) */
     if (m_sw_bt) lv_obj_set_state(m_sw_bt, LV_STATE_CHECKED, ble_running());
 }
 
-void ui_on_power(void) { watch_refresh_status(); }
+void ui_on_power(void)
+{
+    watch_refresh_status();
+    if (s_cur == SCR_QUICK) quick_refresh();
+}
 
 void ui_on_time_changed(void) { watch_update_time(true); }
 
@@ -1615,6 +2003,7 @@ void ui_show_passkey(uint32_t pk)
     lv_obj_set_style_text_color(pa_code, C_FG, 0);
     lv_label_set_text(pa_hint, "Saisir ce code sur l'iPhone");
     lv_timer_pause(pa_timer);
+    if (s_cur != SCR_PAIR) s_origin[SCR_PAIR] = s_cur;
     show(SCR_PAIR, LV_SCR_LOAD_ANIM_NONE);
 }
 

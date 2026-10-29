@@ -1,0 +1,18 @@
+/*
+ * apps.c — registre des apps (ordre du lanceur).
+ * Ajouter une app : écrire app_xxx.c avec un `const app_t app_xxx`, puis
+ * l'ajouter ici. Les entrées système (Lecture, Énergie, Réglages) sont
+ * ajoutées par le lanceur lui-même (ui.c).
+ */
+#include "app.h"
+
+extern const app_t app_chrono;
+extern const app_t app_timer;
+extern const app_t app_lamp;
+
+const app_t *const g_apps[] = {
+    &app_chrono,
+    &app_timer,
+    &app_lamp,
+};
+const int g_app_count = sizeof(g_apps) / sizeof(g_apps[0]);

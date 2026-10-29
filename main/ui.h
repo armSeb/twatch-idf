@@ -3,7 +3,8 @@
  *
  * Écrans : cadran · liste des notifications · détail · appel entrant ·
  * menu/réglages · énergie (télémétrie) · appairage · à propos.
- * Gestes : cadran ↑ notifications, ← menu ; → retour partout.
+ * Gestes : cadran ↑ notifications, ↓ contrôles rapides, ← apps, appui long
+ * = choix du cadran ; ailleurs → revient à l'écran d'origine.
  */
 #pragma once
 #include <stdint.h>
@@ -27,3 +28,4 @@ void ui_on_time_changed(void);
 void ui_show_passkey(uint32_t pk);
 void ui_pairing_done(int status);
 void ui_on_wake(void);                     /* juste avant l'allumage de l'écran */
+bool ui_on_app_event(int32_t a);           /* EV_APP ; true = allumer l'écran */

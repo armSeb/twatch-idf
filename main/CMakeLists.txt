@@ -16,5 +16,11 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/ancs_parse.c
     ${CMAKE_CURRENT_SOURCE_DIR}/face_classic.c
     ${CMAKE_CURRENT_SOURCE_DIR}/face_pub.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_chrono.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_timer.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_lamp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/gauge.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ota.c
     PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wno-unused-parameter;-Wno-missing-field-initializers"
 )

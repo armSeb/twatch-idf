@@ -143,6 +143,9 @@ static void handle_event(const app_event_t *ev)
     case EV_TOUCH_INT:
         if (display_tap_begin()) s_tapping = true;
         break;
+    case EV_APP:
+        if (ui_on_app_event(ev->a)) screen_wake();   /* alarme d'app : montrer l'app */
+        break;
     case EV_NOTIF:
         handle_notifs();
         break;
