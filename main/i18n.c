@@ -80,7 +80,6 @@ static const tr_t EN[] = {
     { "Par Wi-Fi, sans câble", "Over Wi-Fi, no cable" },
 
     /* mise à jour */
-    { "En attente d'un appareil…", "Waiting for a device…" },
     { "Version installée : %s\n\nLa montre crée un réseau Wi-Fi ; le Bluetooth est coupé "
       "le temps de la mise à jour.%s",
       "Installed version: %s\n\nThe watch creates a Wi-Fi network; Bluetooth is off "
@@ -102,9 +101,8 @@ static const tr_t EN[] = {
     { "Erreur Wi-Fi (mémoire ?)", "Wi-Fi error (memory?)" },
     { "Le point d'accès n'a pas démarré", "The access point did not start" },
     { "Le serveur web n'a pas démarré", "The web server did not start" },
-    { "Scanner avec l'iPhone pour rejoindre le Wi-Fi", "Scan with the iPhone to join the Wi-Fi" },
-    { "Connecté ! Scanner pour ouvrir la page", "Connected! Scan to open the page" },
-    { "Ou à la main :", "Or manually:" },
+    { "Wi-Fi « %s », mot de passe :", "Wi-Fi \"%s\", password:" },
+    { "Puis ouvrir\nhttp://192.168.4.1", "Then open\nhttp://192.168.4.1" },
 
     /* énergie */
     { "Batterie  %d %%  ·  %.3f V", "Battery  %d %%  ·  %.3f V" },

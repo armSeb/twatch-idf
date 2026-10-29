@@ -63,7 +63,7 @@ static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_bm_lan
 static void menu_lang_cb(lv_event_t *ev);
 static lv_timer_t *w_clock_t;
 static lv_obj_t *m_sum[6], *m_bt_info, *m_confirm;
-static lv_obj_t *o_info, *o_bar, *o_status, *o_btn, *o_qr, *o_qr_hint, *o_pw;
+static lv_obj_t *o_info, *o_bar, *o_status, *o_btn, *o_pw;
 static void ota_ui_idle(void);
 static void build_ota(void);
 static void back_cb(lv_event_t *ev);
@@ -1114,20 +1114,6 @@ static lv_timer_t *o_reboot_t;
 
 static void ota_reboot_cb(lv_timer_t *t) { ota_reboot_now(); }
 
-/* QR code : Wi-Fi d'abord (l'appareil photo de l'iPhone propose de
- * rejoindre le réseau), puis l'adresse de la page une fois connecté. */
-static void ota_qr_set(bool url)
-{
-    if (!o_qr) return;
-    char q[96];
-    if (url) snprintf(q, sizeof(q), "http://192.168.4.1/");
-    else snprintf(q, sizeof(q), "WIFI:T:WPA;S:%s;P:%s;;", ota_ssid(), ota_password());
-    lv_qrcode_update(o_qr, q, strlen(q));
-    lv_label_set_text(o_qr_hint, url ? _("Connecté ! Scanner pour ouvrir la page")
-                                     : _("Scanner avec l'iPhone pour rejoindre le Wi-Fi"));
-    lv_obj_set_style_text_color(o_qr_hint, url ? C_OK : C_DIM, 0);
-}
-
 static void ota_ui_running(void)
 {
     /* identifiants en gros, mot de passe groupé par 4 */
@@ -1140,16 +1126,13 @@ static void ota_ui_running(void)
     }
     g[o] = 0;
     char b[96];
-    snprintf(b, sizeof(b), "%s\n%s", _("Ou à la main :"), ota_ssid());
+    snprintf(b, sizeof(b), _("Wi-Fi « %s », mot de passe :"), ota_ssid());
     lv_label_set_text(o_info, b);
     lv_obj_set_style_text_color(o_info, C_DIM, 0);
     lv_label_set_text(o_pw, g);
     lv_obj_remove_flag(o_pw, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(o_qr, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(o_qr_hint, LV_OBJ_FLAG_HIDDEN);
-    ota_qr_set(false);
     lv_obj_set_style_text_color(o_status, C_DIM, 0);
-    lv_label_set_text(o_status, _("En attente d'un appareil…"));
+    lv_label_set_text(o_status, _("Puis ouvrir\nhttp://192.168.4.1"));
     lv_label_set_text(lv_obj_get_child(o_btn, 0), _("Annuler"));
     lv_obj_set_style_bg_color(o_btn, C_OFF, 0);
 }
@@ -1163,11 +1146,7 @@ static void ota_ui_idle(void)
     lv_label_set_text(o_info, b);
     lv_obj_set_style_text_color(o_info, C_FG, 0);
     lv_obj_scroll_to_y(lv_obj_get_parent(o_info), 0, LV_ANIM_OFF);
-    if (o_qr) {
-        lv_obj_add_flag(o_qr, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(o_qr_hint, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(o_pw, LV_OBJ_FLAG_HIDDEN);
-    }
+    if (o_pw) lv_obj_add_flag(o_pw, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(o_status, "");
     lv_obj_add_flag(o_bar, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(lv_obj_get_child(o_btn, 0), with_sym(LV_SYMBOL_REFRESH, _("Démarrer")));
@@ -1201,7 +1180,6 @@ void ui_on_ota(int code)
         lv_label_set_text(o_status, b);
     } else if (code == OTA_EV_CLIENT) {
         lv_label_set_text(o_status, _("Appareil connecté : ouvrir http://192.168.4.1"));
-        ota_qr_set(true);
     } else if (code == OTA_EV_DONE) {
         lv_bar_set_value(o_bar, 100, LV_ANIM_OFF);
         {
@@ -1225,21 +1203,6 @@ void ui_on_ota(int code)
 static void build_ota(void)
 {
     lv_obj_t *col = mk_page(SCR_OTA, _("Mise à jour"));
-    /* QR sur fond blanc (marge claire indispensable à la lecture) */
-    o_qr = lv_qrcode_create(col);
-    lv_qrcode_set_size(o_qr, 150);
-    lv_qrcode_set_dark_color(o_qr, lv_color_hex(0x000000));
-    lv_qrcode_set_light_color(o_qr, lv_color_hex(0xFFFFFF));
-    lv_obj_set_style_border_color(o_qr, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_border_width(o_qr, 8, 0);
-    lv_obj_set_style_align(o_qr, LV_ALIGN_TOP_MID, 0);
-    lv_obj_set_style_margin_left(o_qr, (BOARD_LCD_W - 24 - 166) / 2, 0);
-    lv_obj_add_flag(o_qr, LV_OBJ_FLAG_HIDDEN);
-    bubble(o_qr);
-    o_qr_hint = mk_label(col, &font_small_11, C_DIM, "");
-    lv_obj_set_width(o_qr_hint, lv_pct(100));
-    lv_obj_set_style_text_align(o_qr_hint, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_flag(o_qr_hint, LV_OBJ_FLAG_HIDDEN);
     o_info = mk_label(col, &font_text_16, C_FG, "");
     o_pw = mk_label(col, &font_num_44, C_FG, "");          /* mot de passe, bien lisible */
     lv_obj_add_flag(o_pw, LV_OBJ_FLAG_HIDDEN);
@@ -1971,7 +1934,7 @@ static void release_menu(void)
     /* plus aucun pointeur vers des objets détruits */
     m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = m_bm_lang = NULL;
     m_bt_info = m_confirm = NULL;
-    o_info = o_bar = o_status = o_btn = o_qr = o_qr_hint = o_pw = NULL;
+    o_info = o_bar = o_status = o_btn = o_pw = NULL;
     memset(m_sum, 0, sizeof(m_sum));
 }
 
