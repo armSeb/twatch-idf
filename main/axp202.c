@@ -133,6 +133,13 @@ static uint16_t read_13(uint8_t reg)      /* H8 + L5 */
 }
 
 float axp_batt_mv(void)          { return read_12(REG_BAT_V_H8) * 1.1f; }
+
+uint8_t axp_reg(uint8_t reg)
+{
+    uint8_t v = 0;
+    i2c_reg_read8(s_dev, reg, &v);
+    return v;
+}
 float axp_batt_charge_ma(void)   { return read_12(REG_BAT_ICHG_H8) * 0.5f; }
 float axp_batt_discharge_ma(void){ return read_13(REG_BAT_IDCHG_H8) * 0.5f; }
 

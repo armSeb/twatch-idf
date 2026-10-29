@@ -171,6 +171,8 @@ static const tr_t EN[] = {
     { "Erreur infrarouge", "Infrared error" },
     { "Viser la télé, puis appuyer", "Aim at the TV, then press" },
     { "Tous", "All" },
+    { "Tester le haut-parleur", "Test the speaker" },
+    { "Erreur audio 0x%x", "Audio error 0x%x" },
 };
 
 static int s_lang = LANG_FR;

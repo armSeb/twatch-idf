@@ -34,6 +34,7 @@ uint64_t  axp_irq_read_and_clear(void);
 bool      axp_vbus_present(void);
 bool      axp_is_charging(void);
 float     axp_batt_mv(void);
+uint8_t   axp_reg(uint8_t reg);                 /* lecture brute (diagnostic) */
 float     axp_batt_discharge_ma(void);
 float     axp_batt_charge_ma(void);
 

@@ -15,6 +15,8 @@
 #include "wclock.h"
 #include "settings.h"
 #include "display.h"
+#include "sound.h"
+#include "axp202.h"
 #include "esp_timer.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
@@ -689,6 +691,23 @@ static void menu_nwake_cb(lv_event_t *ev)
     settings_save();
 }
 
+static void sound_test_done(lv_timer_t *t)
+{
+    int e = sound_last_error();
+    if (e) {
+        char b[48];
+        snprintf(b, sizeof(b), _("Erreur audio 0x%x"), e);
+        toast(b);
+    }
+}
+
+static void sound_test_cb(lv_event_t *ev)
+{
+    sound_beeps(3, 2700, 120, 80);
+    lv_timer_t *t = lv_timer_create(sound_test_done, 900, NULL);
+    lv_timer_set_repeat_count(t, 1);
+}
+
 static void menu_tap_cb(lv_event_t *ev)
 {
     bool on = lv_obj_has_state(m_sw_tap, LV_STATE_CHECKED);
@@ -1061,6 +1080,9 @@ static void build_menu(void)
     m_sw_vib = mk_switch_row(col, _("Vibration"), _("Notifications et appels"), menu_vib_cb);
     m_sw_nwake = mk_switch_row(col, _("Allumer l'écran"), _("Sinon : vibreur seul"), menu_nwake_cb);
     m_sw_tap = mk_switch_row(col, _("Double tap"), _("2 tapes sur l'écran éteint"), menu_tap_cb);
+    lv_obj_t *ts = mk_button(col, with_sym(LV_SYMBOL_VOLUME_MAX, _("Tester le haut-parleur")), C_CARD,
+                             sound_test_cb, NULL);
+    lv_obj_set_size(ts, lv_pct(100), 44);
 
     /* ---- bluetooth ---- */
     col = mk_page(SCR_SET_BT, _("Bluetooth"));
@@ -1384,6 +1406,11 @@ static void about_refresh(void)
              (unsigned long)g_wake_cnt[EV_TOUCH_INT], (unsigned long)g_wake_cnt[EV_NOTIF],
              (unsigned long)g_wake_cnt[EV_MEDIA], (unsigned long)g_wake_cnt[EV_AXP_IRQ],
              (unsigned long)g_wake_cnt[EV_BLE_STATE]);
+    if (n > 0 && n < (int)sizeof(s)) {
+        /* rails AXP (0x12 sorties, 0x29 LDO3 : bit 7 mode, 6:0 tension) et son */
+        n += snprintf(s + n, sizeof(s) - n, "\nAXP 12=%02X 28=%02X 29=%02X · audio %d",
+                      axp_reg(0x12), axp_reg(0x28), axp_reg(0x29), sound_last_error());
+    }
     if (n > 0 && n < (int)sizeof(s)) {
         n += snprintf(s + n, sizeof(s) - n, _("\n\nJournal BLE (pub. %s) :\n"),
                       b.adv_active ? "active" : "INACTIVE");

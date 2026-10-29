@@ -10,3 +10,4 @@
  * Non bloquant, appelable depuis la tâche app. */
 void sound_beeps(int n, int freq_hz, int on_ms, int off_ms);
 bool sound_busy(void);
+int  sound_last_error(void);       /* 0 = dernier son joué, sinon esp_err_t */
