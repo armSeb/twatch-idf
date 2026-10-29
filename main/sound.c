@@ -18,6 +18,7 @@
 #define PIN_BCK 26
 #define PIN_WS  25
 #define PIN_DO  33
+#define LDO3_START 0x18          /* 1,3 V : valeur d'usine, sans danger */
 
 typedef struct { int n, freq, on_ms, off_ms; } beeps_t;
 static volatile int s_last_err;          /* 0 = joué, sinon code esp_err_t */
@@ -54,9 +55,19 @@ static void sound_task(void *arg)
     i2s_chan_handle_t tx = NULL;
     /* L'ampli MAX98357 est seul sur LDO3 (schéma V1), coupé au repos :
      * allumé à 3,3 V le temps du son. */
-    axp_ldo3_set(AXP_LDO3_3V3);
+    /* Démarrage en douceur : allumer à 1,3 V puis monter par pas de 0,1 V.
+     * Allumé d'un coup à 3,3 V, l'appel de courant des condensateurs de
+     * l'ampli fait plonger VCCX sous le seuil de coupure de l'AXP (3,2 V,
+     * batterie usée) : la montre s'éteint. */
+    axp_ldo3_set(LDO3_START);
     axp_set_outputs(AXP_OUT_LDO3, true);
-    vTaskDelay(pdMS_TO_TICKS(30));               /* montée du rail + démarrage de l'ampli */
+    vTaskDelay(pdMS_TO_TICKS(5));
+    for (int v = LDO3_START + 4; v < AXP_LDO3_3V3; v += 4) {
+        axp_ldo3_set((uint8_t)v);
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    axp_ldo3_set(AXP_LDO3_3V3);
+    vTaskDelay(pdMS_TO_TICKS(20));               /* démarrage de l'ampli */
     i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     cc.auto_clear = true;
     i2s_std_config_t sc = {
@@ -93,6 +104,7 @@ static void sound_task(void *arg)
     gpio_set_level(PIN_WS, 0);
     gpio_set_level(PIN_DO, 0);
     axp_set_outputs(AXP_OUT_LDO3, false);        /* broches déjà à 0 : coupure propre */
+    axp_ldo3_set(LDO3_START);
     s_busy = false;
     vTaskDelete(NULL);
 }

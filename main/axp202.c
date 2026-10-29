@@ -58,11 +58,11 @@ esp_err_t axp_init(void)
      * perturbe le 3V3 → radio BLE sourde (RSSI −82 dBm à 30 cm). L'AXP
      * conserve ses registres tant que la batterie est branchée : on rallume
      * explicitement.
-     * LDO3 : réglé à 3,3 V régulés mais coupé ; sound.c l'allume le temps
+     * LDO3 : coupé ; sound.c l'allume (montée progressive vers 3,3 V) le temps
      * d'un son (ses broches I2S restent à 0 au repos : pas d'alimentation
      * parasite de l'ampli). */
     axp_set_outputs(AXP_OUT_DCDC3 | AXP_OUT_LDO2 | AXP_OUT_LDO4, true);
-    i2c_reg_write8(s_dev, 0x29, AXP_LDO3_3V3);
+    i2c_reg_write8(s_dev, 0x29, 0x18);           /* 1,3 V : sound.c monte en douceur */
     axp_set_outputs(AXP_OUT_LDO3 | AXP_OUT_DCDC2, false);
 
     /* ADC : uniquement tension + courant batterie (0x82 bits 7,6) ; 25 Hz */
