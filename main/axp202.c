@@ -135,8 +135,8 @@ static uint16_t read_13(uint8_t reg)      /* H8 + L5 */
 float axp_batt_mv(void)          { return read_12(REG_BAT_V_H8) * 1.1f; }
 
 /* LDO3 : registre 0x29, bit 7 = mode (0 = régulé), bits 6:0 = 0,7 V + 25 mV·n.
- * Sur cette montre il est à 1,3 V (0x18) au repos ; l'ampli audio, sur ce
- * rail, ne démarre qu'à partir de 2,5 V. */
+ * Il n'alimente que l'ampli audio (schéma V1) ; à 1,3 V (0x18) au repos,
+ * alors que l'ampli ne démarre qu'à partir de 2,5 V. */
 uint8_t axp_ldo3_get(void)
 {
     uint8_t v = 0;

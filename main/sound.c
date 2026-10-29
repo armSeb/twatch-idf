@@ -52,9 +52,9 @@ static void sound_task(void *arg)
 {
     beeps_t r = s_req;
     i2s_chan_handle_t tx = NULL;
-    /* L'ampli MAX98357 est sur LDO3, laissé à 1,3 V au repos : on le monte
-     * à 3,3 V régulés (tension nominale de l'écran qui partage ce rail) le
-     * temps du son, puis on remet la valeur d'origine. */
+    /* L'ampli MAX98357 est seul sur LDO3 (schéma V1), laissé à 1,3 V au
+     * repos : on le monte à 3,3 V régulés le temps du son, puis on remet la
+     * valeur d'origine. */
     uint8_t ldo3 = axp_ldo3_get();
     axp_ldo3_set(AXP_LDO3_3V3);
     vTaskDelay(pdMS_TO_TICKS(20));               /* montée du rail + démarrage de l'ampli */
