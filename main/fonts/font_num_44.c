@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 44 px
  * Bpp: 4
- * Opts: --no-compress --no-prefilter --bpp 4 --size 44 --font lvgl/scripts/built_in_font/Montserrat-Medium.ttf -r 0x20,0x25,0x2B-0x3A --format lvgl --lv-include lvgl.h --lv-font-name font_num_44 -o font_num_44.c
+ * Opts: --no-compress --no-prefilter --bpp 4 --size 44 --font /root/localcomp/lvgl/scripts/built_in_font/Montserrat-Medium.ttf -r 0x20,0x25,0x2B-0x3A --format lvgl --lv-include lvgl.h --lv-font-name font_num_44 -o font_num_44.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE

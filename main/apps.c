@@ -9,10 +9,12 @@
 extern const app_t app_chrono;
 extern const app_t app_timer;
 extern const app_t app_lamp;
+extern const app_t app_tvbgone;
 
 const app_t *const g_apps[] = {
     &app_chrono,
     &app_timer,
     &app_lamp,
+    &app_tvbgone,
 };
 const int g_app_count = sizeof(g_apps) / sizeof(g_apps[0]);

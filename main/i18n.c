@@ -80,8 +80,6 @@ static const tr_t EN[] = {
     { "Par Wi-Fi, sans câble", "Over Wi-Fi, no cable" },
 
     /* mise à jour */
-    { "1. Wi-Fi « %s »\n    mot de passe  %s\n2. Ouvrir http://192.168.4.1\n3. Envoyer le fichier .bin",
-      "1. Wi-Fi \"%s\"\n    password  %s\n2. Open http://192.168.4.1\n3. Send the .bin file" },
     { "En attente d'un appareil…", "Waiting for a device…" },
     { "Version installée : %s\n\nLa montre crée un réseau Wi-Fi ; le Bluetooth est coupé "
       "le temps de la mise à jour.%s",
@@ -98,6 +96,15 @@ static const tr_t EN[] = {
     { "Fichier trop gros", "File too large" },
     { "Transfert interrompu : réessayer", "Transfer interrupted: try again" },
     { "Erreur d'écriture", "Write error" },
+    { "Batterie trop faible (30 % mini) : brancher l'USB", "Battery too low (30 % min): plug in USB" },
+    { "Table de partitions sans OTA : un flash USB est nécessaire", "No OTA partitions: a USB flash is required" },
+    { "Erreur réseau (boucle d'événements)", "Network error (event loop)" },
+    { "Erreur Wi-Fi (mémoire ?)", "Wi-Fi error (memory?)" },
+    { "Le point d'accès n'a pas démarré", "The access point did not start" },
+    { "Le serveur web n'a pas démarré", "The web server did not start" },
+    { "Scanner avec l'iPhone pour rejoindre le Wi-Fi", "Scan with the iPhone to join the Wi-Fi" },
+    { "Connecté ! Scanner pour ouvrir la page", "Connected! Scan to open the page" },
+    { "Ou à la main :", "Or manually:" },
 
     /* énergie */
     { "Batterie  %d %%  ·  %.3f V", "Battery  %d %%  ·  %.3f V" },
@@ -159,6 +166,13 @@ static const tr_t EN[] = {
     { "Sonne à %02d:%02d", "Rings at %02d:%02d" },
     { "En pause", "Paused" },
     { "Minuteur indisponible", "Timer unavailable" },
+    { "Code %u / %u", "Code %u / %u" },
+    { "Démarrage…", "Starting…" },
+    { "Terminé : tous les codes envoyés", "Done: all codes sent" },
+    { "Interrompu", "Stopped" },
+    { "Erreur infrarouge", "Infrared error" },
+    { "Viser la télé, puis appuyer", "Aim at the TV, then press" },
+    { "Tous", "All" },
 };
 
 static int s_lang = LANG_FR;

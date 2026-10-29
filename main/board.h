@@ -70,6 +70,9 @@
  * pendant le modem sleep (bt.c, btdm_sleep_enter_phase2) : écran éteint et
  * radio endormie, le CPU tombe à 10 MHz au lieu de 40. Mini accepté par
  * esp_pm sur ESP32 : 10 MHz (REF_TICK). Revenir à 40 si le BLE devient instable. */
+/* LED infrarouge (émetteur, V1) */
+#define BOARD_IR_GPIO 13
+
 #define POWER_CPU_MIN_MHZ       10
 
 /* Batterie d'origine T-Watch 2020 */

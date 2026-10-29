@@ -29,6 +29,7 @@
 #define SYM_MOON      "\xEF\x86\x86"   /* U+F186 */
 #define SYM_SLIDERS   "\xEF\x87\x9E"   /* U+F1DE */
 #define SYM_GRID      "\xEF\x80\x8A"   /* U+F00A */
+#define SYM_TV        "\xEF\x89\xAC"   /* U+F26C */
 
 #define UI_ANIM_MS 140
 
@@ -41,3 +42,5 @@ void      ui_bubble(lv_obj_t *obj);          /* laisse remonter les gestes au pa
 void      ui_toast(const char *text);        /* message bref par-dessus n'importe quel écran */
 /* en-tête « ‹ Titre » qui ramène à l'écran d'origine ; renvoie la hauteur occupée */
 int       ui_header(lv_obj_t *scr, const char *title);
+/* choix exclusif (boutons segmentés) ; map terminée par "" ; LV_EVENT_VALUE_CHANGED */
+lv_obj_t *ui_segmented(lv_obj_t *parent, const char *const *map, lv_event_cb_t cb);

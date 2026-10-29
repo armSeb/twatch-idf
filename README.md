@@ -27,7 +27,8 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
 - Mode avion (Bluetooth coupé → vrai light sleep), écran **Énergie** (consommation moyenne
   mesurée par le compteur coulométrique de l'AXP202).
 - **Apps** : lanceur (← depuis le cadran) avec **Chrono** (tours), **Minuteur** (sonne même
-  écran éteint, l'app se rouvre) et **Lampe** (blanc / rouge). Un chrono ou un minuteur
+  écran éteint, l'app se rouvre), **Lampe** (blanc / rouge) et **TV-B-Gone** (éteint la plupart des téléviseurs par la LED infrarouge,
+codes Europe / USA). Un chrono ou un minuteur
   en marche garde la main : l'écran s'éteint dessus et le réveil y revient. Un petit cadre d'applications
   (`app.h`) permet d'en ajouter en un fichier.
 - **Contrôles rapides** (↓ depuis le cadran) : Bluetooth, **Ne pas déranger**, Lampe,
@@ -49,10 +50,12 @@ Binaires fournis par la CI (onglet *Releases* ou *Actions*).
 **Mise à jour sans câble (OTA Wi-Fi)** — le cas normal :
 
 1. Montre : *Réglages › Mise à jour › Démarrer*. Le Bluetooth se coupe, la montre crée le
-   réseau Wi-Fi **T-Watch-MAJ** et affiche son mot de passe (tiré au sort une fois, puis
-   toujours le même : l'iPhone se reconnecte tout seul aux mises à jour suivantes).
-2. iPhone ou PC : se connecter à ce réseau, ouvrir **http://192.168.4.1**, choisir
-   `twatch2020v1-app.bin`, *Envoyer*.
+   réseau Wi-Fi **T-Watch-MAJ** et affiche un **QR code** (plus le mot de passe en gros
+   chiffres : tiré au sort une fois, puis toujours le même).
+2. iPhone : viser le QR code avec l'appareil photo → *Rejoindre le réseau*. Dès que
+   l'iPhone est connecté, le QR code devient celui de la page : le viser à nouveau ouvre
+   **http://192.168.4.1** ; choisir `twatch2020v1-app.bin`, *Envoyer*. (Sur PC : se
+   connecter au réseau et ouvrir l'adresse à la main.)
 3. La montre vérifie l'image (firmware T-Watch, SHA-256), l'active et redémarre.
 
 L'image est écrite dans l'autre emplacement (`ota_0`/`ota_1`) : l'ancien firmware reste
@@ -283,6 +286,8 @@ Parseur ANCS, nettoyage UTF-8, stockage (dédup/tri/capacité), jauge, sous `-fs
 | [Font Awesome Free](https://fontawesome.com) | icônes (`main/fonts/`) | SIL OFL 1.1 (polices) |
 | [TTGO_TWatch_Library](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library) — LilyGo | référence brochage et périphériques | MIT |
 | [My-TTGO-Watch](https://github.com/sharandac/My-TTGO-Watch) — sharandac | inspiration (gestion d'énergie, BLE) ; aucun code repris | GPL-3.0 |
+| [TV-B-Gone](https://www.tvbgone.com) — Mitch Altman, Limor Fried ; port Arduino Ken Shirriff ; [composant ESP-IDF](https://github.com/pedrominatel/esp-components/tree/main/tv-b-gone) Pedro Minatel | base de codes infrarouges et émission RMT (`components/tvbgone/`, adapté : voir `NOTICE.md`) | CC BY-SA 4.0 |
 | Apple — *ANCS Specification*, *Accessory Design Guidelines* | protocole ANCS, paramètres de connexion | — |
 
-Code du firmware sous licence MIT (voir `LICENSE`).
+Code du firmware sous licence MIT (voir `LICENSE`), sauf `components/tvbgone/` qui reste sous
+CC BY-SA 4.0.

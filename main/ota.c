@@ -1,3 +1,4 @@
+#include "i18n.h"
 #include "ota.h"
 #include <string.h>
 #include <stdio.h>
@@ -292,8 +293,8 @@ static void idle_cb(void *arg)
 const char *ota_start(void)
 {
     if (s_active) return NULL;
-    if (!power_vbus() && power_percent() < MIN_BATT_PCT) return "Batterie trop faible (30 % mini) : brancher l'USB";
-    if (!esp_ota_get_next_update_partition(NULL)) return "Table de partitions sans OTA : un flash USB est nécessaire";
+    if (!power_vbus() && power_percent() < MIN_BATT_PCT) return N_("Batterie trop faible (30 % mini) : brancher l'USB");
+    if (!esp_ota_get_next_update_partition(NULL)) return N_("Table de partitions sans OTA : un flash USB est nécessaire");
 
     ble_stop();                                  /* libère la radio et la RAM du Bluetooth */
     s_ble_stopped = true;
@@ -303,7 +304,7 @@ const char *ota_start(void)
     if (!net_inited) {
         esp_netif_init();
         esp_err_t e = esp_event_loop_create_default();
-        if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) return "Erreur réseau (boucle d'événements)";
+        if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) return N_("Erreur réseau (boucle d'événements)");
         esp_netif_t *apif = esp_netif_create_default_wifi_ap();
         /* le DHCP annonce la montre comme serveur DNS (voir dns_task) */
         esp_netif_dhcps_stop(apif);
@@ -318,7 +319,7 @@ const char *ota_start(void)
         net_inited = true;
     }
     wifi_init_config_t wc = WIFI_INIT_CONFIG_DEFAULT();
-    if (esp_wifi_init(&wc) != ESP_OK) return "Erreur Wi-Fi (mémoire ?)";
+    if (esp_wifi_init(&wc) != ESP_OK) return N_("Erreur Wi-Fi (mémoire ?)");
     esp_wifi_set_storage(WIFI_STORAGE_RAM);
 
     load_or_create_password();
@@ -331,7 +332,7 @@ const char *ota_start(void)
     ap.ap.max_connection = 2;
     esp_wifi_set_mode(WIFI_MODE_AP);
     esp_wifi_set_config(WIFI_IF_AP, &ap);
-    if (esp_wifi_start() != ESP_OK) return "Le point d'accès n'a pas démarré";
+    if (esp_wifi_start() != ESP_OK) return N_("Le point d'accès n'a pas démarré");
 
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
     hc.stack_size = 6144;
@@ -339,7 +340,7 @@ const char *ota_start(void)
     hc.recv_wait_timeout = 10;
     hc.lru_purge_enable = true;        /* Safari ouvre des connexions en avance : on recycle */
     hc.uri_match_fn = httpd_uri_match_wildcard;
-    if (httpd_start(&s_httpd, &hc) != ESP_OK) return "Le serveur web n'a pas démarré";
+    if (httpd_start(&s_httpd, &hc) != ESP_OK) return N_("Le serveur web n'a pas démarré");
     static const httpd_uri_t uris[] = {
         { .uri = "/update", .method = HTTP_POST, .handler = update_post },
         { .uri = "/", .method = HTTP_GET, .handler = page_get },
