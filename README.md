@@ -118,6 +118,8 @@ Si l'iPhone oublie la montre, elle efface son propre bond et relance un appairag
 **Ne pas déranger** (contrôles rapides) : ni vibration ni allumage pour les notifications,
 qui attendent dans la liste ; les appels sonnent toujours. Une lune le signale sur le cadran.
 
+![apps](docs/apps.png)
+
 Réglages (← puis *Réglages*) : un accueil par catégories (dont **Mise à jour**) avec résumé de l'état, puis
 **Affichage** (cadran Rétro/Pub/Digital, luminosité, extinction), **Alertes** (vibreur,
 allumage sur notif — sinon mode discret —, double tap), **Bluetooth** (mode avion,
