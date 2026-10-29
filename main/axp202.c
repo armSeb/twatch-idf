@@ -134,6 +134,21 @@ static uint16_t read_13(uint8_t reg)      /* H8 + L5 */
 
 float axp_batt_mv(void)          { return read_12(REG_BAT_V_H8) * 1.1f; }
 
+/* LDO3 : registre 0x29, bit 7 = mode (0 = régulé), bits 6:0 = 0,7 V + 25 mV·n.
+ * Sur cette montre il est à 1,3 V (0x18) au repos ; l'ampli audio, sur ce
+ * rail, ne démarre qu'à partir de 2,5 V. */
+uint8_t axp_ldo3_get(void)
+{
+    uint8_t v = 0;
+    i2c_reg_read8(s_dev, 0x29, &v);
+    return v;
+}
+
+void axp_ldo3_set(uint8_t raw)
+{
+    i2c_reg_write8(s_dev, 0x29, raw);
+}
+
 uint8_t axp_reg(uint8_t reg)
 {
     uint8_t v = 0;

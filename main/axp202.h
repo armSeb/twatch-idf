@@ -35,6 +35,9 @@ bool      axp_vbus_present(void);
 bool      axp_is_charging(void);
 float     axp_batt_mv(void);
 uint8_t   axp_reg(uint8_t reg);                 /* lecture brute (diagnostic) */
+uint8_t   axp_ldo3_get(void);                   /* registre 0x29 brut */
+void      axp_ldo3_set(uint8_t raw);
+#define   AXP_LDO3_3V3  0x68                    /* mode régulé, 0,7 + 104 × 25 mV */
 float     axp_batt_discharge_ma(void);
 float     axp_batt_charge_ma(void);
 
