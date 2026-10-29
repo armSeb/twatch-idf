@@ -76,9 +76,6 @@ static struct ble_npl_event s_ev_batt, s_ev_forget, s_ev_pair;
 static int gap_event(struct ble_gap_event *event, void *arg);
 static void adv_start(bool fast, uint32_t fast_ms);
 
-/* Apparence GAP : 0x00C1 = Watch: Sports Watch (numéros assignés Bluetooth) */
-#define BLE_APPEARANCE 0x00C1
-
 
 /* ------------------------------------------------------------------ */
 /* Service batterie 0x180F                                              */
@@ -152,8 +149,6 @@ static void adv_set_data(void)
     f.uuids16 = &hid;
     f.num_uuids16 = 1;
     f.uuids16_is_complete = 1;
-    f.appearance = BLE_APPEARANCE;
-    f.appearance_is_present = 1;
     int rc = ble_gap_adv_set_fields(&f);
     if (rc) ESP_LOGE(TAG, "adv_set_fields rc=%d", rc);
 
@@ -588,7 +583,6 @@ esp_err_t ble_start(void)
     if (rc == 0) rc = ble_gatts_add_svcs(s_svcs);
     if (rc) ESP_LOGE(TAG, "GATT server rc=%d", rc);
     ble_svc_gap_device_name_set(DEVICE_NAME);
-    ble_svc_gap_device_appearance_set(BLE_APPEARANCE);   /* « montre » (icône iOS ?) */
     ble_store_config_init();
 
     struct ble_npl_eventq *q = nimble_port_get_dflt_eventq();
