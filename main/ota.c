@@ -307,7 +307,10 @@ const char *ota_start(void)
 
     ble_stop();                                  /* libère la radio et la RAM du Bluetooth */
     s_ble_stopped = true;
-    power_hold_nosleep(true);
+    /* CPU (et donc bus APB) à pleine vitesse pendant toute la session : sinon
+     * l'économiseur redescend à 10 MHz 1,5 s après le dernier toucher et le
+     * Wi-Fi rame. Libéré par le redémarrage qui termine toujours la session. */
+    power_hold_active(true);
 
     static bool net_inited;
     if (!net_inited) {
