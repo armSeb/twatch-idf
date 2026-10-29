@@ -178,6 +178,9 @@ static void dns_task(void *arg)
     vTaskDelete(NULL);
 }
 
+/* transfert en cours (tâche httpd dans update_post) / activation de l'image */
+static volatile bool s_receiving, s_finishing;
+
 static void post_ev(int32_t code)
 {
     app_post_simple(EV_OTA, code);
@@ -186,6 +189,7 @@ static void post_ev(int32_t code)
 static esp_err_t fail(httpd_req_t *r, esp_ota_handle_t h, int32_t code, const char *msg)
 {
     if (h) esp_ota_abort(h);
+    s_receiving = false;
     ESP_LOGW(TAG, "échec : %s", msg);
     post_ev(code);
     httpd_resp_set_status(r, "400 Bad Request");
@@ -207,6 +211,7 @@ static esp_err_t update_post(httpd_req_t *r)
 
     esp_ota_handle_t h = 0;
     size_t left = r->content_len, done = 0;
+    s_receiving = true;                    /* remis à false par fail() ou en fin */
     int last_pct = -1, timeouts = 0;
     bool checked = false;
     while (left > 0) {
@@ -238,11 +243,15 @@ static esp_err_t update_post(httpd_req_t *r)
         int pct = (int)(done * 100 / r->content_len);
         if (pct != last_pct) { last_pct = pct; post_ev(pct); }
     }
+    s_finishing = true;                    /* plus d'annulation : otadata va être écrit */
+    s_receiving = false;
     esp_err_t e = esp_ota_end(h);          /* vérifie l'image complète (SHA-256) */
     if (e != ESP_OK) {
+        s_finishing = false;
         return fail(r, 0, OTA_EV_ERR_IMAGE, e == ESP_ERR_OTA_VALIDATE_FAILED ? "image corrompue" : "image refusée");
     }
     if (esp_ota_set_boot_partition(dst) != ESP_OK) {
+        s_finishing = false;
         return fail(r, 0, OTA_EV_ERR_WRITE, "impossible d'activer la nouvelle image");
     }
     ESP_LOGI(TAG, "image %s installée sur %s", s_new_ver, dst->label);
@@ -378,7 +387,15 @@ void ota_reboot_now(void)
 void ota_cancel(void)
 {
     if (!s_active && !s_ble_stopped) return;
+    if (s_finishing) return;               /* image en cours d'activation : on laisse finir */
     ESP_LOGI(TAG, "mise à jour abandonnée");
+    if (s_receiving) {
+        /* La tâche httpd est dans update_post, le client envoie encore :
+         * httpd_stop() attendrait la fin du transfert, à l'infini (montre
+         * figée). Redémarrage direct : l'image partielle est dans
+         * l'emplacement inactif, jamais activé, rien à défaire. */
+        esp_restart();
+    }
     ota_reboot_now();
 }
 
