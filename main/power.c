@@ -1,4 +1,6 @@
 #include "power.h"
+#include "nvs.h"
+#include "esp_system.h"
 #include <string.h>
 #include "axp202.h"
 #include "i2c_bus.h"
@@ -119,6 +121,117 @@ void power_screen_segment(bool on)
     s_seg_mah = mah; s_seg_us = now; s_seg_on = on;
 }
 
+/* ------------------------------------------------------------------ */
+/* Historique de décharge (NVS) : survit à une coupure batterie vide.   */
+/* Instantané toutes les 10 min sur batterie ; au démarrage suivant (ou */
+/* au branchement USB), il devient la « décharge précédente ». Si elle  */
+/* s'est terminée par une coupure en partant d'une charge connue, on en */
+/* déduit la capacité réelle de la batterie.                            */
+/* ------------------------------------------------------------------ */
+#define HIST_MAGIC     0x42484953u
+#define HIST_PERIOD_US (10LL * 60 * 1000000)
+
+typedef struct {
+    uint32_t magic;
+    uint32_t since_s;
+    float    used_mah;
+    float    off_mah;
+    uint32_t off_s;
+    uint16_t vbat_mv;
+    uint8_t  pct_start, pct_end;
+    uint8_t  end;                 /* POWER_HIST_* */
+} bhist_t;
+
+static power_hist_t s_last;
+static bool s_last_valid;
+static uint16_t s_cap_learned;    /* 0 = inconnue */
+static uint8_t s_pct_start = 255;
+static int64_t s_hist_last_us;
+
+static bool hist_get(nvs_handle_t h, const char *k, bhist_t *b)
+{
+    size_t n = sizeof(*b);
+    return nvs_get_blob(h, k, b, &n) == ESP_OK && n == sizeof(*b) && b->magic == HIST_MAGIC;
+}
+
+static void hist_publish(const bhist_t *b)
+{
+    s_last.since_s = b->since_s;
+    s_last.used_mah = b->used_mah;
+    s_last.avg_off_ma = b->off_s >= 120 ? b->off_mah / (b->off_s / 3600.0f) : 0;
+    s_last.vbat_mv = b->vbat_mv;
+    s_last.pct_start = b->pct_start;
+    s_last.pct_end = b->pct_end;
+    s_last.end = b->end;
+    s_last_valid = true;
+}
+
+/* « bcur » (décharge en cours) → « blast » (précédente), capacité apprise */
+static void hist_promote(uint8_t end_reason)
+{
+    nvs_handle_t h;
+    if (nvs_open("tw", NVS_READWRITE, &h) != ESP_OK) return;
+    bhist_t b;
+    if (hist_get(h, "bcur", &b)) {
+        if (b.end == POWER_HIST_RUNNING) b.end = end_reason;
+        if (b.since_s >= 1800) {
+            nvs_set_blob(h, "blast", &b, sizeof(b));
+            /* capacité : seulement si la batterie était vraiment vide (dernière
+             * tension < 3,55 V) — un arrêt au bouton ne compte pas */
+            if (b.end == POWER_HIST_EMPTY && b.vbat_mv < 3550 && b.pct_start != 255 &&
+                b.pct_start >= 60 && b.used_mah > 30) {
+                float cap = b.used_mah * 100.0f / b.pct_start;
+                if (cap >= 50 && cap <= 500) {
+                    s_cap_learned = (uint16_t)(cap + 0.5f);
+                    nvs_set_u16(h, "bcap", s_cap_learned);
+                    ESP_LOGW(TAG, "capacité batterie mesurée : ~%u mAh", s_cap_learned);
+                }
+            }
+        }
+        nvs_erase_key(h, "bcur");
+        nvs_commit(h);
+    }
+    if (hist_get(h, "blast", &b)) hist_publish(&b);
+    nvs_get_u16(h, "bcap", &s_cap_learned);
+    nvs_close(h);
+}
+
+static void hist_snapshot(uint8_t end)
+{
+    int64_t now = esp_timer_get_time();
+    s_hist_last_us = now;
+    uint32_t since = (uint32_t)((now - s_period_start_us) / 1000000);
+    if (since < 600) return;
+    float used = axp_coulomb_used_mah();
+    float off_mah = s_off_mah;
+    int64_t off_us = s_off_us;
+    if (!s_seg_on) { off_mah += used - s_seg_mah; off_us += now - s_seg_us; }
+    bhist_t b = {
+        .magic = HIST_MAGIC, .since_s = since, .used_mah = used, .off_mah = off_mah,
+        .off_s = (uint32_t)(off_us / 1000000), .vbat_mv = (uint16_t)axp_batt_mv(),
+        .pct_start = s_pct_start, .pct_end = (uint8_t)(s_percent < 0 ? 0 : s_percent), .end = end,
+    };
+    nvs_handle_t h;
+    if (nvs_open("tw", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_blob(h, "bcur", &b, sizeof(b));
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+bool power_last_discharge(power_hist_t *out)
+{
+    if (s_last_valid) *out = s_last;
+    return s_last_valid;
+}
+
+uint16_t power_capacity_mah(void)
+{
+    return s_cap_learned ? s_cap_learned : BATTERY_CAPACITY_MAH;
+}
+
+bool power_capacity_learned(void) { return s_cap_learned != 0; }
+
 uint64_t power_handle_irq(void)
 {
     uint64_t m = axp_irq_read_and_clear();
@@ -126,7 +239,13 @@ uint64_t power_handle_irq(void)
         bool was_vbus = s_vbus;
         s_vbus = axp_vbus_present();
         s_charging = axp_is_charging();
+        if (!was_vbus && s_vbus) {
+            /* fin d'une période sur batterie : dernier instantané, archivé */
+            hist_snapshot(POWER_HIST_CHARGED);
+            hist_promote(POWER_HIST_CHARGED);
+        }
         if (was_vbus && !s_vbus) {
+            s_pct_start = 255;
             /* début d'une période sur batterie : on remet la mesure à zéro */
             axp_coulomb_reset();
             s_period_start_us = esp_timer_get_time();
@@ -270,6 +389,12 @@ esp_err_t power_init(void)
     axp_coulomb_reset();
     s_period_start_us = esp_timer_get_time();
     meter_reset();
+    {
+        /* décharge précédente : coupure (batterie vide / bouton) ou redémarrage */
+        esp_reset_reason_t rr = esp_reset_reason();
+        hist_promote((rr == ESP_RST_POWERON || rr == ESP_RST_BROWNOUT) ? POWER_HIST_EMPTY
+                                                                       : POWER_HIST_REBOOT);
+    }
 
     axp_irq_enable(AXP_IRQ_VBUS_CONNECT | AXP_IRQ_VBUS_REMOVED | AXP_IRQ_CHG_START |
                    AXP_IRQ_CHG_DONE | AXP_IRQ_PEK_SHORT | AXP_IRQ_PEK_LONG |
@@ -330,6 +455,10 @@ void power_update(void)
         s_percent = p;
     } else if (p < s_percent) {
         s_percent = p;          /* sur batterie, jamais de remontée */
+    }
+    if (!s_vbus) {
+        if (s_pct_start == 255) s_pct_start = (uint8_t)s_percent;
+        if (esp_timer_get_time() - s_hist_last_us >= HIST_PERIOD_US) hist_snapshot(POWER_HIST_RUNNING);
     }
 }
 

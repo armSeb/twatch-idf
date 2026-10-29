@@ -39,6 +39,20 @@ void power_get_telemetry(power_telemetry_t *t);
 /* appelé par display.c à chaque allumage/extinction (ventilation de la conso) */
 void power_screen_segment(bool on);
 
+/* Décharge précédente (historique NVS) et capacité apprise */
+enum { POWER_HIST_RUNNING = 0, POWER_HIST_CHARGED = 1, POWER_HIST_EMPTY = 2, POWER_HIST_REBOOT = 3 };
+typedef struct {
+    uint32_t since_s;
+    float    used_mah;
+    float    avg_off_ma;     /* moyenne écran éteint */
+    uint16_t vbat_mv;        /* dernière tension enregistrée */
+    uint8_t  pct_start, pct_end;
+    uint8_t  end;            /* POWER_HIST_* */
+} power_hist_t;
+bool     power_last_discharge(power_hist_t *out);
+uint16_t power_capacity_mah(void);      /* apprise, sinon nominale */
+bool     power_capacity_learned(void);
+
 /* rétroéclairage 0..255 (0 = éteint) */
 void power_backlight(uint8_t level);
 

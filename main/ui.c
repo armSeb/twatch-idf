@@ -74,7 +74,7 @@ static scr_id_t menu_parent(scr_id_t id);
 static void menu_refresh_summaries(void);
 static lv_timer_t *m_toast_t;
 /* énergie */
-static lv_obj_t *p_lbl[6];
+static lv_obj_t *p_lbl[7];
 static lv_timer_t *p_timer;
 static lv_timer_t *mu_timer;
 static void media_refresh(bool full);
@@ -1107,7 +1107,7 @@ static void power_refresh(void)
     power_get_telemetry(&t);
     ble_info_t b;
     ble_get_info(&b);
-    char s[64];
+    char s[112];
 
     snprintf(s, sizeof(s), "Batterie  %d %%  ·  %.3f V", t.percent, t.vbat_mv / 1000.0f);
     lv_label_set_text(p_lbl[0], s);
@@ -1127,7 +1127,7 @@ static void power_refresh(void)
     if (t.vbus) {
         snprintf(s, sizeof(s), "Débrancher pour mesurer");
     } else if (t.avg_ma > 0.1f) {
-        float left_h = BATTERY_CAPACITY_MAH * t.percent / 100.0f / t.avg_ma;
+        float left_h = power_capacity_mah() * t.percent / 100.0f / t.avg_ma;
         snprintf(s, sizeof(s), "Moy. %.1f mA, reste ~%.0f h", t.avg_ma, left_h);
     } else {
         snprintf(s, sizeof(s), "Moyenne : mesure en cours…");
@@ -1151,6 +1151,18 @@ static void power_refresh(void)
         snprintf(s, sizeof(s), "Écran allumé %.0f %% du temps", t.screen_pct);
     }
     lv_label_set_text(p_lbl[5], s);
+    power_hist_t h;
+    if (power_last_discharge(&h)) {
+        static const char *const END[] = { "", "rechargée", "coupure", "redémarrage" };
+        char cap[24] = "";
+        if (power_capacity_learned()) snprintf(cap, sizeof(cap), " · capa ~%u mAh", power_capacity_mah());
+        snprintf(s, sizeof(s), "Préc. %.0f mAh en %luh%02lu, %u à %u %%, %s%s", h.used_mah,
+                 (unsigned long)(h.since_s / 3600), (unsigned long)((h.since_s / 60) % 60),
+                 h.pct_start == 255 ? 0 : h.pct_start, h.pct_end, END[h.end & 3], cap);
+    } else {
+        snprintf(s, sizeof(s), "Préc. : pas encore d'historique");
+    }
+    lv_label_set_text(p_lbl[6], s);
 }
 
 static void power_timer_cb(lv_timer_t *t) { power_refresh(); }
@@ -1160,12 +1172,14 @@ static void build_power(void)
     lv_obj_t *s = s_scr[SCR_POWER] = mk_screen();
     lv_obj_t *h = mk_label(s, &font_title_20, C_FG, LV_SYMBOL_CHARGE "  Énergie");
     lv_obj_align(h, LV_ALIGN_TOP_LEFT, 12, 10);
-    for (int i = 0; i < 6; i++) {
-        p_lbl[i] = mk_label(s, &font_text_16, i == 3 ? C_ACC : C_FG, "");
+    for (int i = 0; i < 7; i++) {
+        p_lbl[i] = mk_label(s, i == 6 ? &font_small_11 : &font_text_16, i == 3 ? C_ACC : (i == 6 ? C_DIM : C_FG), "");
         lv_label_set_long_mode(p_lbl[i], LV_LABEL_LONG_DOT);
         lv_obj_set_size(p_lbl[i], BOARD_LCD_W - 24, lv_font_get_line_height(&font_text_16));
-        lv_obj_set_pos(p_lbl[i], 12, 46 + i * 30);
+        lv_obj_set_pos(p_lbl[i], 12, 42 + i * 27);
     }
+    lv_label_set_long_mode(p_lbl[6], LV_LABEL_LONG_WRAP);        /* 2 lignes en petit */
+    lv_obj_set_height(p_lbl[6], 2 * lv_font_get_line_height(&font_small_11));
     p_timer = lv_timer_create(power_timer_cb, 1000, NULL);
     lv_timer_pause(p_timer);
 }
