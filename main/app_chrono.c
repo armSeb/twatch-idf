@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include "app.h"
 #include "ui_kit.h"
+#include "i18n.h"
 #include "esp_timer.h"
 
 #define LAPS 3
@@ -48,7 +49,9 @@ static void refresh(void)
     for (int i = 0; i < s_nlaps && i < LAPS; i++) {
         char t[24];
         fmt(t, sizeof(t), s_laps[i]);
-        o += snprintf(l + o, sizeof(l) - o, "%sTour %d   %s", i ? "\n" : "", s_nlaps - i, t);
+        o += snprintf(l + o, sizeof(l) - o, "%s", i ? "\n" : "");
+        if (o >= sizeof(l)) break;
+        o += snprintf(l + o, sizeof(l) - o, _("Tour %d   %s"), s_nlaps - i, t);
         if (o >= sizeof(l)) break;
     }
     lv_label_set_text(v_laps, l);
@@ -56,7 +59,7 @@ static void refresh(void)
     lv_label_set_text(lv_obj_get_child(v_right, 0), s_run ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
     lv_obj_set_style_bg_color(v_right, s_run ? C_WARN : C_OK, 0);
     bool idle = !s_run && elapsed() == 0;
-    lv_label_set_text(lv_obj_get_child(v_left, 0), s_run ? "Tour" : "Zéro");
+    lv_label_set_text(lv_obj_get_child(v_left, 0), s_run ? _("Tour") : _("Zéro"));
     if (idle) lv_obj_add_state(v_left, LV_STATE_DISABLED);
     else lv_obj_remove_state(v_left, LV_STATE_DISABLED);
 }
@@ -87,7 +90,7 @@ static void left_cb(lv_event_t *e)
 
 static void create(lv_obj_t *scr)
 {
-    ui_header(scr, "Chrono");
+    ui_header(scr, _("Chrono"));
     v_time = ui_label(scr, &font_num_44, C_FG, "");
     lv_obj_align(v_time, LV_ALIGN_TOP_MID, 0, 56);
     v_laps = ui_label(scr, &font_text_16, C_DIM, "");
@@ -116,6 +119,8 @@ static void destroy(void)
 static void on_show(void) { if (v_tick) lv_timer_resume(v_tick); refresh(); }
 static void on_hide(void) { if (v_tick) lv_timer_pause(v_tick); }
 
+static bool busy(void) { return s_run; }
+
 const app_t app_chrono = {
     .name = "Chrono",
     .icon = SYM_STOPWATCH,
@@ -124,4 +129,5 @@ const app_t app_chrono = {
     .destroy = destroy,
     .on_show = on_show,
     .on_hide = on_hide,
+    .busy = busy,
 };

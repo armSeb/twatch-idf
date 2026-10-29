@@ -28,6 +28,9 @@ typedef struct app_s {
      * et allumer l'écran (alarme…) */
     bool (*on_event)(int code);
     uint32_t screen_timeout_ms;       /* 0 = réglage utilisateur */
+    /* optionnel : true = l'app travaille (chrono lancé…) ; l'écran s'éteint
+     * alors sur l'app et le réveil y revient au lieu du cadran */
+    bool (*busy)(void);
 } app_t;
 
 /* registre (apps.c) */

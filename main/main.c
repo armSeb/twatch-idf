@@ -122,7 +122,7 @@ uint32_t g_wake_cnt[EV_COUNT];
 
 static void wake_to_pending_or_home(void)
 {
-    if (!ui_open_pending()) ui_go_home();   /* dernière notif non vue, sinon cadran */
+    if (!ui_open_pending()) ui_go_home_or_app();   /* dernière notif non vue, sinon cadran (ou app active) */
     screen_wake();
 }
 
@@ -188,7 +188,7 @@ static void app_task(void *arg)
             uint32_t next = lv_timer_handler();
             if (lv_display_get_inactive_time(NULL) > ui_timeout_ms()) {
                 display_set_on(false);
-                ui_go_home();            /* sans animation : écran éteint */
+                ui_go_home_or_app();         /* cadran, ou app active (chrono…) */
                 ui_release_idle();
                 continue;
             }

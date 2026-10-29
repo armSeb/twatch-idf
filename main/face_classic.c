@@ -1,3 +1,4 @@
+#include "i18n.h"
 #include "face_classic.h"
 #include <math.h>
 #include <stdio.h>
@@ -165,7 +166,7 @@ lv_obj_t *face_classic_create(lv_obj_t *parent)
 
     /* 12 h : réserve de marche (batterie), arc de 120° */
     scale(s_root, PR_X, PR_Y, 62, 210, 120, 11, 5, 6, 2, 3, C_INDEX, C_PRINT, 1);
-    s_pr_label = text(s_root, &font_small_11, C_PRINT, "RÉSERVE");
+    s_pr_label = text(s_root, &font_small_11, C_PRINT, _("RÉSERVE"));
     lv_obj_align(s_pr_label, LV_ALIGN_TOP_MID, 0, PR_Y + 6);
     lv_obj_t *pr0 = text(s_root, &font_small_11, C_PRINT, "0");
     lv_obj_set_pos(pr0, PR_X - 30, PR_Y - 10);
@@ -218,7 +219,7 @@ lv_obj_t *face_classic_create(lv_obj_t *parent)
 
 void face_classic_set_time(const struct tm *tm, bool force)
 {
-    static const char *const JOURS[] = { "DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM" };
+    static const char *const JOURS[] = { N_("DIM"), N_("LUN"), N_("MAR"), N_("MER"), N_("JEU"), N_("VEN"), N_("SAM") };
     if (force || tm->tm_min != s_last_min) {
         float m = tm->tm_min + tm->tm_sec / 60.0f;
         float h = (tm->tm_hour % 12) + m / 60.0f;
@@ -227,7 +228,7 @@ void face_classic_set_time(const struct tm *tm, bool force)
         place(s_min, s_pt_min, CX, CY, m * 6.0f, -16, 94);
         place(s_min_lume, s_pt_min_l, CX, CY, m * 6.0f, 24, 88);
         char b[16];
-        snprintf(b, sizeof(b), "%s %d", JOURS[tm->tm_wday % 7], tm->tm_mday);
+        snprintf(b, sizeof(b), "%s %d", _(JOURS[tm->tm_wday % 7]), tm->tm_mday);
         lv_label_set_text(s_date, b);
         s_last_min = tm->tm_min;
     }
@@ -245,7 +246,7 @@ void face_classic_set_status(int pct, bool charging, bool ble_ok, bool ble_on, i
         place(s_pr_hand, s_pt_pr, PR_X, PR_Y, -60.0f + pct * 1.2f, -4, 24);
         s_last_pct = pct;
     }
-    lv_label_set_text(s_pr_label, charging ? "CHARGE" : "RÉSERVE");
+    lv_label_set_text(s_pr_label, charging ? _("CHARGE") : _("RÉSERVE"));
     lv_obj_set_style_text_color(s_pr_label, (pct <= 15 && !charging) ? C_BADGE : C_PRINT, 0);
 
     lv_obj_set_style_text_color(s_ble, ble_ok ? C_BLUED : (ble_on ? C_DIM : lv_color_hex(0xCFC4AA)), 0);

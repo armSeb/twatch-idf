@@ -22,6 +22,7 @@
 #include "esp_idf_version.h"
 
 #include "ui_kit.h"
+#include "i18n.h"
 #include "app.h"
 
 #define ANIM_MS UI_ANIM_MS
@@ -58,7 +59,9 @@ static bool c_uid_valid;
 /* menu */
 static uint32_t s_pending_hash;   /* notif reçue écran éteint, pas encore vue */
 static lv_obj_t *m_sw_nwake, *m_sw_tap;
-static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_toast;
+static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_bm_lang, *m_toast;
+static void menu_lang_cb(lv_event_t *ev);
+static lv_timer_t *w_clock_t;
 static lv_obj_t *m_sum[6], *m_bt_info, *m_confirm;
 static lv_obj_t *o_info, *o_bar, *o_status, *o_btn;
 static void ota_ui_idle(void);
@@ -139,6 +142,16 @@ static lv_obj_t *mk_button(lv_obj_t *p, const char *txt, lv_color_t bg, lv_event
     lv_obj_t *l = mk_label(b, &font_text_16, C_FG, txt);
     lv_obj_center(l);
     return b;
+}
+
+/* « icône  texte traduit » (tampons tournants : le label copie le texte) */
+static const char *with_sym(const char *sym, const char *txt)
+{
+    static char buf[4][96];
+    static int k;
+    k = (k + 1) & 3;
+    snprintf(buf[k], sizeof(buf[k]), "%s  %s", sym, txt);
+    return buf[k];
 }
 
 /* exports ui_kit.h (apps) */
@@ -307,9 +320,11 @@ static void gesture_cb(lv_event_t *e)
 /* ------------------------------------------------------------------ */
 static void watch_update_time(bool force)
 {
-    static const char *const JOURS[] = { "dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam." };
-    static const char *const MOIS[] = { "janv.", "févr.", "mars", "avr.", "mai", "juin",
-                                        "juil.", "août", "sept.", "oct.", "nov.", "déc." };
+    static const char *const JOURS[] = { N_("dim."), N_("lun."), N_("mar."), N_("mer."), N_("jeu."),
+                                         N_("ven."), N_("sam.") };
+    static const char *const MOIS[] = { N_("janv."), N_("févr."), N_("mars"), N_("avr."), N_("mai"),
+                                        N_("juin"), N_("juil."), N_("août"), N_("sept."), N_("oct."),
+                                        N_("nov."), N_("déc.") };
     static int last_min = -1, last_day = -1;
     struct tm tm;
     wclock_local_tm(&tm);
@@ -320,7 +335,7 @@ static void watch_update_time(bool force)
     }
     if (force || tm.tm_mday != last_day) {
         char b[32];
-        snprintf(b, sizeof(b), "%s %d %s", JOURS[tm.tm_wday % 7], tm.tm_mday, MOIS[tm.tm_mon % 12]);
+        snprintf(b, sizeof(b), "%s %d %s", _(JOURS[tm.tm_wday % 7]), tm.tm_mday, _(MOIS[tm.tm_mon % 12]));
         lv_label_set_text(w_date, b);
         last_day = tm.tm_mday;
     }
@@ -422,7 +437,7 @@ static void build_watch(void)
     w_scr = s;
     lv_obj_add_event_cb(s, watch_long_cb, LV_EVENT_LONG_PRESSED, NULL);
     apply_face();
-    lv_timer_create(clock_timer_cb, 1000, NULL);
+    w_clock_t = lv_timer_create(clock_timer_cb, 1000, NULL);
 }
 
 /* ------------------------------------------------------------------ */
@@ -456,7 +471,7 @@ static void detail_fill(const notif_entry_t *e)
     } else {
         lv_obj_add_flag(d_btn_pos, LV_OBJ_FLAG_HIDDEN);
     }
-    lv_label_set_text(d_lbl_neg, (neg_ios && e->n.neg_label[0]) ? e->n.neg_label : "Effacer");
+    lv_label_set_text(d_lbl_neg, (neg_ios && e->n.neg_label[0]) ? e->n.neg_label : _("Effacer"));
     lv_obj_set_user_data(d_btn_neg, (void *)(uintptr_t)(neg_ios ? 1 : 2));
     lv_obj_scroll_to_y(d_body, 0, LV_ANIM_OFF);
 }
@@ -544,7 +559,7 @@ static void call_btn_cb(lv_event_t *ev)
 static void build_call(void)
 {
     lv_obj_t *s = s_scr[SCR_CALL] = mk_screen();
-    lv_obj_t *t = mk_label(s, &font_text_16, C_DIM, LV_SYMBOL_CALL "  Appel entrant");
+    lv_obj_t *t = mk_label(s, &font_text_16, C_DIM, with_sym(LV_SYMBOL_CALL, _("Appel entrant")));
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 22);
     c_who = mk_label(s, &font_title_20, C_FG, "");
     lv_label_set_long_mode(c_who, LV_LABEL_LONG_WRAP);
@@ -588,7 +603,7 @@ static void list_rebuild(void)
     lv_obj_clean(l_list);
     int n = ns_count();
     if (n == 0) {
-        lv_obj_t *t = lv_list_add_text(l_list, "Aucune notification");
+        lv_obj_t *t = lv_list_add_text(l_list, _("Aucune notification"));
         lv_obj_set_style_text_color(t, C_DIM, 0);
         lv_obj_set_style_bg_opa(t, LV_OPA_TRANSP, 0);
         bubble(t);
@@ -610,7 +625,7 @@ static void list_rebuild(void)
         }
     }
     if (n > 0) {
-        lv_obj_t *clr = lv_list_add_button(l_list, LV_SYMBOL_TRASH, "Tout effacer");
+        lv_obj_t *clr = lv_list_add_button(l_list, LV_SYMBOL_TRASH, _("Tout effacer"));
         lv_obj_set_style_bg_color(clr, lv_color_hex(0x3F1D1D), 0);
         lv_obj_set_style_text_color(clr, C_FG, 0);
         lv_obj_add_event_cb(clr, list_clear_cb, LV_EVENT_CLICKED, NULL);
@@ -622,7 +637,7 @@ static void list_rebuild(void)
 static void build_list(void)
 {
     lv_obj_t *s = s_scr[SCR_LIST] = mk_screen();
-    lv_obj_t *h = mk_label(s, &font_title_20, C_FG, "Notifications");
+    lv_obj_t *h = mk_label(s, &font_title_20, C_FG, _("Notifications"));
     lv_obj_align(h, LV_ALIGN_TOP_MID, 0, 8);
     l_list = lv_list_create(s);
     lv_obj_set_size(l_list, BOARD_LCD_W, BOARD_LCD_H - 38);
@@ -687,13 +702,13 @@ static void menu_bt_cb(lv_event_t *ev)
     bool on = lv_obj_has_state(m_sw_bt, LV_STATE_CHECKED);
     settings_get()->ble_enabled = on;
     settings_save();
-    if (on) { ble_start(); toast("Bluetooth activé"); }
-    else { ble_stop(); toast("Mode avion"); }
+    if (on) { ble_start(); toast(_("Bluetooth activé")); }
+    else { ble_stop(); toast(_("Mode avion")); }
 }
 
 /* Faces dans l'ordre du sélecteur → valeur settings.watchface */
 static const uint8_t FACE_ORDER[3] = { FACE_CLASSIC, FACE_PUB, FACE_DIGITAL };
-static const char *const FACE_NAMES[3] = { "Rétro", "Pub", "Digital" };
+static const char *const FACE_NAMES[3] = { N_("Rétro"), N_("Pub"), N_("Digital") };
 
 static void menu_tmo_cb(lv_event_t *ev)
 {
@@ -715,6 +730,57 @@ static void menu_face_cb(lv_event_t *ev)
     watch_refresh_status();
 }
 
+/* Changement de langue : tous les écrans sont reconstruits dans la nouvelle
+ * langue (pas de redémarrage), puis on revient sur la page Affichage.
+ * Différé : on ne détruit pas le bouton dont on traite l'événement. */
+static void build_watch(void);
+static void build_list(void);
+static void build_detail(void);
+static void build_call(void);
+static void build_power(void);
+static void build_pair(void);
+static void build_about(void);
+static void release_group(int g);
+
+static void relang_async(void *arg)
+{
+    scr_id_t back = s_cur;
+    lv_obj_t *tmp = lv_obj_create(NULL);
+    lv_screen_load(tmp);
+    s_cur = SCR_WATCH;                       /* plus aucun groupe « affiché » */
+    for (int g = G_MENU; g <= G_APP; g++) release_group(g);
+
+    if (w_clock_t) { lv_timer_delete(w_clock_t); w_clock_t = NULL; }
+    if (p_timer) { lv_timer_delete(p_timer); p_timer = NULL; }
+    if (pa_timer) { lv_timer_delete(pa_timer); pa_timer = NULL; }
+    static const scr_id_t perm[] = { SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_POWER, SCR_PAIR, SCR_ABOUT };
+    for (size_t i = 0; i < sizeof(perm) / sizeof(perm[0]); i++) {
+        if (s_scr[perm[i]]) { lv_obj_delete(s_scr[perm[i]]); s_scr[perm[i]] = NULL; }
+    }
+    w_classic = w_pub = w_dnd = NULL;
+    l_dirty = true;
+
+    build_watch();
+    build_list();
+    build_detail();
+    build_call();
+    build_power();
+    build_pair();
+    build_about();
+    show(back, LV_SCR_LOAD_ANIM_NONE);       /* reconstruit le groupe réglages */
+    lv_obj_delete(tmp);
+}
+
+static void menu_lang_cb(lv_event_t *ev)
+{
+    uint32_t i = lv_buttonmatrix_get_selected_button(m_bm_lang);
+    if (i > 1 || i == settings_get()->lang) return;
+    settings_get()->lang = (uint8_t)i;
+    settings_save();
+    i18n_set((int)i);
+    lv_async_call(relang_async, NULL);
+}
+
 /* ouvre un écran en mémorisant d'où l'on vient (pour « ‹ » et →) */
 static void nav_open(scr_id_t id, lv_screen_load_anim_t anim)
 {
@@ -726,10 +792,10 @@ static void menu_nav_cb(lv_event_t *ev)
 {
     scr_id_t id = (scr_id_t)(uintptr_t)lv_event_get_user_data(ev);
     if (id == SCR_PAIR) {
-        if (!ble_running()) { toast("Activez d'abord le Bluetooth"); return; }
+        if (!ble_running()) { toast(_("Activez d'abord le Bluetooth")); return; }
         lv_label_set_text(pa_code, "------");
         lv_obj_set_style_text_color(pa_code, C_DIM, 0);
-        lv_label_set_text(pa_hint, "iPhone : Réglages > Bluetooth\n> T-Watch, puis « Jumeler »");
+        lv_label_set_text(pa_hint, _("iPhone : Réglages > Bluetooth\n> T-Watch, puis « Jumeler »"));
         ble_pairing_mode();
     }
     nav_open(id, LV_SCR_LOAD_ANIM_MOVE_LEFT);
@@ -744,7 +810,7 @@ static scr_id_t menu_parent(scr_id_t id)
 
 static void back_cb(lv_event_t *ev)
 {
-    if (s_cur == SCR_OTA && ota_active()) { toast("Annuler d'abord la mise à jour"); return; }
+    if (s_cur == SCR_OTA && ota_active()) { toast(_("Annuler d'abord la mise à jour")); return; }
     show(menu_parent(s_cur), LV_SCR_LOAD_ANIM_MOVE_RIGHT);
 }
 
@@ -757,7 +823,7 @@ static void confirm_cb(lv_event_t *ev)
     ble_forget_all();
     ns_invalidate_uids();
     power_vibrate(VIB_SHORT);
-    toast("Appareils oubliés");
+    toast(_("Appareils oubliés"));
     menu_bt_refresh();
 }
 
@@ -893,13 +959,15 @@ static void menu_bt_refresh(void)
     ble_info_t bi;
     ble_get_info(&bi);
     const char *st;
-    if (!settings_get()->ble_enabled || bi.state == BLE_ST_OFF) st = "Coupé (mode avion)";
-    else if (bi.state == BLE_ST_READY) st = "Connecté à l'iPhone";
-    else if (bi.state == BLE_ST_ADVERTISING) st = "En attente de l'iPhone";
-    else st = "Connexion en cours…";
-    char b[96];
-    snprintf(b, sizeof(b), "%s\n%d appareil%s appairé%s", st, bi.bonds, bi.bonds > 1 ? "s" : "",
-             bi.bonds > 1 ? "s" : "");
+    if (!settings_get()->ble_enabled || bi.state == BLE_ST_OFF) st = _("Coupé (mode avion)");
+    else if (bi.state == BLE_ST_READY) st = _("Connecté à l'iPhone");
+    else if (bi.state == BLE_ST_ADVERTISING) st = _("En attente de l'iPhone");
+    else st = _("Connexion en cours…");
+    char n[48], b[96];
+    if (bi.bonds == 0) snprintf(n, sizeof(n), "%s", _("Aucun appareil appairé"));
+    else if (bi.bonds == 1) snprintf(n, sizeof(n), "%s", _("1 appareil appairé"));
+    else snprintf(n, sizeof(n), _("%d appareils appairés"), bi.bonds);
+    snprintf(b, sizeof(b), "%s\n%s", st, n);
     lv_label_set_text(m_bt_info, b);
 }
 
@@ -908,30 +976,30 @@ static void menu_refresh_summaries(void)
 {
     settings_t *st = settings_get();
     char b[64];
-    const char *face = "Rétro";
+    const char *face = FACE_NAMES[0];
     for (int i = 0; i < 3; i++) if (FACE_ORDER[i] == st->watchface) face = FACE_NAMES[i];
-    snprintf(b, sizeof(b), "Cadran %s · veille %u s", face, st->screen_timeout_s);
+    snprintf(b, sizeof(b), _("Cadran %s · veille %u s"), _(face), st->screen_timeout_s);
     lv_label_set_text(m_sum[0], b);
 
-    snprintf(b, sizeof(b), "%s%s%s", st->vibrate ? "Vibreur" : "Sans vibreur",
-             st->notif_wake ? "" : " · discret", st->tap_wake ? " · double tap" : "");
+    snprintf(b, sizeof(b), "%s%s%s", st->vibrate ? _("Vibreur") : _("Sans vibreur"),
+             st->notif_wake ? "" : _(" · discret"), st->tap_wake ? _(" · double tap") : "");
     lv_label_set_text(m_sum[1], b);
 
     ble_info_t bi;
     ble_get_info(&bi);
-    lv_label_set_text(m_sum[2], !st->ble_enabled ? "Mode avion" :
-                      bi.state == BLE_ST_READY ? "Connecté" :
-                      bi.state == BLE_ST_ADVERTISING ? "En attente de l'iPhone" : "Connexion…");
+    lv_label_set_text(m_sum[2], !st->ble_enabled ? _("Mode avion") :
+                      bi.state == BLE_ST_READY ? _("Connecté") :
+                      bi.state == BLE_ST_ADVERTISING ? _("En attente de l'iPhone") : _("Connexion…"));
 
     power_telemetry_t t;
     power_get_telemetry(&t);
-    if (t.avg_ma > 0.1f) snprintf(b, sizeof(b), "%d %% · moyenne %.1f mA", t.percent, t.avg_ma);
-    else snprintf(b, sizeof(b), "%d %%%s", t.percent, t.charging ? " · en charge" : "");
+    if (t.avg_ma > 0.1f) snprintf(b, sizeof(b), _("%d %% · moyenne %.1f mA"), t.percent, t.avg_ma);
+    else snprintf(b, sizeof(b), "%d %%%s", t.percent, t.charging ? _(" · en charge") : "");
     lv_label_set_text(m_sum[3], b);
 
-    snprintf(b, sizeof(b), "Firmware %s", esp_app_get_description()->version);
+    snprintf(b, sizeof(b), _("Firmware %s"), esp_app_get_description()->version);
     lv_label_set_text(m_sum[4], b);
-    lv_label_set_text(m_sum[5], "Par Wi-Fi, sans câble");
+    lv_label_set_text(m_sum[5], _("Par Wi-Fi, sans câble"));
 }
 
 static void build_toast(void)
@@ -953,20 +1021,22 @@ static void build_menu(void)
 {
 
     /* ---- accueil ---- */
-    lv_obj_t *col = mk_page(SCR_MENU, "Réglages");
-    mk_entry(col, SYM_EYE, "Affichage", SCR_SET_DISP, &m_sum[0]);
-    mk_entry(col, LV_SYMBOL_BELL, "Alertes et réveil", SCR_SET_ALERT, &m_sum[1]);
-    mk_entry(col, LV_SYMBOL_BLUETOOTH, "Bluetooth", SCR_SET_BT, &m_sum[2]);
-    mk_entry(col, LV_SYMBOL_CHARGE, "Énergie", SCR_POWER, &m_sum[3]);
-    mk_entry(col, LV_SYMBOL_LIST, "À propos", SCR_ABOUT, &m_sum[4]);
-    mk_entry(col, LV_SYMBOL_REFRESH, "Mise à jour", SCR_OTA, &m_sum[5]);
+    lv_obj_t *col = mk_page(SCR_MENU, _("Réglages"));
+    mk_entry(col, SYM_EYE, _("Affichage"), SCR_SET_DISP, &m_sum[0]);
+    mk_entry(col, LV_SYMBOL_BELL, _("Alertes et réveil"), SCR_SET_ALERT, &m_sum[1]);
+    mk_entry(col, LV_SYMBOL_BLUETOOTH, _("Bluetooth"), SCR_SET_BT, &m_sum[2]);
+    mk_entry(col, LV_SYMBOL_CHARGE, _("Énergie"), SCR_POWER, &m_sum[3]);
+    mk_entry(col, LV_SYMBOL_LIST, _("À propos"), SCR_ABOUT, &m_sum[4]);
+    mk_entry(col, LV_SYMBOL_REFRESH, _("Mise à jour"), SCR_OTA, &m_sum[5]);
 
     /* ---- affichage ---- */
-    col = mk_page(SCR_SET_DISP, "Affichage");
-    mk_section(col, "CADRAN");
-    static const char *face_map[] = { "Rétro", "Pub", "Digital", "" };
+    col = mk_page(SCR_SET_DISP, _("Affichage"));
+    mk_section(col, _("CADRAN"));
+    static const char *face_map[4];
+    for (int i = 0; i < 3; i++) face_map[i] = _(FACE_NAMES[i]);
+    face_map[3] = "";
     m_bm_face = mk_segmented(col, face_map, menu_face_cb);
-    mk_section(col, "LUMINOSITÉ");
+    mk_section(col, _("LUMINOSITÉ"));
     m_slider = lv_slider_create(col);
     lv_obj_set_width(m_slider, lv_pct(90));
     lv_obj_set_style_margin_left(m_slider, 8, 0);
@@ -977,27 +1047,30 @@ static void build_menu(void)
     lv_obj_add_event_cb(m_slider, menu_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(m_slider, menu_slider_cb, LV_EVENT_RELEASED, NULL);
     bubble(m_slider);
-    mk_section(col, "EXTINCTION DE L'ÉCRAN");
+    mk_section(col, _("EXTINCTION DE L'ÉCRAN"));
     static const char *tmo_map[] = { "5 s", "8 s", "10 s", "15 s", "30 s", "" };
     m_bm_tmo = mk_segmented(col, tmo_map, menu_tmo_cb);
+    mk_section(col, _("LANGUE"));
+    static const char *lang_map[] = { "Français", "English", "" };
+    m_bm_lang = mk_segmented(col, lang_map, menu_lang_cb);
 
     /* ---- alertes et réveil ---- */
-    col = mk_page(SCR_SET_ALERT, "Alertes");
-    m_sw_vib = mk_switch_row(col, "Vibration", "Notifications et appels", menu_vib_cb);
-    m_sw_nwake = mk_switch_row(col, "Allumer l'écran", "Sinon : vibreur seul", menu_nwake_cb);
-    m_sw_tap = mk_switch_row(col, "Double tap", "2 tapes sur l'écran éteint", menu_tap_cb);
+    col = mk_page(SCR_SET_ALERT, _("Alertes"));
+    m_sw_vib = mk_switch_row(col, _("Vibration"), _("Notifications et appels"), menu_vib_cb);
+    m_sw_nwake = mk_switch_row(col, _("Allumer l'écran"), _("Sinon : vibreur seul"), menu_nwake_cb);
+    m_sw_tap = mk_switch_row(col, _("Double tap"), _("2 tapes sur l'écran éteint"), menu_tap_cb);
 
     /* ---- bluetooth ---- */
-    col = mk_page(SCR_SET_BT, "Bluetooth");
-    m_sw_bt = mk_switch_row(col, "Bluetooth", "Coupé = mode avion", menu_bt_cb);
+    col = mk_page(SCR_SET_BT, _("Bluetooth"));
+    m_sw_bt = mk_switch_row(col, _("Bluetooth"), _("Coupé = mode avion"), menu_bt_cb);
     m_bt_info = mk_label(col, &font_small_11, C_DIM, "");
     lv_obj_set_style_pad_bottom(m_bt_info, 4, 0);
-    lv_obj_t *pb = mk_button(col, LV_SYMBOL_BLUETOOTH "  Appairer un iPhone", C_CARD, menu_nav_cb,
+    lv_obj_t *pb = mk_button(col, with_sym(LV_SYMBOL_BLUETOOTH, _("Appairer un iPhone")), C_CARD, menu_nav_cb,
                              (void *)(uintptr_t)SCR_PAIR);
     lv_obj_set_size(pb, lv_pct(100), 44);
     lv_obj_t *sp = mk_container(col);                 /* écart : action destructive à part */
     lv_obj_set_size(sp, 10, 14);
-    lv_obj_t *fg = mk_button(col, LV_SYMBOL_TRASH "  Oublier les appareils", lv_color_hex(0x3F1D1D),
+    lv_obj_t *fg = mk_button(col, with_sym(LV_SYMBOL_TRASH, _("Oublier les appareils")), lv_color_hex(0x3F1D1D),
                              forget_cb, NULL);
     lv_obj_set_size(fg, lv_pct(100), 44);
     lv_obj_set_style_text_color(lv_obj_get_child(fg, 0), lv_color_hex(0xFCA5A5), 0);
@@ -1016,15 +1089,15 @@ static void build_menu(void)
     lv_obj_set_style_border_width(card, 0, 0);
     lv_obj_set_style_radius(card, 14, 0);
     lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *q = mk_label(card, &font_text_16, C_FG, "Oublier tous les\nappareils appairés ?");
+    lv_obj_t *q = mk_label(card, &font_text_16, C_FG, _("Oublier tous les\nappareils appairés ?"));
     lv_obj_set_style_text_align(q, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(q, LV_ALIGN_TOP_MID, 0, 2);
-    lv_obj_t *q2 = mk_label(card, &font_small_11, C_DIM, "Il faudra réappairer l'iPhone.");
+    lv_obj_t *q2 = mk_label(card, &font_small_11, C_DIM, _("Il faudra réappairer l'iPhone."));
     lv_obj_align(q2, LV_ALIGN_TOP_MID, 0, 46);
-    lv_obj_t *no = mk_button(card, "Annuler", C_OFF, confirm_cb, (void *)0);
+    lv_obj_t *no = mk_button(card, _("Annuler"), C_OFF, confirm_cb, (void *)0);
     lv_obj_set_size(no, 88, 40);
     lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_obj_t *yes = mk_button(card, "Oublier", C_BAD, confirm_cb, (void *)1);
+    lv_obj_t *yes = mk_button(card, _("Oublier"), C_BAD, confirm_cb, (void *)1);
     lv_obj_set_size(yes, 88, 40);
     lv_obj_align(yes, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
     lv_obj_add_flag(m_confirm, LV_OBJ_FLAG_HIDDEN);
@@ -1042,32 +1115,32 @@ static void ota_reboot_cb(lv_timer_t *t) { ota_reboot_now(); }
 static void ota_ui_running(void)
 {
     char b[200];
-    snprintf(b, sizeof(b), "1. Wi-Fi « %s »\n    mot de passe  %s\n2. Ouvrir http://192.168.4.1\n3. Envoyer le fichier .bin",
+    snprintf(b, sizeof(b), _("1. Wi-Fi « %s »\n    mot de passe  %s\n2. Ouvrir http://192.168.4.1\n3. Envoyer le fichier .bin"),
              ota_ssid(), ota_password());
     lv_label_set_text(o_info, b);
     lv_obj_set_style_text_color(o_status, C_DIM, 0);
-    lv_label_set_text(o_status, "En attente d'un appareil…");
-    lv_label_set_text(lv_obj_get_child(o_btn, 0), "Annuler");
+    lv_label_set_text(o_status, _("En attente d'un appareil…"));
+    lv_label_set_text(lv_obj_get_child(o_btn, 0), _("Annuler"));
     lv_obj_set_style_bg_color(o_btn, C_OFF, 0);
 }
 
 static void ota_ui_idle(void)
 {
     char b[220];
-    snprintf(b, sizeof(b), "Version installée : %s\n\nLa montre crée un réseau Wi-Fi ; le Bluetooth est coupé "
-             "le temps de la mise à jour.%s", esp_app_get_description()->version,
-             ota_rolled_back() ? "\n\nLa dernière mise à jour avait échoué : ancien firmware restauré." : "");
+    snprintf(b, sizeof(b), _("Version installée : %s\n\nLa montre crée un réseau Wi-Fi ; le Bluetooth est coupé "
+             "le temps de la mise à jour.%s"), esp_app_get_description()->version,
+             ota_rolled_back() ? _("\n\nLa dernière mise à jour avait échoué : ancien firmware restauré.") : "");
     lv_label_set_text(o_info, b);
     lv_label_set_text(o_status, "");
     lv_obj_add_flag(o_bar, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(lv_obj_get_child(o_btn, 0), LV_SYMBOL_REFRESH "  Démarrer");
+    lv_label_set_text(lv_obj_get_child(o_btn, 0), with_sym(LV_SYMBOL_REFRESH, _("Démarrer")));
     lv_obj_set_style_bg_color(o_btn, C_ACC, 0);
 }
 
 static void ota_btn_cb(lv_event_t *ev)
 {
     if (ota_active()) { ota_cancel(); return; }
-    lv_label_set_text(o_status, "Démarrage du Wi-Fi…");
+    lv_label_set_text(o_status, _("Démarrage du Wi-Fi…"));
     lv_refr_now(NULL);
     const char *err = ota_start();
     if (err) {
@@ -1086,22 +1159,26 @@ void ui_on_ota(int code)
     if (code >= 0 && code <= OTA_EV_PROGRESS_MAX) {
         lv_obj_remove_flag(o_bar, LV_OBJ_FLAG_HIDDEN);
         lv_bar_set_value(o_bar, code, LV_ANIM_OFF);
-        snprintf(b, sizeof(b), "Réception… %d %%", code);
+        snprintf(b, sizeof(b), _("Réception… %d %%"), code);
         lv_obj_set_style_text_color(o_status, C_FG, 0);
         lv_label_set_text(o_status, b);
     } else if (code == OTA_EV_CLIENT) {
-        lv_label_set_text(o_status, "Appareil connecté : ouvrir http://192.168.4.1");
+        lv_label_set_text(o_status, _("Appareil connecté : ouvrir http://192.168.4.1"));
     } else if (code == OTA_EV_DONE) {
         lv_bar_set_value(o_bar, 100, LV_ANIM_OFF);
-        snprintf(b, sizeof(b), LV_SYMBOL_OK " Version %s installée\nRedémarrage…", ota_new_version());
+        {
+            char v[64];
+            snprintf(v, sizeof(v), _("Version %s installée\nRedémarrage…"), ota_new_version());
+            snprintf(b, sizeof(b), LV_SYMBOL_OK " %s", v);
+        }
         lv_obj_set_style_text_color(o_status, C_OK, 0);
         lv_label_set_text(o_status, b);
         lv_obj_add_flag(o_btn, LV_OBJ_FLAG_HIDDEN);
         if (!o_reboot_t) o_reboot_t = lv_timer_create(ota_reboot_cb, 2000, NULL);
     } else {
-        const char *m = code == OTA_EV_ERR_IMAGE ? "Fichier refusé (pas un firmware T-Watch ?)" :
-                        code == OTA_EV_ERR_SIZE ? "Fichier trop gros" :
-                        code == OTA_EV_ERR_NET ? "Transfert interrompu : réessayer" : "Erreur d'écriture";
+        const char *m = code == OTA_EV_ERR_IMAGE ? _("Fichier refusé (pas un firmware T-Watch ?)") :
+                        code == OTA_EV_ERR_SIZE ? _("Fichier trop gros") :
+                        code == OTA_EV_ERR_NET ? _("Transfert interrompu : réessayer") : _("Erreur d'écriture");
         lv_obj_set_style_text_color(o_status, C_BAD, 0);
         lv_label_set_text(o_status, m);
     }
@@ -1109,7 +1186,7 @@ void ui_on_ota(int code)
 
 static void build_ota(void)
 {
-    lv_obj_t *col = mk_page(SCR_OTA, "Mise à jour");
+    lv_obj_t *col = mk_page(SCR_OTA, _("Mise à jour"));
     o_info = mk_label(col, &font_text_16, C_FG, "");
     lv_label_set_long_mode(o_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(o_info, lv_pct(100));
@@ -1139,6 +1216,7 @@ static void menu_sync_from_settings(void)
     for (int i = 0; i < 3; i++) {
         if (FACE_ORDER[i] == st->watchface) lv_buttonmatrix_set_button_ctrl(m_bm_face, i, LV_BUTTONMATRIX_CTRL_CHECKED);
     }
+    lv_buttonmatrix_set_button_ctrl(m_bm_lang, st->lang ? 1 : 0, LV_BUTTONMATRIX_CTRL_CHECKED);
     for (size_t i = 0; i < sizeof(TMO_VALUES); i++) {
         if (TMO_VALUES[i] >= st->screen_timeout_s) {
             lv_buttonmatrix_set_button_ctrl(m_bm_tmo, i, LV_BUTTONMATRIX_CTRL_CHECKED);
@@ -1158,64 +1236,64 @@ static void power_refresh(void)
     ble_get_info(&b);
     char s[112];
 
-    snprintf(s, sizeof(s), "Batterie  %d %%  ·  %.3f V", t.percent, t.vbat_mv / 1000.0f);
+    snprintf(s, sizeof(s), _("Batterie  %d %%  ·  %.3f V"), t.percent, t.vbat_mv / 1000.0f);
     lv_label_set_text(p_lbl[0], s);
 
     if (t.vbus) {
-        if (t.charging) snprintf(s, sizeof(s), "Charge  +%.0f mA", t.i_chg_ma);
-        else snprintf(s, sizeof(s), "Secteur · charge terminée");
+        if (t.charging) snprintf(s, sizeof(s), _("Charge  +%.0f mA"), t.i_chg_ma);
+        else snprintf(s, sizeof(s), _("Secteur · charge terminée"));
     } else {
-        snprintf(s, sizeof(s), "Décharge  %.1f mA", t.i_dischg_ma);
+        snprintf(s, sizeof(s), _("Décharge  %.1f mA"), t.i_dischg_ma);
     }
     lv_label_set_text(p_lbl[1], s);
 
     if (t.vbus) {   /* en charge, le compteur mesure ce qui entre dans la batterie */
-        snprintf(s, sizeof(s), "Chargé  %.0f mAh en %luh%02lu", t.used_mah < 0 ? -t.used_mah : 0.0f,
+        snprintf(s, sizeof(s), _("Chargé  %.0f mAh en %luh%02lu"), t.used_mah < 0 ? -t.used_mah : 0.0f,
                  (unsigned long)(t.since_s / 3600), (unsigned long)((t.since_s / 60) % 60));
     } else {
-        snprintf(s, sizeof(s), "Conso  %.2f mAh en %luh%02lu", t.used_mah,
+        snprintf(s, sizeof(s), _("Conso  %.2f mAh en %luh%02lu"), t.used_mah,
                  (unsigned long)(t.since_s / 3600), (unsigned long)((t.since_s / 60) % 60));
     }
     lv_label_set_text(p_lbl[2], s);
 
     if (t.vbus) {
-        snprintf(s, sizeof(s), "Débrancher pour mesurer");
+        snprintf(s, sizeof(s), _("Débrancher pour mesurer"));
     } else if (t.avg_ma > 0.1f) {
         float left_h = power_capacity_mah() * t.percent / 100.0f / t.avg_ma;
-        snprintf(s, sizeof(s), "Moy. %.1f mA, reste ~%.0f h", t.avg_ma, left_h);
+        snprintf(s, sizeof(s), _("Moy. %.1f mA, reste ~%.0f h"), t.avg_ma, left_h);
     } else {
-        snprintf(s, sizeof(s), "Moyenne : mesure en cours…");
+        snprintf(s, sizeof(s), _("Moyenne : mesure en cours…"));
     }
     lv_label_set_text(p_lbl[3], s);
 
-    static const char *const ST[] = { "coupé", "publicité", "connecté", "chiffré", "prêt" };
+    static const char *const ST[] = { N_("coupé"), N_("publicité"), N_("connecté"), N_("chiffré"), N_("prêt") };
     if (b.itvl_x125) {
-        snprintf(s, sizeof(s), "BLE %s · %.0f ms · lat %u", ST[b.state], b.itvl_x125 * 1.25f, b.latency);
+        snprintf(s, sizeof(s), "BLE %s · %.0f ms · lat %u", _(ST[b.state]), b.itvl_x125 * 1.25f, b.latency);
     } else {
-        snprintf(s, sizeof(s), "BLE %s%s", ST[b.state],
+        snprintf(s, sizeof(s), "BLE %s%s", _(ST[b.state]),
                  (b.state == BLE_ST_ADVERTISING && !b.adv_active) ? " INACTIVE" : "");
     }
     lv_label_set_text(p_lbl[4], s);
 
     if (t.vbus) {
-        snprintf(s, sizeof(s), "Veille : sur batterie");
+        snprintf(s, sizeof(s), _("Veille : sur batterie"));
     } else if (t.off_avg_ma > 0.05f) {
-        snprintf(s, sizeof(s), "Veille %.1f mA · écran %.0f%%", t.off_avg_ma, t.screen_pct);
+        snprintf(s, sizeof(s), _("Veille %.1f mA · écran %.0f%%"), t.off_avg_ma, t.screen_pct);
     } else {
-        snprintf(s, sizeof(s), "Écran allumé %.0f %% du temps", t.screen_pct);
+        snprintf(s, sizeof(s), _("Écran allumé %.0f %% du temps"), t.screen_pct);
     }
     lv_label_set_text(p_lbl[5], s);
     /* ligne 1 : jauge (capacité apprise) ; ligne 2 : décharge précédente */
     int n = power_capacity_samples();
     char l1[64], l2[64] = "";
-    if (n > 0) snprintf(l1, sizeof(l1), "Jauge : capacité ~%u mAh (%d mes.)", power_capacity_mah(), n);
-    else if (power_soc_known()) snprintf(l1, sizeof(l1), "Jauge : calibrage, %u mAh nominal", power_capacity_mah());
-    else snprintf(l1, sizeof(l1), "Jauge : estimée (pas encore calibrée)");
+    if (n > 0) snprintf(l1, sizeof(l1), _("Jauge : capacité ~%u mAh (%d mes.)"), power_capacity_mah(), n);
+    else if (power_soc_known()) snprintf(l1, sizeof(l1), _("Jauge : calibrage, %u mAh nominal"), power_capacity_mah());
+    else snprintf(l1, sizeof(l1), _("Jauge : estimée (pas encore calibrée)"));
     power_hist_t h;
     if (power_last_discharge(&h)) {
-        static const char *const END[] = { "", "rechargée", "coupure", "redémarrage" };
-        snprintf(l2, sizeof(l2), "Préc. %.0f mAh en %luh%02lu, %s", h.used_mah,
-                 (unsigned long)(h.since_s / 3600), (unsigned long)((h.since_s / 60) % 60), END[h.end & 3]);
+        static const char *const END[] = { "", N_("rechargée"), N_("coupure"), N_("redémarrage") };
+        snprintf(l2, sizeof(l2), _("Préc. %.0f mAh en %luh%02lu, %s"), h.used_mah,
+                 (unsigned long)(h.since_s / 3600), (unsigned long)((h.since_s / 60) % 60), _(END[h.end & 3]));
     }
     snprintf(s, sizeof(s), "%s%s%s", l1, l2[0] ? "\n" : "", l2);
     lv_label_set_text(p_lbl[6], s);
@@ -1226,7 +1304,7 @@ static void power_timer_cb(lv_timer_t *t) { power_refresh(); }
 static void build_power(void)
 {
     lv_obj_t *s = s_scr[SCR_POWER] = mk_screen();
-    lv_obj_t *h = mk_label(s, &font_title_20, C_FG, LV_SYMBOL_CHARGE "  Énergie");
+    lv_obj_t *h = mk_label(s, &font_title_20, C_FG, with_sym(LV_SYMBOL_CHARGE, _("Énergie")));
     lv_obj_align(h, LV_ALIGN_TOP_LEFT, 12, 10);
     for (int i = 0; i < 7; i++) {
         p_lbl[i] = mk_label(s, i == 6 ? &font_small_11 : &font_text_16, i == 3 ? C_ACC : (i == 6 ? C_DIM : C_FG), "");
@@ -1252,7 +1330,7 @@ static void pair_done_timer_cb(lv_timer_t *t)
 static void build_pair(void)
 {
     lv_obj_t *s = s_scr[SCR_PAIR] = mk_screen();
-    lv_obj_t *h = mk_label(s, &font_title_20, C_FG, LV_SYMBOL_BLUETOOTH "  Appairage");
+    lv_obj_t *h = mk_label(s, &font_title_20, C_FG, with_sym(LV_SYMBOL_BLUETOOTH, _("Appairage")));
     lv_obj_align(h, LV_ALIGN_TOP_MID, 0, 12);
     pa_code = mk_label(s, &font_num_44, C_FG, "------");
     lv_obj_align(pa_code, LV_ALIGN_CENTER, 0, -16);
@@ -1274,10 +1352,10 @@ static void about_refresh(void)
     uint32_t up = (uint32_t)(esp_timer_get_time() / 1000000);
     static char s[1200];
     int n = snprintf(s, sizeof(s),
-             "Firmware %s\nESP-IDF %s · LVGL %d.%d.%d\n"
-             "BLE %02X:%02X:%02X:%02X:%02X:%02X\nAppareils appairés : %d\n"
-             "En marche depuis %luj %02luh%02lu\nTas libre %u Ko (min %u Ko)\nPlus grand bloc %u Ko\nReset : %d\n"
-             "Réveils écran éteint :\n tactile %lu · notif %lu\n média %lu · AXP %lu · BLE %lu",
+             _("Firmware %s\nESP-IDF %s · LVGL %d.%d.%d\n"
+               "BLE %02X:%02X:%02X:%02X:%02X:%02X\nAppareils appairés : %d\n"
+               "En marche depuis %luj %02luh%02lu\nTas libre %u Ko (min %u Ko)\nPlus grand bloc %u Ko\nReset : %d\n"
+               "Réveils écran éteint :\n tactile %lu · notif %lu\n média %lu · AXP %lu · BLE %lu"),
              d->version, esp_get_idf_version(), LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH,
              b.addr[5], b.addr[4], b.addr[3], b.addr[2], b.addr[1], b.addr[0], b.bonds,
              (unsigned long)(up / 86400), (unsigned long)((up / 3600) % 24), (unsigned long)((up / 60) % 60),
@@ -1289,7 +1367,7 @@ static void about_refresh(void)
              (unsigned long)g_wake_cnt[EV_MEDIA], (unsigned long)g_wake_cnt[EV_AXP_IRQ],
              (unsigned long)g_wake_cnt[EV_BLE_STATE]);
     if (n > 0 && n < (int)sizeof(s)) {
-        n += snprintf(s + n, sizeof(s) - n, "\n\nJournal BLE (pub. %s) :\n",
+        n += snprintf(s + n, sizeof(s) - n, _("\n\nJournal BLE (pub. %s) :\n"),
                       b.adv_active ? "active" : "INACTIVE");
         if (n < (int)sizeof(s)) ble_diag_dump(s + n, sizeof(s) - n);
     }
@@ -1299,7 +1377,7 @@ static void about_refresh(void)
 static void build_about(void)
 {
     lv_obj_t *s = s_scr[SCR_ABOUT] = mk_screen();
-    lv_obj_t *h = mk_label(s, &font_title_20, C_FG, "À propos");
+    lv_obj_t *h = mk_label(s, &font_title_20, C_FG, _("À propos"));
     lv_obj_align(h, LV_ALIGN_TOP_LEFT, 12, 10);
     a_lbl = mk_label(s, &font_text_16, C_DIM, "");
     lv_obj_set_width(a_lbl, BOARD_LCD_W - 24);
@@ -1347,8 +1425,8 @@ static void media_refresh(bool full)
     if (!has) {
         lv_obj_add_flag(mu_box, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(mu_empty, LV_OBJ_FLAG_HIDDEN);
-        lv_label_set_text(mu_empty, m.available ? LV_SYMBOL_AUDIO "\n\nAucune lecture en cours"
-                                                : LV_SYMBOL_AUDIO "\n\niPhone non connecté");
+        lv_label_set_text_fmt(mu_empty, LV_SYMBOL_AUDIO "\n\n%s",
+                              m.available ? _("Aucune lecture en cours") : _("iPhone non connecté"));
         mu_seq = UINT32_MAX;
         return;
     }
@@ -1358,7 +1436,7 @@ static void media_refresh(bool full)
     char b[24];
     if (full || m.seq != mu_seq) {
         char pl[sizeof(m.player)], pl2[sizeof(m.player) + 8];
-        strlcpy(pl, m.player[0] ? m.player : "Lecture", sizeof(pl));
+        strlcpy(pl, m.player[0] ? m.player : _("Lecture"), sizeof(pl));
         text_sanitize(pl);             /* avant l'icône : le nettoyage retire les glyphes privés */
         snprintf(pl2, sizeof(pl2), LV_SYMBOL_AUDIO "  %s", pl);
         lv_label_set_text(mu_player, pl2);
@@ -1526,14 +1604,14 @@ static void launch_add(const char *name, const char *icon, uint32_t color, scr_i
 static void build_launcher(void)
 {
     s_launch_n = 0;
-    launch_add("Lecture", LV_SYMBOL_AUDIO, 0x1DB954, SCR_MEDIA, NULL);
+    launch_add(N_("Lecture"), LV_SYMBOL_AUDIO, 0x1DB954, SCR_MEDIA, NULL);
     for (int i = 0; i < g_app_count; i++)
         launch_add(g_apps[i]->name, g_apps[i]->icon, g_apps[i]->color, SCR_APP, g_apps[i]);
-    launch_add("Énergie", LV_SYMBOL_BATTERY_FULL, 0x22C55E, SCR_POWER, NULL);
-    launch_add("Réglages", LV_SYMBOL_SETTINGS, 0x8A8F98, SCR_MENU, NULL);
+    launch_add(N_("Énergie"), LV_SYMBOL_BATTERY_FULL, 0x22C55E, SCR_POWER, NULL);
+    launch_add(N_("Réglages"), LV_SYMBOL_SETTINGS, 0x8A8F98, SCR_MENU, NULL);
 
     lv_obj_t *s = s_scr[SCR_LAUNCHER] = mk_screen();
-    lv_obj_t *t = mk_label(s, &font_text_16, C_DIM, "Apps");
+    lv_obj_t *t = mk_label(s, &font_text_16, C_DIM, _("Apps"));
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 6);
 
     lv_obj_t *grid = mk_container(s);
@@ -1569,7 +1647,7 @@ static void build_launcher(void)
         lv_obj_t *ic = mk_label(disc, &font_title_20, lv_color_hex(0x000000), s_launch[i].icon);
         lv_obj_center(ic);
 
-        lv_obj_t *nm = mk_label(cell, &font_small_11, C_FG, s_launch[i].name);
+        lv_obj_t *nm = mk_label(cell, &font_small_11, C_FG, _(s_launch[i].name));
         lv_obj_align(nm, LV_ALIGN_BOTTOM_MID, 0, -6);
     }
 }
@@ -1605,9 +1683,9 @@ static void quick_refresh(void)
     if (!s_scr[SCR_QUICK]) return;
     ble_info_t bi;
     ble_get_info(&bi);
-    const char *lk = bi.state == BLE_ST_READY ? "iPhone connecté" :
-                     (bi.state == BLE_ST_CONNECTED || bi.state == BLE_ST_SECURED) ? "Connexion…" :
-                     bi.state == BLE_ST_OFF ? "Bluetooth coupé" : "iPhone absent";
+    const char *lk = bi.state == BLE_ST_READY ? _("iPhone connecté") :
+                     (bi.state == BLE_ST_CONNECTED || bi.state == BLE_ST_SECURED) ? _("Connexion…") :
+                     bi.state == BLE_ST_OFF ? _("Bluetooth coupé") : _("iPhone absent");
     lv_label_set_text_fmt(q_info, "%s%d%%  ·  %s", power_charging() ? LV_SYMBOL_CHARGE " " : "",
                           power_percent(), lk);
     q_set_tile(Q_BT, ble_running());
@@ -1623,13 +1701,13 @@ static void quick_tile_cb(lv_event_t *ev)
     case Q_BT:
         st->ble_enabled = !ble_running();
         settings_save();
-        if (st->ble_enabled) { ble_start(); toast("Bluetooth activé"); }
-        else { ble_stop(); toast("Mode avion"); }
+        if (st->ble_enabled) { ble_start(); toast(_("Bluetooth activé")); }
+        else { ble_stop(); toast(_("Mode avion")); }
         break;
     case Q_DND:
         st->dnd = !st->dnd;
         settings_save();
-        toast(st->dnd ? "Ne pas déranger" : "Notifications actives");
+        toast(st->dnd ? _("Ne pas déranger") : _("Notifications actives"));
         watch_refresh_status();
         break;
     case Q_LAMP: {
@@ -1684,10 +1762,10 @@ static void build_quick(void)
     q_info = mk_label(s, &font_text_16, C_DIM, "");
     lv_obj_align(q_info, LV_ALIGN_TOP_MID, 0, 8);
 
-    q_mk_tile(s, Q_BT, LV_SYMBOL_BLUETOOTH, "Bluetooth", 12, 36);
-    q_mk_tile(s, Q_DND, SYM_MOON, "Ne pas déranger", 124, 36);
-    q_mk_tile(s, Q_LAMP, SYM_BULB, "Lampe", 12, 106);
-    q_mk_tile(s, Q_MEDIA, LV_SYMBOL_AUDIO, "Lecture", 124, 106);
+    q_mk_tile(s, Q_BT, LV_SYMBOL_BLUETOOTH, _("Bluetooth"), 12, 36);
+    q_mk_tile(s, Q_DND, SYM_MOON, _("Ne pas déranger"), 124, 36);
+    q_mk_tile(s, Q_LAMP, SYM_BULB, _("Lampe"), 12, 106);
+    q_mk_tile(s, Q_MEDIA, LV_SYMBOL_AUDIO, _("Lecture"), 124, 106);
 
     /* luminosité : − [barre] + (gros boutons, faciles au doigt) */
     lv_obj_t *mn = mk_button(s, "-", C_CARD, quick_bri_cb, (void *)(intptr_t)-49);
@@ -1705,7 +1783,7 @@ static void build_quick(void)
     lv_obj_set_style_bg_color(q_bri, C_OFF, LV_PART_MAIN);
     lv_obj_set_style_bg_color(q_bri, C_FG, LV_PART_INDICATOR);
     bubble(q_bri);
-    lv_obj_t *sun = mk_label(s, &font_small_11, C_DIM, "Luminosité");
+    lv_obj_t *sun = mk_label(s, &font_small_11, C_DIM, _("Luminosité"));
     lv_obj_align(sun, LV_ALIGN_TOP_MID, 0, 178);
 }
 
@@ -1815,6 +1893,7 @@ void ui_init(void)
     lv_display_t *disp = lv_display_get_default();
     lv_theme_t *th = lv_theme_default_init(disp, C_ACC, lv_color_hex(0x6B7280), true, &font_text_16);
     lv_display_set_theme(disp, th);
+    i18n_set(settings_get()->lang);
 
     build_watch();
     build_list();
@@ -1835,7 +1914,7 @@ static void release_menu(void)
         if (s_scr[grp[i]]) { lv_obj_delete(s_scr[grp[i]]); s_scr[grp[i]] = NULL; }
     }
     /* plus aucun pointeur vers des objets détruits */
-    m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = NULL;
+    m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = m_bm_lang = NULL;
     m_bt_info = m_confirm = NULL;
     o_info = o_bar = o_status = o_btn = NULL;
     memset(m_sum, 0, sizeof(m_sum));
@@ -1866,7 +1945,23 @@ static void release_group(int g)
 
 void ui_release_idle(void)
 {
+    /* une animation de changement d'écran en cours garde l'ancien écran
+     * affiché : on la termine avant de libérer quoi que ce soit */
+    if (s_scr[s_cur] && lv_screen_active() != s_scr[s_cur]) lv_screen_load(s_scr[s_cur]);
     for (int g = G_MENU; g <= G_APP; g++) release_group(g);
+}
+
+static bool app_busy(void)
+{
+    return s_app_cur && s_app_cur->busy && s_app_cur->busy();
+}
+
+/* extinction et réveil : on reste sur une app qui travaille (chrono lancé,
+ * minuteur en cours) pour la retrouver au réveil, sinon retour au cadran */
+void ui_go_home_or_app(void)
+{
+    if (s_cur == SCR_APP && app_busy()) return;
+    ui_go_home();
 }
 
 void ui_go_home(void)
@@ -1930,11 +2025,12 @@ bool ui_on_notif(notif_entry_t *e, bool alert)
     if (e->n.category == ANCS_CAT_INCOMING_CALL) {
         c_uid = e->n.uid;
         c_uid_valid = e->uid_valid;
-        lv_label_set_text(c_who, e->n.title[0] ? e->n.title : "Inconnu");
+        lv_label_set_text(c_who, e->n.title[0] ? e->n.title : _("Inconnu"));
         show(SCR_CALL, LV_SCR_LOAD_ANIM_OVER_TOP);
         if (vib) power_vibrate(VIB_CALL);
     } else {
-        if (s_cur != SCR_DETAIL) d_return = (s_cur == SCR_LIST) ? SCR_LIST : SCR_WATCH;
+        if (s_cur != SCR_DETAIL)
+            d_return = (s_cur == SCR_LIST || s_cur == SCR_APP) ? s_cur : SCR_WATCH;
         detail_fill(e);
         show(SCR_DETAIL, LV_SCR_LOAD_ANIM_OVER_TOP);
         if (vib) power_vibrate(VIB_NOTIF);
@@ -1948,7 +2044,7 @@ bool ui_open_pending(void)
     notif_entry_t *e = ns_find_hash(s_pending_hash);
     s_pending_hash = 0;
     if (!e) return false;              /* supprimée entre-temps sur l'iPhone */
-    d_return = SCR_WATCH;
+    d_return = s_cur == SCR_APP ? SCR_APP : SCR_WATCH;   /* puis retour à l'app en cours */
     detail_fill(e);
     show(SCR_DETAIL, LV_SCR_LOAD_ANIM_NONE);
     return true;
@@ -2001,7 +2097,7 @@ void ui_show_passkey(uint32_t pk)
 {
     lv_label_set_text_fmt(pa_code, "%06lu", (unsigned long)pk);
     lv_obj_set_style_text_color(pa_code, C_FG, 0);
-    lv_label_set_text(pa_hint, "Saisir ce code sur l'iPhone");
+    lv_label_set_text(pa_hint, _("Saisir ce code sur l'iPhone"));
     lv_timer_pause(pa_timer);
     if (s_cur != SCR_PAIR) s_origin[SCR_PAIR] = s_cur;
     show(SCR_PAIR, LV_SCR_LOAD_ANIM_NONE);
@@ -2012,11 +2108,11 @@ void ui_pairing_done(int status)
     if (s_cur != SCR_PAIR) return;
     if (status == 0) {
         lv_obj_set_style_text_color(pa_code, C_OK, 0);
-        lv_label_set_text(pa_hint, LV_SYMBOL_OK "  Appairage réussi");
+        lv_label_set_text(pa_hint, with_sym(LV_SYMBOL_OK, _("Appairage réussi")));
         power_vibrate(VIB_SHORT);
     } else {
         lv_obj_set_style_text_color(pa_code, C_BAD, 0);
-        lv_label_set_text(pa_hint, LV_SYMBOL_CLOSE "  Échec de l'appairage");
+        lv_label_set_text(pa_hint, with_sym(LV_SYMBOL_CLOSE, _("Échec de l'appairage")));
     }
     lv_timer_reset(pa_timer);
     lv_timer_resume(pa_timer);

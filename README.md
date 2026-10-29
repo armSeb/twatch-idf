@@ -27,10 +27,13 @@ analogique « montre ancienne » à complications. Priorités : stabilité, auto
 - Mode avion (Bluetooth coupé → vrai light sleep), écran **Énergie** (consommation moyenne
   mesurée par le compteur coulométrique de l'AXP202).
 - **Apps** : lanceur (← depuis le cadran) avec **Chrono** (tours), **Minuteur** (sonne même
-  écran éteint, l'app se rouvre) et **Lampe** (blanc / rouge). Un petit cadre d'applications
+  écran éteint, l'app se rouvre) et **Lampe** (blanc / rouge). Un chrono ou un minuteur
+  en marche garde la main : l'écran s'éteint dessus et le réveil y revient. Un petit cadre d'applications
   (`app.h`) permet d'en ajouter en un fichier.
 - **Contrôles rapides** (↓ depuis le cadran) : Bluetooth, **Ne pas déranger**, Lampe,
   Lecture, luminosité.
+- Interface en **français ou en anglais** (Réglages › Affichage › Langue), changement
+  immédiat sans redémarrage.
 - Démarrage quasi instantané, coredump en flash en cas de crash.
 
 Consommation mesurée : ~8,6 mA de moyenne **en utilisation réelle** (3 % du temps écran
@@ -226,13 +229,20 @@ arme un `esp_timer` et appelle `app_post_event(&app_xxx, code)` ; si `on_event` 
 `true`, le système rouvre l'app et allume l'écran. Voir `app_chrono.c`, `app_timer.c`,
 `app_lamp.c`.
 
+## Traduire
+
+Mécanisme à la gettext : la chaîne française sert de clé, `_("Réglages")` dans le code,
+`N_()` dans les tableaux statiques (traduits à l'affichage). La table anglaise est dans
+`main/i18n.c`. `host_tests/check_i18n.py` (lancé par `run.sh`) signale toute chaîne sans
+traduction et tout format printf qui diffère entre les deux langues.
+
 ## Tests PC
 
 ```bash
 host_tests/run.sh
 ```
 
-Parseur ANCS, nettoyage UTF-8, stockage (dédup/tri/capacité), sous `-fsanitize=address,undefined`.
+Parseur ANCS, nettoyage UTF-8, stockage (dédup/tri/capacité), jauge, sous `-fsanitize=address,undefined` ; couverture des traductions.
 
 ## Fichiers
 
@@ -248,6 +258,7 @@ Parseur ANCS, nettoyage UTF-8, stockage (dédup/tri/capacité), sous `-fsanitize
 | `main/wclock.c` | PCF8563 (UTC), fuseau, resynchro de l'horloge système |
 | `main/settings.c` | réglages NVS |
 | `main/app.h` / `apps.c` / `app_*.c` / `ui_kit.h` | cadre d'apps, registre, apps livrées, briques d'UI partagées |
+| `main/i18n.c` | traduction FR → EN |
 | `main/gauge.c` | jauge adaptative (compteur coulométrique, apprentissage de la capacité) |
 | `main/ota.c` | mise à jour Wi-Fi : point d'accès, page web, écriture OTA, validation / retour arrière |
 | `main/fonts/` | polices générées (`tools/gen_fonts.sh`) |
@@ -255,7 +266,7 @@ Parseur ANCS, nettoyage UTF-8, stockage (dédup/tri/capacité), sous `-fsanitize
 ## Pistes
 
 - Réveil au poignet / double tape (config BMA423 à charger, ~150–500 µA).
-- Interface en anglais (choix FR/EN).
+- Page web de mise à jour en anglais.
 - Répondre aux SMS : impossible via ANCS (seules les actions iOS positive/négative existent).
 
 ---

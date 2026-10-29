@@ -4,6 +4,7 @@
  */
 #include "app.h"
 #include "ui_kit.h"
+#include "i18n.h"
 #include "display.h"
 #include "settings.h"
 
@@ -27,7 +28,7 @@ static void create(lv_obj_t *scr)
 {
     s_scr = scr;
     lv_obj_add_event_cb(scr, tap_cb, LV_EVENT_CLICKED, NULL);
-    s_hint = ui_label(scr, &font_small_11, C_DIM, "Toucher : blanc / rouge");
+    s_hint = ui_label(scr, &font_small_11, C_DIM, _("Toucher : blanc / rouge"));
     lv_obj_align(s_hint, LV_ALIGN_BOTTOM_MID, 0, -8);
     paint();
 }

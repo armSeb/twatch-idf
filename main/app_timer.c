@@ -7,6 +7,7 @@
 #include <time.h>
 #include "app.h"
 #include "ui_kit.h"
+#include "i18n.h"
 #include "esp_timer.h"
 #include "power.h"
 
@@ -57,16 +58,16 @@ static void refresh(void)
     else lv_obj_add_flag(v_presets, LV_OBJ_FLAG_HIDDEN);
 
     if (s_done) {
-        lv_label_set_text(v_info, "Terminé !");
+        lv_label_set_text(v_info, _("Terminé !"));
         lv_obj_set_style_text_color(v_info, C_BAD, 0);
     } else if (s_run) {
         time_t now = time(NULL) + (time_t)(r / 1000000);
         struct tm tm;
         localtime_r(&now, &tm);
-        lv_label_set_text_fmt(v_info, "Sonne à %02d:%02d", tm.tm_hour, tm.tm_min);
+        lv_label_set_text_fmt(v_info, _("Sonne à %02d:%02d"), tm.tm_hour, tm.tm_min);
         lv_obj_set_style_text_color(v_info, C_DIM, 0);
     } else {
-        lv_label_set_text(v_info, idle ? "" : "En pause");
+        lv_label_set_text(v_info, idle ? "" : _("En pause"));
         lv_obj_set_style_text_color(v_info, C_DIM, 0);
     }
     if (idle) lv_obj_add_flag(v_info, LV_OBJ_FLAG_HIDDEN);
@@ -80,7 +81,7 @@ static void refresh(void)
         lv_label_set_text(rl, s_run ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
         lv_obj_set_style_bg_color(v_right, s_run ? C_WARN : C_OK, 0);
     }
-    lv_label_set_text(lv_obj_get_child(v_left, 0), idle ? "+1 min" : "Annuler");
+    lv_label_set_text(lv_obj_get_child(v_left, 0), idle ? "+1 min" : _("Annuler"));
 }
 
 static void stop_alarm(void)
@@ -105,7 +106,7 @@ static void right_cb(lv_event_t *e)
     } else if (s_left_us > 0) {
         if (!s_alarm) {
             const esp_timer_create_args_t a = { .callback = alarm_cb, .name = "minuteur" };
-            if (esp_timer_create(&a, &s_alarm) != ESP_OK) { ui_toast("Minuteur indisponible"); return; }
+            if (esp_timer_create(&a, &s_alarm) != ESP_OK) { ui_toast(_("Minuteur indisponible")); return; }
         }
         s_end = esp_timer_get_time() + s_left_us;
         esp_timer_start_once(s_alarm, (uint64_t)s_left_us);
@@ -147,7 +148,7 @@ static void tick_cb(lv_timer_t *t)
 static void create(lv_obj_t *scr)
 {
     if (!s_run && !s_done && s_left_us == 0) s_left_us = (int64_t)s_set_s * 1000000;
-    ui_header(scr, "Minuteur");
+    ui_header(scr, _("Minuteur"));
     v_time = ui_label(scr, &font_num_44, C_FG, "");
     lv_obj_align(v_time, LV_ALIGN_TOP_MID, 0, 52);
 
@@ -205,6 +206,8 @@ static bool on_event(int code)
     return true;                       /* ouvrir l'app et allumer l'écran */
 }
 
+static bool busy(void) { return s_run || s_done; }
+
 const app_t app_timer = {
     .name = "Minuteur",
     .icon = SYM_HOURGLASS,
@@ -215,4 +218,5 @@ const app_t app_timer = {
     .on_hide = on_hide,
     .on_event = on_event,
     .screen_timeout_ms = 30000,        /* l'alarme reste visible */
+    .busy = busy,
 };

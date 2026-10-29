@@ -11,6 +11,7 @@ typedef struct {
     uint8_t watchface;        /* 0 = classique, 1 = numérique, 2 = pub (carré) */
     bool    tap_wake;         /* double tap sur l'écran éteint = réveil */
     bool    notif_wake;       /* false = notif : vibre seulement, bouton pour voir */
+    uint8_t lang;             /* 0 = français, 1 = anglais (i18n.h) */
     bool    dnd;              /* ne pas déranger : ni vibration ni allumage (sauf appels) */
 } settings_t;
 
