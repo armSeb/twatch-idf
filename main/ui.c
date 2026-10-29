@@ -1408,7 +1408,9 @@ static void about_refresh(void)
              (unsigned long)g_wake_cnt[EV_BLE_STATE]);
     if (n > 0 && n < (int)sizeof(s)) {
         /* rails AXP (0x12 sorties, 0x29 LDO3 : bit 7 mode, 6:0 tension) et son */
-        n += snprintf(s + n, sizeof(s) - n, "\nAXP 12=%02X 28=%02X 29=%02X · audio %d",
+        n += snprintf(s + n, sizeof(s) - n, "\nPSRAM %u/%u Ko\nAXP 12=%02X 28=%02X 29=%02X · audio %d",
+                      (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024),
+                      (unsigned)(heap_caps_get_total_size(MALLOC_CAP_SPIRAM) / 1024),
                       axp_reg(0x12), axp_reg(0x28), axp_reg(0x29), sound_last_error());
     }
     if (n > 0 && n < (int)sizeof(s)) {

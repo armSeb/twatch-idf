@@ -35,6 +35,8 @@ codes Europe / USA). Un chrono ou un minuteur
   Lecture, luminosité.
 - Interface en **français ou en anglais** (Réglages › Affichage › Langue), changement
   immédiat sans redémarrage.
+- PSRAM 8 Mo activée (4 Mo adressables) : les grosses allocations y vont, la RAM interne
+  reste aux piles, au DMA et au Wi-Fi ; demi-veille pendant le light sleep.
 - Démarrage quasi instantané, coredump en flash en cas de crash.
 
 Consommation mesurée : ~8,6 mA de moyenne **en utilisation réelle** (3 % du temps écran
