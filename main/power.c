@@ -336,8 +336,8 @@ static void unused_gpio_setup(void)
 {
     /* Ampli I2S MAX98357 (BCLK 26, LRCLK 25, DIN 33) et LED IR (13) :
      * sorties à 0. Entrées flottantes = courant de fuite ; LED IR jamais
-     * allumée par accident. L'ampli est seul sur LDO3 (laissé à 1,3 V au
-     * repos, monté à 3,3 V par sound.c le temps d'un son). */
+     * allumée par accident. L'ampli est seul sur LDO3, coupé hors son
+     * (sound.c) : broches à 0, pas d'alimentation parasite par ses E/S. */
     gpio_config_t out = {
         .pin_bit_mask = (1ULL << GPIO_NUM_13) | (1ULL << GPIO_NUM_25) |
                         (1ULL << GPIO_NUM_26) | (1ULL << GPIO_NUM_33),

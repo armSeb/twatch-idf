@@ -49,13 +49,17 @@ esp_err_t axp_init(void)
     /* LDO2 = 3,3 V (bits 7:4 de 0x28 : 1,8 V + 100 mV*n → n=15) */
     i2c_reg_update8(s_dev, REG_LDO24_VOL, 0xF0, 0xF0);
 
-    /* Rails : NE RIEN COUPER. Sur la montre de Seb (ancien firmware
-     * fonctionnel), LDO3 alimente l'écran et LDO4 le tactile, contrairement
-     * au mapping LilyGo « V1 ». Une puce non alimentée mais reliée à l'ESP32
-     * se fait alimenter par ses E/S et perturbe le 3V3 → radio BLE sourde
-     * (RSSI −82 dBm à 30 cm, supervision timeout). L'AXP conserve ses
-     * registres tant que la batterie est branchée : on rallume explicitement. */
-    axp_set_outputs(AXP_OUT_DCDC3 | AXP_OUT_LDO2 | AXP_OUT_LDO3 | AXP_OUT_LDO4, true);
+    /* Rails (schéma V1) : LDO2 = écran (LCD_VDD), LDO3 = ampli audio seul.
+     * Ne pas couper LDO4 : une puce non alimentée mais reliée à l'ESP32 se
+     * fait alimenter par ses E/S et perturbe le 3V3 → radio BLE sourde
+     * (RSSI −82 dBm à 30 cm). L'AXP conserve ses registres tant que la
+     * batterie est branchée : on rallume explicitement.
+     * LDO3 : réglé à 3,3 V régulés mais coupé ; sound.c l'allume le temps
+     * d'un son (ses broches I2S restent à 0 au repos : pas d'alimentation
+     * parasite de l'ampli). */
+    axp_set_outputs(AXP_OUT_DCDC3 | AXP_OUT_LDO2 | AXP_OUT_LDO4, true);
+    i2c_reg_write8(s_dev, 0x29, AXP_LDO3_3V3);
+    axp_set_outputs(AXP_OUT_LDO3, false);
 
     /* ADC : uniquement tension + courant batterie (0x82 bits 7,6) ; 25 Hz */
     i2c_reg_write8(s_dev, REG_ADC_EN1, 0xC0);
@@ -135,8 +139,7 @@ static uint16_t read_13(uint8_t reg)      /* H8 + L5 */
 float axp_batt_mv(void)          { return read_12(REG_BAT_V_H8) * 1.1f; }
 
 /* LDO3 : registre 0x29, bit 7 = mode (0 = régulé), bits 6:0 = 0,7 V + 25 mV·n.
- * Il n'alimente que l'ampli audio (schéma V1) ; à 1,3 V (0x18) au repos,
- * alors que l'ampli ne démarre qu'à partir de 2,5 V. */
+ * N'alimente que l'ampli audio (schéma V1, 2,5 V mini). */
 uint8_t axp_ldo3_get(void)
 {
     uint8_t v = 0;

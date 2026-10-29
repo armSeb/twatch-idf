@@ -52,12 +52,11 @@ static void sound_task(void *arg)
 {
     beeps_t r = s_req;
     i2s_chan_handle_t tx = NULL;
-    /* L'ampli MAX98357 est seul sur LDO3 (schéma V1), laissé à 1,3 V au
-     * repos : on le monte à 3,3 V régulés le temps du son, puis on remet la
-     * valeur d'origine. */
-    uint8_t ldo3 = axp_ldo3_get();
+    /* L'ampli MAX98357 est seul sur LDO3 (schéma V1), coupé au repos :
+     * allumé à 3,3 V le temps du son. */
     axp_ldo3_set(AXP_LDO3_3V3);
-    vTaskDelay(pdMS_TO_TICKS(20));               /* montée du rail + démarrage de l'ampli */
+    axp_set_outputs(AXP_OUT_LDO3, true);
+    vTaskDelay(pdMS_TO_TICKS(30));               /* montée du rail + démarrage de l'ampli */
     i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     cc.auto_clear = true;
     i2s_std_config_t sc = {
@@ -84,7 +83,6 @@ static void sound_task(void *arg)
         ESP_LOGW(TAG, "I2S indisponible : %s", esp_err_to_name(e));
     }
     if (tx) i2s_del_channel(tx);
-    axp_ldo3_set(ldo3);
     /* broches au repos (sorties à 0, comme au démarrage) */
     gpio_config_t out = {
         .pin_bit_mask = (1ULL << PIN_BCK) | (1ULL << PIN_WS) | (1ULL << PIN_DO),
@@ -94,6 +92,7 @@ static void sound_task(void *arg)
     gpio_set_level(PIN_BCK, 0);
     gpio_set_level(PIN_WS, 0);
     gpio_set_level(PIN_DO, 0);
+    axp_set_outputs(AXP_OUT_LDO3, false);        /* broches déjà à 0 : coupure propre */
     s_busy = false;
     vTaskDelete(NULL);
 }

@@ -13,7 +13,7 @@
 #define AXP_OUT_LDO2    (1u << 2)   /* V1 : alimente ST7789 + rétroéclairage */
 #define AXP_OUT_LDO4    (1u << 3)
 #define AXP_OUT_DCDC2   (1u << 4)
-#define AXP_OUT_LDO3    (1u << 6)   /* V1 : ampli audio MAX98357 */
+#define AXP_OUT_LDO3    (1u << 6)   /* V1 : ampli audio MAX98357 (coupé hors son) */
 
 /* Sources d'IRQ décodées (index de bit sur 40 bits : reg 0x48..0x4C) */
 #define AXP_IRQ_VBUS_REMOVED    (1ull << 2)
