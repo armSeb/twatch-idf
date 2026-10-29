@@ -45,7 +45,8 @@ void ble_store_config_init(void);   /* fourni par NimBLE (store NVS), non export
 #define ECO_LATENCY     4
 #define ECO_TIMEOUT     600     /* 6 s (unités 10 ms) */
 #define ECO_DELAY_MS    15000   /* après ANCS prêt : laisse iOS finir ses propres mises à jour */
-#define ECO_MAX_TRIES   3
+#define ECO_RETRY_MS    5000    /* 1er nouvel essai ; doublé à chaque échec */
+#define ECO_RETRY_MAX   120000  /* plafond : on n'abandonne jamais, iOS finit par accepter */
 
 static volatile bool s_running;
 static volatile bool s_stopping;   /* nimble_port_stop en cours : pas de publicité */
@@ -249,6 +250,14 @@ static void co_adv_cb(struct ble_npl_event *ev)
 /* ------------------------------------------------------------------ */
 extern bool ancs_idle(void);
 
+/* attente avant le prochain essai : 5 s, 10 s, 20 s… jusqu'à 2 min */
+static uint32_t eco_backoff_ms(void)
+{
+    uint32_t ms = ECO_RETRY_MS;
+    for (int i = 1; i < s_eco_tries && ms < ECO_RETRY_MAX; i++) ms *= 2;
+    return ms < ECO_RETRY_MAX ? ms : ECO_RETRY_MAX;
+}
+
 static void co_eco_cb(struct ble_npl_event *ev)
 {
     if (s_conn == BLE_HS_CONN_HANDLE_NONE || s_eco_pending) return;
@@ -257,7 +266,6 @@ static void co_eco_cb(struct ble_npl_event *ev)
         ble_npl_callout_reset(&s_co_eco, ble_npl_time_ms_to_ticks32(3000));
         return;
     }
-    if (s_eco_tries >= ECO_MAX_TRIES) return;
     struct ble_gap_upd_params up = {
         .itvl_min = ECO_ITVL_MIN,
         .itvl_max = ECO_ITVL_MAX,
@@ -272,8 +280,8 @@ static void co_eco_cb(struct ble_npl_event *ev)
         s_eco_pending = true;
         ESP_LOGI(TAG, "demande params éco (essai %d)", s_eco_tries);
     } else {
-        ESP_LOGW(TAG, "update_params rc=%d, nouvel essai dans 30 s", rc);
-        ble_npl_callout_reset(&s_co_eco, ble_npl_time_ms_to_ticks32(30000));
+        ESP_LOGW(TAG, "update_params rc=%d, nouvel essai", rc);
+        ble_npl_callout_reset(&s_co_eco, ble_npl_time_ms_to_ticks32(eco_backoff_ms()));
     }
 }
 
@@ -489,14 +497,24 @@ static int gap_event(struct ble_gap_event *event, void *arg)
                           event->notify_rx.om);
         return 0;
 
-    case BLE_GAP_EVENT_CONN_UPDATE:
+    case BLE_GAP_EVENT_CONN_UPDATE: {
+        bool was_eco = s_itvl >= ECO_ITVL_MIN && s_lat >= ECO_LATENCY;
         s_eco_pending = false;
         refresh_conn_params(event->conn_update.conn_handle);
-        if (event->conn_update.status != 0) {
-            ESP_LOGW(TAG, "conn update status=%d (nouvel essai dans 10 s)", event->conn_update.status);
-            ble_npl_callout_reset(&s_co_eco, ble_npl_time_ms_to_ticks32(10000));
+        bool is_eco = s_itvl >= ECO_ITVL_MIN && s_lat >= ECO_LATENCY;
+        if (is_eco && !was_eco) {
+            ble_diag("éco %u ms lat %u (essai %d)", (unsigned)(s_itvl * 5 / 4), s_lat, s_eco_tries);
+            s_eco_tries = 0;                         /* prochain retour en rapide : repartir de 5 s */
+        } else if (!is_eco && s_state == BLE_ST_READY) {
+            /* Collision (0x22A : l'iPhone change ses paramètres au même
+             * moment) ou iOS qui repasse en rapide : on redemande plus tard. */
+            uint32_t ms = event->conn_update.status ? eco_backoff_ms() : ECO_DELAY_MS;
+            ESP_LOGW(TAG, "params non éco (status=%d), nouvel essai dans %lu s",
+                     event->conn_update.status, (unsigned long)(ms / 1000));
+            ble_npl_callout_reset(&s_co_eco, ble_npl_time_ms_to_ticks32(ms));
         }
         return 0;
+    }
 
     case BLE_GAP_EVENT_CONN_UPDATE_REQ:
         return 0;   /* on accepte les paramètres demandés par l'iPhone */
