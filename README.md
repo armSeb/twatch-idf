@@ -136,7 +136,16 @@ sur tout le reste :
 | Périphériques | BMA423 en suspend, PCF8563 CLKOUT coupé, ST7789 en SLPIN, FT6336 en mode monitor, GPIO inutilisés figés |
 | Mode avion | contrôleur BT arrêté → **light sleep automatique** |
 
-Écran **Énergie** : moyenne réelle depuis le dernier débranchement USB (« Moy. x mA, reste ~y h »).
+Écran **Énergie** : moyenne réelle depuis le dernier débranchement USB (« Moy. x mA, reste ~y h »),
+part de veille, décharge précédente (historique en NVS, survit à une batterie vide).
+
+**Jauge adaptative** (`gauge.c`, testée sur PC) : comptage coulométrique sur les compteurs
+monotones de l'AXP202 (jamais remis à zéro, ils survivent aux redémarrages et à la coupure),
+recalé sur trois ancres — fin de charge = 100 %, < 3,45 V sous faible courant = 4 %,
+coupure AXP (3,2 V) = 0 %. Chaque intervalle entre deux ancres donne une mesure de capacité ;
+la capacité retenue converge par moyenne pondérée (la 1re remplace les 380 mAh nominaux),
+mesures aberrantes rejetées. Le pourcentage et le « reste ~h » suivent la batterie réelle,
+même usée.
 
 Piste matérielle (non retenue) : un oscillateur 32,768 kHz sur 32K_XN (GPIO33) permettrait
 le light sleep BLE connecté (`BTDM_CTRL_LPCLK_SEL_EXT_32K_XTAL` + `RTC_CLK_SRC_EXT_OSC`).

@@ -50,9 +50,9 @@ typedef struct {
     uint8_t  end;            /* POWER_HIST_* */
 } power_hist_t;
 bool     power_last_discharge(power_hist_t *out);
-uint16_t power_capacity_mah(void);      /* apprise, sinon nominale */
-bool     power_capacity_learned(void);
-int      power_charge_start_pct(void); /* charge en cours : % de départ, sinon -1 */
+uint16_t power_capacity_mah(void);      /* capacité de la jauge (apprise, sinon nominale) */
+int      power_capacity_samples(void);   /* nombre de mesures de capacité retenues */
+bool     power_soc_known(void);          /* % recalé sur une ancre (sinon estimé à la tension) */
 
 /* rétroéclairage 0..255 (0 = éteint) */
 void power_backlight(uint8_t level);

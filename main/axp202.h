@@ -40,3 +40,6 @@ float     axp_batt_charge_ma(void);
 /* Compteur coulométrique (mAh net consommés depuis le dernier reset, >0 = décharge) */
 esp_err_t axp_coulomb_reset(void);
 float     axp_coulomb_used_mah(void);
+/* compteurs bruts monotones (charge entrée / sortie) — ne pas remettre à zéro : la jauge en dépend */
+esp_err_t axp_coulomb_raw(uint32_t *chg, uint32_t *dchg);
+float     axp_coulomb_mah_per_count(void);

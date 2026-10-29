@@ -1156,23 +1156,19 @@ static void power_refresh(void)
         snprintf(s, sizeof(s), "Écran allumé %.0f %% du temps", t.screen_pct);
     }
     lv_label_set_text(p_lbl[5], s);
+    /* ligne 1 : jauge (capacité apprise) ; ligne 2 : décharge précédente */
+    int n = power_capacity_samples();
+    char l1[64], l2[64] = "";
+    if (n > 0) snprintf(l1, sizeof(l1), "Jauge : capacité ~%u mAh (%d mes.)", power_capacity_mah(), n);
+    else if (power_soc_known()) snprintf(l1, sizeof(l1), "Jauge : calibrage, %u mAh nominal", power_capacity_mah());
+    else snprintf(l1, sizeof(l1), "Jauge : estimée (pas encore calibrée)");
     power_hist_t h;
-    int cs = power_charge_start_pct();
-    if (t.vbus && cs >= 0) {
-        char cap[24] = "";
-        if (power_capacity_learned()) snprintf(cap, sizeof(cap), " · capa ~%u mAh", power_capacity_mah());
-        snprintf(s, sizeof(s), "Charge partie de %d %%%s%s", cs, cap,
-                 cs <= 20 ? "\nCapacité mesurée en fin de charge" : "");
-    } else if (power_last_discharge(&h)) {
+    if (power_last_discharge(&h)) {
         static const char *const END[] = { "", "rechargée", "coupure", "redémarrage" };
-        char cap[24] = "";
-        if (power_capacity_learned()) snprintf(cap, sizeof(cap), " · capa ~%u mAh", power_capacity_mah());
-        snprintf(s, sizeof(s), "Préc. %.0f mAh en %luh%02lu, %u à %u %%, %s%s", h.used_mah,
-                 (unsigned long)(h.since_s / 3600), (unsigned long)((h.since_s / 60) % 60),
-                 h.pct_start == 255 ? 0 : h.pct_start, h.pct_end, END[h.end & 3], cap);
-    } else {
-        snprintf(s, sizeof(s), "Préc. : pas encore d'historique");
+        snprintf(l2, sizeof(l2), "Préc. %.0f mAh en %luh%02lu, %s", h.used_mah,
+                 (unsigned long)(h.since_s / 3600), (unsigned long)((h.since_s / 60) % 60), END[h.end & 3]);
     }
+    snprintf(s, sizeof(s), "%s%s%s", l1, l2[0] ? "\n" : "", l2);
     lv_label_set_text(p_lbl[6], s);
 }
 

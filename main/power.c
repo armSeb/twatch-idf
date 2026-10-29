@@ -1,5 +1,6 @@
 #include "power.h"
 #include "nvs.h"
+#include "gauge.h"
 #include "esp_system.h"
 #include <string.h>
 #include "axp202.h"
@@ -27,6 +28,11 @@ static float s_ocv_filt = -1;
 static int s_percent = -1;
 static bool s_vbus, s_charging;
 static int64_t s_period_start_us;
+/* Les compteurs AXP ne sont JAMAIS remis à zéro (la jauge en dépend) :
+ * la télémétrie « depuis le débranchement » part d'une base logicielle. */
+static float s_base_mah;
+static float used_now(void) { return axp_coulomb_used_mah() - s_base_mah; }
+static void  period_restart(void) { s_base_mah = axp_coulomb_used_mah(); s_period_start_us = esp_timer_get_time(); }
 
 /* ------------------------------------------------------------------ */
 /* Courbe OCV LiPo (repos, 25 °C) → %. Interpolation linéaire.         */
@@ -115,7 +121,7 @@ static void meter_reset(void)
 void power_screen_segment(bool on)
 {
     int64_t now = esp_timer_get_time();
-    float mah = axp_coulomb_used_mah();
+    float mah = used_now();
     if (s_seg_on) { s_on_mah += mah - s_seg_mah; s_on_us += now - s_seg_us; }
     else          { s_off_mah += mah - s_seg_mah; s_off_us += now - s_seg_us; }
     s_seg_mah = mah; s_seg_us = now; s_seg_on = on;
@@ -144,10 +150,7 @@ typedef struct {
 
 static power_hist_t s_last;
 static bool s_last_valid;
-static uint16_t s_cap_learned;    /* 0 = inconnue */
 static uint8_t s_pct_start = 255;
-static bool    s_chg_active;      /* session de charge mesurée (USB branché) */
-static int     s_chg_start_pct = -1;
 static int64_t s_hist_last_us;
 
 static bool hist_get(nvs_handle_t h, const char *k, bhist_t *b)
@@ -178,23 +181,11 @@ static void hist_promote(uint8_t end_reason)
         if (b.end == POWER_HIST_RUNNING) b.end = end_reason;
         if (b.since_s >= 1800) {
             nvs_set_blob(h, "blast", &b, sizeof(b));
-            /* capacité : seulement si la batterie était vraiment vide (dernière
-             * tension < 3,55 V) — un arrêt au bouton ne compte pas */
-            if (b.end == POWER_HIST_EMPTY && b.vbat_mv < 3550 && b.pct_start != 255 &&
-                b.pct_start >= 60 && b.used_mah > 30) {
-                float cap = b.used_mah * 100.0f / b.pct_start;
-                if (cap >= 50 && cap <= 500) {
-                    s_cap_learned = (uint16_t)(cap + 0.5f);
-                    nvs_set_u16(h, "bcap", s_cap_learned);
-                    ESP_LOGW(TAG, "capacité batterie mesurée : ~%u mAh", s_cap_learned);
-                }
-            }
         }
         nvs_erase_key(h, "bcur");
         nvs_commit(h);
     }
     if (hist_get(h, "blast", &b)) hist_publish(&b);
-    nvs_get_u16(h, "bcap", &s_cap_learned);
     nvs_close(h);
 }
 
@@ -204,7 +195,7 @@ static void hist_snapshot(uint8_t end)
     s_hist_last_us = now;
     uint32_t since = (uint32_t)((now - s_period_start_us) / 1000000);
     if (since < 600) return;
-    float used = axp_coulomb_used_mah();
+    float used = used_now();
     float off_mah = s_off_mah;
     int64_t off_us = s_off_us;
     if (!s_seg_on) { off_mah += used - s_seg_mah; off_us += now - s_seg_us; }
@@ -227,13 +218,9 @@ bool power_last_discharge(power_hist_t *out)
     return s_last_valid;
 }
 
-uint16_t power_capacity_mah(void)
-{
-    return s_cap_learned ? s_cap_learned : BATTERY_CAPACITY_MAH;
-}
-
-bool power_capacity_learned(void) { return s_cap_learned != 0; }
-int  power_charge_start_pct(void)  { return s_chg_active ? s_chg_start_pct : -1; }
+uint16_t power_capacity_mah(void) { return (uint16_t)(gauge_state()->cap_mah + 0.5f); }
+int      power_capacity_samples(void) { return gauge_state()->n_learn; }
+bool     power_soc_known(void) { return gauge_state()->known; }
 
 uint64_t power_handle_irq(void)
 {
@@ -246,22 +233,17 @@ uint64_t power_handle_irq(void)
             /* fin d'une période sur batterie : dernier instantané, archivé */
             hist_snapshot(POWER_HIST_CHARGED);
             hist_promote(POWER_HIST_CHARGED);
-            /* début d'une session de charge : le compteur mesure ce qui entre */
-            axp_coulomb_reset();
-            s_period_start_us = esp_timer_get_time();
+            /* début d'une session de charge : la télémétrie mesure ce qui entre */
+            period_restart();
             meter_reset();
-            s_chg_active = true;
-            s_chg_start_pct = s_percent;          /* dernière valeur sur batterie : fiable */
         }
         if (was_vbus && !s_vbus) {
             s_pct_start = 255;
-            /* début d'une période sur batterie : on remet la mesure à zéro */
-            axp_coulomb_reset();
-            s_period_start_us = esp_timer_get_time();
+            /* début d'une période sur batterie : on repart de zéro */
+            period_restart();
             meter_reset();
             s_ocv_filt = -1;   /* tension de charge non représentative */
         }
-        if (m & AXP_IRQ_CHG_DONE) s_percent = 100;
     }
     gpio_intr_enable(BOARD_AXP_INT);
     return m;
@@ -395,15 +377,18 @@ esp_err_t power_init(void)
 
     s_vbus = axp_vbus_present();
     s_charging = axp_is_charging();
-    axp_coulomb_reset();
-    s_period_start_us = esp_timer_get_time();
+    period_restart();
     meter_reset();
     {
         /* décharge précédente : coupure (batterie vide / bouton) ou redémarrage */
         esp_reset_reason_t rr = esp_reset_reason();
         hist_promote((rr == ESP_RST_POWERON || rr == ESP_RST_BROWNOUT) ? POWER_HIST_EMPTY
                                                                        : POWER_HIST_REBOOT);
-        s_chg_active = s_vbus;                /* démarrage sur USB : la charge est mesurée */
+        /* jauge : état restauré + tout ce qui a été compté par l'AXP depuis */
+        float v0 = axp_batt_mv();
+        float ocv0 = s_charging ? v0 - axp_batt_charge_ma() * R_INT_OHM : v0 + axp_batt_discharge_ma() * R_INT_OHM;
+        gauge_init(BATTERY_CAPACITY_MAH, ocv_to_pct(ocv0), rr == ESP_RST_POWERON || rr == ESP_RST_BROWNOUT);
+        s_percent = gauge_percent(s_vbus, s_charging);
     }
 
     axp_irq_enable(AXP_IRQ_VBUS_CONNECT | AXP_IRQ_VBUS_REMOVED | AXP_IRQ_CHG_START |
@@ -460,34 +445,10 @@ void power_update(void)
         ocv = v + axp_batt_discharge_ma() * R_INT_OHM;
     }
     s_ocv_filt = (s_ocv_filt < 0) ? ocv : (0.75f * s_ocv_filt + 0.25f * ocv);
-    int p = ocv_to_pct(s_ocv_filt);
-    if (s_vbus && !s_charging && v > 4100) p = 100;   /* charge terminée : 100 %, pas l'OCV au repos */
-    if (s_vbus && s_chg_active && s_chg_start_pct < 0) s_chg_start_pct = p;   /* démarrage sur USB */
-    if (s_vbus && s_chg_active && !s_charging && v > 4100) {
-        /* charge complète : si elle partait de presque vide, les mAh entrés
-         * donnent la capacité réelle (rendement coulombique LiPo ≈ 99 %) */
-        s_chg_active = false;
-        float in = -axp_coulomb_used_mah();
-        ESP_LOGI(TAG, "charge terminée : %.0f mAh depuis %d %%", in, s_chg_start_pct);
-        if (s_chg_start_pct >= 0 && s_chg_start_pct <= 20 && in > 30) {
-            float cap = in * 100.0f / (100 - s_chg_start_pct);
-            if (cap >= 50 && cap <= 500) {
-                s_cap_learned = (uint16_t)(cap + 0.5f);
-                nvs_handle_t h;
-                if (nvs_open("tw", NVS_READWRITE, &h) == ESP_OK) {
-                    nvs_set_u16(h, "bcap", s_cap_learned);
-                    nvs_commit(h);
-                    nvs_close(h);
-                }
-                ESP_LOGW(TAG, "capacité batterie mesurée à la charge : ~%u mAh", s_cap_learned);
-            }
-        }
-    }
-    if (s_percent < 0 || s_vbus) {
-        s_percent = p;
-    } else if (p < s_percent) {
-        s_percent = p;          /* sur batterie, jamais de remontée */
-    }
+    /* jauge adaptative : comptage coulométrique + ancres + capacité apprise ;
+     * la tension (OCV) ne sert qu'en secours tant qu'aucune ancre n'est connue */
+    gauge_update(v, axp_batt_discharge_ma(), s_vbus, s_charging, ocv_to_pct(s_ocv_filt));
+    s_percent = gauge_percent(s_vbus, s_charging);
     if (!s_vbus) {
         if (s_pct_start == 255) s_pct_start = (uint8_t)s_percent;
         if (esp_timer_get_time() - s_hist_last_us >= HIST_PERIOD_US) hist_snapshot(POWER_HIST_RUNNING);
@@ -507,7 +468,7 @@ void power_get_telemetry(power_telemetry_t *t)
     t->vbus = axp_vbus_present();
     t->charging = axp_is_charging();
     t->percent = power_percent();
-    t->used_mah = axp_coulomb_used_mah();
+    t->used_mah = used_now();
     t->since_s = (uint32_t)((esp_timer_get_time() - s_period_start_us) / 1000000);
     if (t->since_s >= 120 && !t->vbus) {
         t->avg_ma = t->used_mah / (t->since_s / 3600.0f);

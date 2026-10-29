@@ -149,6 +149,22 @@ static uint32_t read_be32(uint8_t reg)
     return ((uint32_t)b[0] << 24) | ((uint32_t)b[1] << 16) | ((uint32_t)b[2] << 8) | b[3];
 }
 
+float axp_coulomb_mah_per_count(void)
+{
+    return 65536.0f * 0.5f / 3600.0f / ADC_RATE_HZ;   /* ≈ 0,364 mAh à 25 Hz */
+}
+
+esp_err_t axp_coulomb_raw(uint32_t *chg, uint32_t *dchg)
+{
+    uint8_t b[8];
+    /* 0xB0..0xB7 : CHG (4 octets) puis DCHG (4 octets), lus d'un bloc */
+    esp_err_t e = i2c_reg_read(s_dev, REG_COULOMB_CHG, b, 8);
+    if (e != ESP_OK) return e;
+    *chg = ((uint32_t)b[0] << 24) | ((uint32_t)b[1] << 16) | ((uint32_t)b[2] << 8) | b[3];
+    *dchg = ((uint32_t)b[4] << 24) | ((uint32_t)b[5] << 16) | ((uint32_t)b[6] << 8) | b[7];
+    return ESP_OK;
+}
+
 float axp_coulomb_used_mah(void)
 {
     /* C(mAh) = 65536 * 0.5 mA * (DCHG - CHG) / 3600 / fréquence ADC */

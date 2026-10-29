@@ -19,3 +19,4 @@ host_tests/out/
 *.swp
 .DS_Store
 host_tests/test_host
+host_tests/test_gauge
