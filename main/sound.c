@@ -14,7 +14,7 @@
 
 #define TAG "sound"
 #define RATE 16000
-#define AMPL 9000                /* ~ -11 dBFS : net sans saturer le petit HP */
+#define AMPL 4000                /* ~ -18 dBFS : assez fort, pointes de courant modérées */
 #define PIN_BCK 26
 #define PIN_WS  25
 #define PIN_DO  33
