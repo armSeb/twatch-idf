@@ -10,6 +10,7 @@ static i2c_master_dev_handle_t s_dev;
 #define REG_CHG_STATUS      0x01
 #define REG_OUT_CTL         0x12
 #define REG_LDO24_VOL       0x28
+#define REG_VOFF            0x31   /* bits 2:0 : tension de coupure 2,6 V + n × 0,1 V */
 #define REG_OFF_CTL         0x32
 #define REG_CHARGE1         0x33
 #define REG_PEK_SET         0x36
@@ -37,6 +38,10 @@ esp_err_t axp_init(void)
 
     /* Coupure matérielle sur appui long : 4 s (bits 1:0 de 0x36 = 00) */
     i2c_reg_update8(s_dev, REG_PEK_SET, 0x03, 0x00);
+    /* Coupure batterie à 3,2 V au lieu de 2,9 V (défaut) : il ne reste que
+     * ~1 % d'énergie sous 3,2 V, et une LiPo stockée vide après être
+     * descendue à 2,9 V perd vite de la capacité. */
+    i2c_reg_update8(s_dev, REG_VOFF, 0x07, 0x06);
     /* LED de charge : contrôlée par registre (bit3=1), éteinte (bits5:4=00) */
     i2c_reg_update8(s_dev, REG_OFF_CTL, 0x38, 0x08);
     /* Courant de charge 300 mA (0.8C pour 380 mAh) : nibble bas = (I-300)/100 */

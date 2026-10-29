@@ -451,6 +451,7 @@ void power_update(void)
     }
     s_ocv_filt = (s_ocv_filt < 0) ? ocv : (0.75f * s_ocv_filt + 0.25f * ocv);
     int p = ocv_to_pct(s_ocv_filt);
+    if (s_vbus && !s_charging && v > 4100) p = 100;   /* charge terminée : 100 %, pas l'OCV au repos */
     if (s_percent < 0 || s_vbus) {
         s_percent = p;
     } else if (p < s_percent) {
