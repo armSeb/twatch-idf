@@ -51,7 +51,9 @@ esp_err_t axp_init(void)
 
     /* Rails (schéma V1) : LDO2 = écran (LCD_VDD), LDO3 = ampli audio seul,
      * LDO4 = VDD_1V8 (1,8 V) : inutilisé sur le schéma mais gardé allumé,
-     * certaines variantes ont une flash 1,8 V. Règle générale : une puce non
+     * certaines variantes ont une flash 1,8 V. DCDC2 : broches DCDC2/LX2
+     * non câblées sur le schéma V1 (pas d'inductance) → coupé.
+     * Règle générale : une puce non
      * alimentée mais reliée à l'ESP32 se fait alimenter par ses E/S et
      * perturbe le 3V3 → radio BLE sourde (RSSI −82 dBm à 30 cm). L'AXP
      * conserve ses registres tant que la batterie est branchée : on rallume
@@ -61,7 +63,7 @@ esp_err_t axp_init(void)
      * parasite de l'ampli). */
     axp_set_outputs(AXP_OUT_DCDC3 | AXP_OUT_LDO2 | AXP_OUT_LDO4, true);
     i2c_reg_write8(s_dev, 0x29, AXP_LDO3_3V3);
-    axp_set_outputs(AXP_OUT_LDO3, false);
+    axp_set_outputs(AXP_OUT_LDO3 | AXP_OUT_DCDC2, false);
 
     /* ADC : uniquement tension + courant batterie (0x82 bits 7,6) ; 25 Hz */
     i2c_reg_write8(s_dev, REG_ADC_EN1, 0xC0);

@@ -11,8 +11,8 @@
 #define AXP_OUT_EXTEN   (1u << 0)
 #define AXP_OUT_DCDC3   (1u << 1)   /* 3V3 ESP32 : ne JAMAIS couper */
 #define AXP_OUT_LDO2    (1u << 2)   /* V1 : alimente ST7789 + rétroéclairage */
-#define AXP_OUT_LDO4    (1u << 3)
-#define AXP_OUT_DCDC2   (1u << 4)
+#define AXP_OUT_LDO4    (1u << 3)   /* V1 : VDD_1V8, inutilisé (point de test) mais gardé */
+#define AXP_OUT_DCDC2   (1u << 4)   /* V1 : non câblé, coupé */
 #define AXP_OUT_LDO3    (1u << 6)   /* V1 : ampli audio MAX98357 (coupé hors son) */
 
 /* Sources d'IRQ décodées (index de bit sur 40 bits : reg 0x48..0x4C) */
