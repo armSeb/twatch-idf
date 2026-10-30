@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 72 px
  * Bpp: 4
- * Opts: --no-compress --no-prefilter --bpp 4 --size 72 --font /root/localcomp/lvgl/scripts/built_in_font/Montserrat-Medium.ttf -r 0x30-0x3A --format lvgl --lv-include lvgl.h --lv-font-name font_time_72 -o font_time_72.c
+ * Opts: --no-compress --no-prefilter --bpp 4 --size 72 --font $LVGL_DIR/scripts/built_in_font/Montserrat-Medium.ttf -r 0x30-0x3A --format lvgl --lv-include lvgl.h --lv-font-name font_time_72 -o font_time_72.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE

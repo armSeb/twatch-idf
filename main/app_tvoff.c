@@ -1,11 +1,13 @@
 /*
- * app_tvbgone.c — TV-B-Gone : envoie à la suite les codes « marche/arrêt »
+ * app_tvoff.c — TV-B-Gone : envoie à la suite les codes « marche/arrêt »
  * de centaines de téléviseurs par la LED infrarouge (GPIO 13).
  *
  * L'émission tourne dans une tâche dédiée (une salve dure 30 à 90 s) ; le
  * périphérique RMT n'est initialisé que le temps de la salve (il bloque le
- * CPU à pleine vitesse tant qu'il est actif). Codes : composant
- * components/tvbgone (CC BY-SA 4.0, Mitch Altman & Limor Fried).
+ * CPU à pleine vitesse tant qu'il est actif). Codes : base WORLDcodes du
+ * TV-B-Gone(R) de Mitch Altman & Limor Fried, via components/tvbgone
+ * (CC BY-SA 4.0). Nom de l'app neutre : TV-B-Gone est la marque de leur
+ * produit, ce firmware n'y est pas affilié.
  */
 #include <stdio.h>
 #include "app.h"
@@ -19,7 +21,7 @@
 
 #define EV_DONE 1
 
-extern const app_t app_tvbgone;
+extern const app_t app_tvoff;
 
 /* modèle */
 static volatile bool s_run;
@@ -37,7 +39,7 @@ static void send_task(void *arg)
 {
     esp_err_t e = tvbgone_core_send(REGION[s_region], TVBGONE_CORE_SEND_MODE_SINGLE);
     s_result = e == ESP_OK ? 1 : e == ESP_ERR_INVALID_STATE ? 2 : 3;
-    app_post_event(&app_tvbgone, EV_DONE);
+    app_post_event(&app_tvoff, EV_DONE);
     vTaskDelete(NULL);
 }
 
@@ -94,7 +96,7 @@ static void tick_cb(lv_timer_t *t) { if (s_run) refresh(); }
 
 static void create(lv_obj_t *scr)
 {
-    ui_header(scr, "TV-B-Gone");
+    ui_header(scr, _("TV off"));
     static const char *map[4];
     map[0] = "Europe"; map[1] = "USA"; map[2] = _("Tous"); map[3] = "";
     v_seg = ui_segmented(scr, map, seg_cb);
@@ -149,8 +151,8 @@ static bool on_event(int code)
 
 static bool busy(void) { return s_run; }
 
-const app_t app_tvbgone = {
-    .name = "TV-B-Gone",
+const app_t app_tvoff = {
+    .name = N_("TV off"),
     .icon = SYM_TV,
     .color = 0xDC2626,
     .create = create,

@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Tests PC (ASan/UBSan)
+      - name: PC tests (ASan/UBSan) and translations
         run: host_tests/run.sh
 
   firmware:
     runs-on: ubuntu-latest
-    # ESP-IDF 5.5.6 obligatoire : le contrôleur BT de 5.5.3 casse la liaison iPhone
+    # ESP-IDF 5.5.6 is mandatory: the 5.5.3 BT controller breaks the iPhone link
     container: espressif/idf:v5.5.6
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +25,12 @@ jobs:
         run: |
           . $IDF_PATH/export.sh
           idf.py build
-      - name: Image complète (0x0)
+      - name: Build without TV off (no CC BY-SA content)
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          TW_NO_TVOFF=1 idf.py -B build-notvoff build
+      - name: Full image (0x0) and release files
         shell: bash
         run: |
           . $IDF_PATH/export.sh
@@ -42,6 +47,8 @@ jobs:
           cp partition_table/partition-table.bin ../dist/partition-table.bin
           cp ota_data_initial.bin ../dist/ota_data_initial.bin
           cp twatch.elf ../dist/twatch2020v1.elf
+          cp ../build-notvoff/twatch.bin ../dist/twatch2020v1-app-notvoff.bin
+          cp ../LICENSE ../THIRD_PARTY_NOTICES.md ../dist/
       - uses: actions/upload-artifact@v4
         with:
           name: twatch2020v1-firmware
@@ -53,3 +60,6 @@ jobs:
           files: |
             dist/twatch2020v1-full.bin
             dist/twatch2020v1-app.bin
+            dist/twatch2020v1-app-notvoff.bin
+            dist/LICENSE
+            dist/THIRD_PARTY_NOTICES.md

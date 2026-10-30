@@ -1,9 +1,18 @@
 file(GLOB_RECURSE app_sources ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
 
+# Firmware sans l'app « TV off » ni sa base de codes CC BY-SA 4.0 :
+#   TW_NO_TVOFF=1 idf.py build
+if(DEFINED ENV{TW_NO_TVOFF})
+    list(REMOVE_ITEM app_sources ${CMAKE_CURRENT_SOURCE_DIR}/app_tvoff.c)
+endif()
+
 idf_component_register(
     SRCS ${app_sources}
     INCLUDE_DIRS "."
 )
+if(DEFINED ENV{TW_NO_TVOFF})
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE TW_NO_TVOFF=1)
+endif()
 
 # Avertissements stricts sur notre code (pas sur les polices générées)
 set_source_files_properties(
@@ -21,7 +30,7 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/app_timer.c
     ${CMAKE_CURRENT_SOURCE_DIR}/app_lamp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/i18n.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/app_tvbgone.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_tvoff.c
     ${CMAKE_CURRENT_SOURCE_DIR}/sound.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gauge.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ota.c

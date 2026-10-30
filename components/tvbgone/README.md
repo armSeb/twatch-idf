@@ -66,9 +66,9 @@ uses the RMT driver recovery path to interrupt an active transmission.
 
 ## Example
 
-The example in [`examples/tvbgone_esp32c3_supermini`](examples/tvbgone_esp32c3_supermini)
+The example in [`examples/tvbgone_esp32c3_supermini`](https://github.com/pedrominatel/esp-components/tree/main/tv-b-gone/examples/tvbgone_esp32c3_supermini)
 is the reference application for the internal-channel mode. The
-[`examples/defconsg1-badge`](examples/defconsg1-badge) example shows how to pass
+[`examples/defconsg1-badge`](https://github.com/pedrominatel/esp-components/tree/main/tv-b-gone/examples/defconsg1-badge) example shows how to pass
 in a BSP-owned TX channel.
 
 Both examples keep the board-facing behavior in example code:

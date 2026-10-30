@@ -15,3 +15,4 @@ Modifications apportées pour la T-Watch :
 - tampon de symboles RMT (5 Ko) alloué à `tvbgone_core_init()` et libéré à
   `tvbgone_core_deinit()` au lieu d'être statique ;
 - journal par code ramené au niveau DEBUG.
+- `README.md` : liens vers les exemples (non inclus ici) pointés sur le dépôt d'origine.

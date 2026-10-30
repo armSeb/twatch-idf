@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 11 px
  * Bpp: 4
- * Opts: --no-compress --no-prefilter --bpp 4 --size 11 --font /root/localcomp/lvgl/scripts/built_in_font/Montserrat-Medium.ttf -r 0x20-0x7E,0xA0-0xFF,0x2019,0x2026 --format lvgl --lv-include lvgl.h --lv-font-name font_small_11 -o font_small_11.c
+ * Opts: --no-compress --no-prefilter --bpp 4 --size 11 --font $LVGL_DIR/scripts/built_in_font/Montserrat-Medium.ttf -r 0x20-0x7E,0xA0-0xFF,0x2019,0x2026 --format lvgl --lv-include lvgl.h --lv-font-name font_small_11 -o font_small_11.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE

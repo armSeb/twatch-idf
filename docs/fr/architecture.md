@@ -1,0 +1,134 @@
+# Architecture, énergie et jauge de batterie
+
+Français · [English](../en/architecture.md)
+
+## Tâches et propriétaires
+
+```
+            ┌──────────── tâche hôte NimBLE (cœur 0) ─────────────┐
+            │ ble.c   GAP, sécurité passkey, service batterie,      │
+ iPhone ◄──►│         paramètres de connexion, publicité, journal   │
+            │ ancs.c  découverte ANCS + CTS + AMS, file de commandes│
+            │         réassemblage Data Source (ancs_parse.c)       │
+            └──────────┬───────────────────────────┬────────────────┘
+                       │ g_notif_queue (copies)    │ app_post(événement)
+            ┌──────────▼───────────────────────────▼────────────────┐
+ IRQ AXP ──►│ tâche app (cœur 1) : seule propriétaire de LVGL       │
+ INT tactile│ main.c   boucle d'événements / lv_timer_handler / veille│
+ esp_timers │ ui.c, face_*.c, app_*.c   notif_store.c               │
+            │ display.c (ST7789 + FT6336)  power.c, gauge.c, sound.c│
+            └───────────────────────────────────────────────────────┘
+```
+
+Règles de stabilité :
+
+- **Un seul propriétaire par état.** LVGL et le stockage des notifications appartiennent à
+  la tâche app ; l'état ANCS à la tâche hôte NimBLE. Elles échangent par files et
+  événements, jamais par un mutex LVGL partagé.
+- **Une seule procédure ATT en vol** côté ANCS, avec un numéro de génération vérifié dans
+  chaque callback (les réponses tardives après une reconnexion sont ignorées).
+- **Data Source réassemblé octet par octet**, testé sur PC avec des fragmentations
+  aléatoires.
+- **Rejeu iOS** filtré par `EventFlagPreExisting` et déduplication par contenu (FNV-1a, durée
+  de vie 5 minutes) ; seules les 32 notifications les plus récentes sont gardées.
+- **Texte iOS nettoyé** (UTF-8 tronqué, émojis, séquences ZWJ…) avant d'arriver à LVGL.
+- **Interruption AXP en niveau** : aucune interruption perdue pendant un light sleep.
+- **Événements de partout, interface à un seul endroit** : timers, BLE et interruptions ne
+  font que poster des événements ; `app_post_event()` permet à une app de réagir écran
+  fermé.
+
+Pas d'`esp_lvgl_port` (son timer de tick et sa tâche réveillent le CPU en permanence), pas de
+bibliothèque AXP/BMA/FT (quelques registres suffisent), `esp_lcd` natif, `i2c_master`
+d'ESP-IDF 5.
+
+## Interface
+
+- **Navigation par origine** : chaque écran retient d'où il a été ouvert ; glisser → ou
+  l'en-tête « ‹ » y ramène toujours.
+- **Écrans paresseux** : réglages, lecture en cours, lanceur, contrôles rapides et app
+  hébergée sont construits à la demande et détruits à l'extinction de l'écran ; la RAM ne
+  contient que ce qui est affiché. Écrans permanents : cadran, liste des notifications,
+  détail, appel, énergie, appairage, à propos.
+- **Apps** (`app.h`) : voir [apps-and-i18n.md](apps-and-i18n.md). Une app qui se déclare
+  *occupée* (chrono lancé, minuteur en cours, TV off en émission) garde l'écran sur sa vue à
+  l'extinction et au réveil.
+- **Changer de langue** reconstruit tous les écrans sur place, sans redémarrer.
+- Les objets LVGL sont alloués sur le tas ; les allocations de plus de 4 Ko vont en PSRAM, la
+  RAM interne est gardée pour les piles, les tampons DMA et la radio.
+
+## Énergie
+
+Sur un ESP32 « classique », **le light sleep est impossible tant que le contrôleur BLE est
+actif** sans quartz 32 kHz externe (absent de la T-Watch 2020) : le contrôleur garde un
+verrou `ESP_PM_NO_LIGHT_SLEEP`, quel que soit le framework. Tout le reste est donc réglé :
+
+| Levier | Réglage |
+|---|---|
+| Fréquence | CPU à **10 MHz** au repos (le contrôleur BT relâche son verrou de fréquence en modem sleep) ; **240 MHz** seulement pendant une interaction, retour au minimum 1,5 s après le dernier toucher même écran allumé ; pleine vitesse pendant une mise à jour Wi-Fi |
+| Liaison BLE | modem sleep ; une fois ANCS prêt, demande de paramètres économes (intervalle 150–300 ms, latence 4, timeout 6 s, dans les règles Apple), **redemandés jusqu'à acceptation** avec une attente croissante (iOS entre souvent en collision avec ses propres mises à jour, erreur 0x22A) |
+| Publicité | 160 ms pendant 30 s après une déconnexion, puis ~1 s ; nouvel essai chaque seconde si la pile la refuse |
+| Tâches | aucun timer périodique écran éteint ; la tâche app dort jusqu'à un événement (60 s max) ; tick LVGL lu à la demande |
+| Écran | ST7789 en veille, rétroéclairage coupé, tactile en mode monitor avec un détecteur de double tap interrogé seulement après une interruption tactile |
+| AXP202 | ADC limités à la tension et au courant batterie, LED de charge éteinte ; rails inutilisés coupés ; le rail du haut-parleur n'est alimenté que pendant un son |
+| Périphériques | BMA423 en suspend, CLKOUT du PCF8563 coupé, GPIO inutilisés à un niveau défini |
+| Mode avion | contrôleur BT arrêté → **light sleep automatique** |
+
+Résultat typique : environ **7,7 mA en veille**, iPhone connecté et notifications actives.
+
+## Jauge de batterie adaptative
+
+`gauge.c` (cœur pur testé sur PC) compte la charge avec les compteurs coulométriques de
+l'AXP202 (0,364 mAh par impulsion). Ces compteurs sont monotones et jamais remis à zéro : ils
+survivent aux redémarrages et aux coupures. Le comptage est recalé sur trois ancres :
+
+| Ancre | Condition | Valeur |
+|---|---|---|
+| PLEINE | sur USB, charge terminée, > 4,10 V | 100 % |
+| BASSE | < 3,45 V sous faible courant, vu deux fois | 4 % |
+| VIDE | démarrage après une dernière tension enregistrée < 3,55 V | 0 % |
+
+Chaque intervalle entre deux ancres donne une mesure de capacité. La capacité retenue
+converge avec des poids 1, ½, ⅓ puis ¼ (la première mesure remplace les 380 mAh nominaux) ;
+les mesures aberrantes au-delà de ±50 % sont rejetées dès qu'il y en a deux. Le pourcentage
+et l'autonomie restante suivent donc la batterie réelle, même usée. En charge, l'affichage
+plafonne à 99 % ; l'état est enregistré en NVS toutes les 10 minutes et à chaque ancre.
+
+La capacité apprise est la capacité *utilisable par la montre* : une cellule âgée, à forte
+résistance interne, atteint la tension de coupure sous les pointes de courant plus tôt
+qu'en test sur banc.
+
+## Mise à jour Wi-Fi (OTA)
+
+- La montre coupe le Bluetooth, démarre un point d'accès WPA2 (`T-Watch-OTA`, mot de passe
+  tiré une fois et gardé en NVS), un petit serveur DNS qui répond 192.168.4.1 à tout, et un
+  serveur HTTP. Les sondes de connectivité Apple et Android reçoivent une réponse « succès »
+  pour que le téléphone reste sur le réseau.
+- L'envoi est écrit au fil de l'eau par blocs de 4 Ko dans l'emplacement inactif. Le premier
+  bloc est vérifié (signature d'image ESP32 et descripteur d'application au nom `twatch`),
+  l'image complète est vérifiée (SHA-256) avant activation.
+- Retour arrière : une nouvelle image démarre « à vérifier » et est validée après 30 s de
+  fonctionnement ; un plantage avant cela fait revenir à l'emplacement précédent.
+- Annuler redémarre la montre (retour propre au Bluetooth). Pendant un envoi, le redémarrage
+  est immédiat : arrêter le serveur HTTP attendrait la fin du gestionnaire, qui reçoit
+  toujours.
+- *Revenir à la x.y.z* vérifie entièrement l'autre emplacement avant d'y démarrer.
+
+## Fichiers sources
+
+| Fichier | Rôle |
+|---|---|
+| `main/main.c` | `app_main`, tâche app, boucle d'événements, veille écran |
+| `main/ble.c` | NimBLE : GAP, sécurité, publicité, paramètres de connexion, service batterie, mode avion, journal |
+| `main/ancs.c` / `ancs_parse.c` | client ANCS + CTS + AMS (`media.h`) ; réassemblage Data Source |
+| `main/notif_store.c` | stockage, tri par date, déduplication, nettoyage UTF-8 |
+| `main/ui.c`, `ui_kit.h` | écrans, navigation, briques d'interface partagées |
+| `main/face_classic.c`, `face_pub.c` | cadrans analogiques (dessinés en code) |
+| `main/app.h`, `apps.c`, `app_*.c` | cadre d'apps, registre, apps livrées |
+| `main/display.c` | ST7789 (`esp_lcd`, SPI DMA), FT6336, glue LVGL, double tap, fréquence CPU |
+| `main/power.c`, `axp202.c`, `gauge.c` | PMIC, rails, batterie, verrous PM, rétroéclairage, vibreur, jauge adaptative |
+| `main/sound.c` | bips sur l'ampli I2S |
+| `main/wclock.c` | PCF8563 (UTC), fuseau, resynchro de l'horloge système |
+| `main/settings.c` | réglages en NVS |
+| `main/i18n.c` | table français → anglais |
+| `main/ota.c` | mise à jour Wi-Fi : point d'accès, page web, écriture OTA, validation, retour arrière |
+| `components/tvbgone/` | codes infrarouges et émetteur RMT (CC BY-SA 4.0) |

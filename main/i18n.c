@@ -171,6 +171,7 @@ static const tr_t EN[] = {
     { "Erreur infrarouge", "Infrared error" },
     { "Viser la télé, puis appuyer", "Aim at the TV, then press" },
     { "Tous", "All" },
+    { "TV off", "TV off" },
     { "Tester le haut-parleur", "Test the speaker" },
     { "Revenir à la %s", "Go back to %s" },
     { "Revenir à la version précédente ?", "Go back to the previous version?" },

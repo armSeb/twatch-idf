@@ -24,7 +24,7 @@
 
 static const char *TAG = "ota";
 
-#define OTA_SSID          "T-Watch-MAJ"
+#define OTA_SSID          "T-Watch-OTA"
 #define VALIDATE_AFTER_US (30LL * 1000000)
 #define IDLE_TIMEOUT_US   (5LL * 60 * 1000000)
 #define MIN_BATT_PCT      30
@@ -115,33 +115,59 @@ const char *ota_boot_other(void)
 /* ------------------------------------------------------------------ */
 /* Page web (en flash)                                                  */
 /* ------------------------------------------------------------------ */
+/* Page bilingue : français si le navigateur est en français, anglais sinon
+ * (bouton FR/EN). Le serveur ne renvoie que des codes d'erreur courts,
+ * traduits ici. */
 static const char PAGE_HEAD[] =
-    "<!doctype html><html lang=fr><head><meta charset=utf-8>"
+    "<!doctype html><html><head><meta charset=utf-8>"
     "<meta name=viewport content='width=device-width,initial-scale=1'>"
-    "<title>T-Watch : mise à jour</title><style>"
+    "<title>T-Watch</title><style>"
     "body{font:16px -apple-system,system-ui,sans-serif;background:#111;color:#eee;margin:0;padding:24px;max-width:480px}"
     "h1{font-size:22px;margin:0 0 4px}p{color:#9aa}input{margin:16px 0;color:#eee}"
     "button{font-size:17px;padding:12px 20px;border:0;border-radius:10px;background:#3b82f6;color:#fff;width:100%}"
     "button:disabled{background:#334}progress{width:100%;height:14px;margin-top:16px}"
     "#m{margin-top:12px;min-height:1.4em}.ok{color:#4ade80}.ko{color:#f87171}"
-    "</style></head><body><h1>T-Watch 2020 · mise à jour</h1><p>Version installée : <b>";
+    "#l{float:right;background:none;border:1px solid #445;color:#9aa;width:auto;padding:4px 10px;font-size:13px}"
+    "</style></head><body><button id=l onclick=sw()></button><h1 id=t></h1><p><span id=v></span> <b>";
 static const char PAGE_TAIL[] =
-    "</b></p><p>Choisir le fichier <b>twatch2020v1-app.bin</b>. L'ancien firmware reste en place "
-    "jusqu'à la fin : une coupure ne casse rien.</p>"
+    "</b></p><p id=h></p>"
     "<input type=file id=f accept='.bin,application/octet-stream'>"
-    "<button id=b onclick=go()>Envoyer</button><progress id=p max=100 value=0 hidden></progress>"
+    "<button id=b onclick=go()></button><progress id=p max=100 value=0 hidden></progress>"
     "<div id=m></div><script>"
-    "function go(){var f=document.getElementById('f').files[0],m=document.getElementById('m'),"
-    "p=document.getElementById('p'),b=document.getElementById('b');"
-    "if(!f){m.textContent='Choisis d\\u2019abord le fichier.';return;}"
-    "b.disabled=true;p.hidden=false;m.className='';m.textContent='Envoi\\u2026';"
+    "var T={fr:{t:'T-Watch 2020 · mise à jour',v:'Version installée :',"
+    "h:'Choisir le fichier <b>twatch2020v1-app.bin</b>. L’ancien firmware reste en place jusqu’à la fin : une coupure ne casse rien.',"
+    "b:'Envoyer',nf:'Choisis d’abord le fichier.',s:'Envoi…',ok:'Terminé : la montre redémarre ',"
+    "ko:'Échec : ',lost:'Connexion perdue.',"
+    "no_slot:'pas d’emplacement de mise à jour (flash USB nécessaire)',bad_size:'taille de fichier invalide',"
+    "net:'transfert interrompu, réessayer',not_esp32:'ce fichier n’est pas un firmware ESP32',"
+    "not_twatch:'ce n’est pas un firmware T-Watch',flash_prep:'impossible de préparer la flash',"
+    "flash_write:'erreur d’écriture flash',corrupt:'image corrompue',rejected:'image refusée',"
+    "activate:'impossible d’activer la nouvelle image'},"
+    "en:{t:'T-Watch 2020 · update',v:'Installed version:',"
+    "h:'Choose the <b>twatch2020v1-app.bin</b> file. The current firmware stays in place until the end: an interruption breaks nothing.',"
+    "b:'Send',nf:'Choose the file first.',s:'Sending…',ok:'Done: the watch is restarting ',"
+    "ko:'Failed: ',lost:'Connection lost.',"
+    "no_slot:'no update slot (USB flash required)',bad_size:'invalid file size',"
+    "net:'transfer interrupted, try again',not_esp32:'this file is not an ESP32 firmware',"
+    "not_twatch:'this is not a T-Watch firmware',flash_prep:'could not prepare the flash',"
+    "flash_write:'flash write error',corrupt:'corrupted image',rejected:'image rejected',"
+    "activate:'could not activate the new image'}};"
+    "var L=(navigator.language||'en').slice(0,2)=='fr'?'fr':'en';"
+    "function $(i){return document.getElementById(i);}"
+    "function tr(k){return T[L][k]||k;}"
+    "function draw(){document.documentElement.lang=L;['t','v','b'].forEach(function(k){$(k).textContent=tr(k);});"
+    "$('h').innerHTML=tr('h');$('l').textContent=L=='fr'?'English':'Français';}"
+    "function sw(){L=L=='fr'?'en':'fr';draw();}"
+    "function go(){var f=$('f').files[0],m=$('m'),p=$('p'),b=$('b');"
+    "if(!f){m.textContent=tr('nf');return;}"
+    "b.disabled=true;p.hidden=false;m.className='';m.textContent=tr('s');"
     "var x=new XMLHttpRequest();x.open('POST','/update');"
     "x.upload.onprogress=function(e){if(e.lengthComputable)p.value=e.loaded*100/e.total;};"
     "x.onload=function(){if(x.status==200){p.value=100;m.className='ok';"
-    "m.textContent='Termin\\u00e9 : la montre red\\u00e9marre ('+x.responseText+').';}"
-    "else{m.className='ko';m.textContent='\\u00c9chec : '+x.responseText;b.disabled=false;}};"
-    "x.onerror=function(){m.className='ko';m.textContent='Connexion perdue.';b.disabled=false;};"
-    "x.send(f);}</script></body></html>";
+    "m.textContent=tr('ok')+'('+x.responseText+').';}"
+    "else{m.className='ko';m.textContent=tr('ko')+tr(x.responseText);b.disabled=false;}};"
+    "x.onerror=function(){m.className='ko';m.textContent=tr('lost');b.disabled=false;};"
+    "x.send(f);}draw();</script></body></html>";
 
 /* Réponse d'un bloc avec Content-Length et « Connection: close » : Safari iOS
  * garde sinon plusieurs connexions ouvertes et sature le serveur. */
@@ -246,9 +272,9 @@ static esp_err_t update_post(httpd_req_t *r)
     static char buf[4096];
     const esp_partition_t *dst = esp_ota_get_next_update_partition(NULL);
     s_last_activity_us = esp_timer_get_time();
-    if (!dst) return fail(r, 0, OTA_EV_ERR_WRITE, "pas d'emplacement OTA (table de partitions ?)");
+    if (!dst) return fail(r, 0, OTA_EV_ERR_WRITE, "no_slot");
     if (r->content_len <= 0 || r->content_len > dst->size) {
-        return fail(r, 0, OTA_EV_ERR_SIZE, "taille de fichier invalide");
+        return fail(r, 0, OTA_EV_ERR_SIZE, "bad_size");
     }
     ESP_LOGI(TAG, "réception de %u octets vers %s", (unsigned)r->content_len, dst->label);
 
@@ -260,27 +286,27 @@ static esp_err_t update_post(httpd_req_t *r)
     while (left > 0) {
         int n = httpd_req_recv(r, buf, left < sizeof(buf) ? left : sizeof(buf));
         if (n == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < 5) continue;
-        if (n <= 0) return fail(r, h, OTA_EV_ERR_NET, "transfert interrompu");
+        if (n <= 0) return fail(r, h, OTA_EV_ERR_NET, "net");
         timeouts = 0;
         s_last_activity_us = esp_timer_get_time();
         if (!checked) {
             /* en-tête ESP32 + descripteur d'application : bien un firmware T-Watch ? */
             const size_t off = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t);
             if ((size_t)n < off + sizeof(esp_app_desc_t) || (uint8_t)buf[0] != ESP_IMAGE_HEADER_MAGIC) {
-                return fail(r, 0, OTA_EV_ERR_IMAGE, "ce fichier n'est pas un firmware ESP32");
+                return fail(r, 0, OTA_EV_ERR_IMAGE, "not_esp32");
             }
             const esp_app_desc_t *d = (const esp_app_desc_t *)(buf + off);
             if (d->magic_word != ESP_APP_DESC_MAGIC_WORD ||
                 strncmp(d->project_name, esp_app_get_description()->project_name, sizeof(d->project_name))) {
-                return fail(r, 0, OTA_EV_ERR_IMAGE, "ce n'est pas un firmware T-Watch (twatch)");
+                return fail(r, 0, OTA_EV_ERR_IMAGE, "not_twatch");
             }
             strlcpy(s_new_ver, d->version, sizeof(s_new_ver));
             if (esp_ota_begin(dst, OTA_WITH_SEQUENTIAL_WRITES, &h) != ESP_OK) {
-                return fail(r, 0, OTA_EV_ERR_WRITE, "impossible de préparer la flash");
+                return fail(r, 0, OTA_EV_ERR_WRITE, "flash_prep");
             }
             checked = true;
         }
-        if (esp_ota_write(h, buf, n) != ESP_OK) return fail(r, h, OTA_EV_ERR_WRITE, "erreur d'écriture flash");
+        if (esp_ota_write(h, buf, n) != ESP_OK) return fail(r, h, OTA_EV_ERR_WRITE, "flash_write");
         left -= n;
         done += n;
         int pct = (int)(done * 100 / r->content_len);
@@ -291,11 +317,11 @@ static esp_err_t update_post(httpd_req_t *r)
     esp_err_t e = esp_ota_end(h);          /* vérifie l'image complète (SHA-256) */
     if (e != ESP_OK) {
         s_finishing = false;
-        return fail(r, 0, OTA_EV_ERR_IMAGE, e == ESP_ERR_OTA_VALIDATE_FAILED ? "image corrompue" : "image refusée");
+        return fail(r, 0, OTA_EV_ERR_IMAGE, e == ESP_ERR_OTA_VALIDATE_FAILED ? "corrupt" : "rejected");
     }
     if (esp_ota_set_boot_partition(dst) != ESP_OK) {
         s_finishing = false;
-        return fail(r, 0, OTA_EV_ERR_WRITE, "impossible d'activer la nouvelle image");
+        return fail(r, 0, OTA_EV_ERR_WRITE, "activate");
     }
     ESP_LOGI(TAG, "image %s installée sur %s", s_new_ver, dst->label);
     httpd_resp_set_type(r, "text/plain; charset=utf-8");
