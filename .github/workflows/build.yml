@@ -6,6 +6,10 @@ on:
     tags: ['v*']
   pull_request:
 
+# contents: write lets the tag build publish the GitHub release
+permissions:
+  contents: write
+
 jobs:
   host-tests:
     runs-on: ubuntu-latest
