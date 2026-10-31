@@ -2,6 +2,11 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.15.1 — 2026-10-31
+
+- First published release: same firmware as 0.15.0, CI allowed to publish the release
+  (`permissions: contents: write`).
+
 ## 0.15.0 — 2026-10-30
 
 - Wi-Fi update page in **French and English** (browser language, switch button); the server
