@@ -110,6 +110,8 @@ static int find_uid(uint32_t uid)
     return -1;
 }
 
+static char s_since[16];      /* économie : date ANCS de la fin de la dernière relève */
+
 static void remove_at(int i)
 {
     if (i < 0 || i >= s_n) return;
@@ -178,8 +180,26 @@ notif_entry_t *ns_add(ancs_notif_t *n, bool *alert)
     s_e[pos].rx_us = now;
     s_e[pos].uid_valid = true;
     s_n++;
-    *alert = !(n->flags & ANCS_FLAG_PREEXISTING);
+    /* PreExisting = rejouée par iOS à la connexion : silencieuse, sauf en
+     * économie d'énergie si elle est arrivée depuis la relève précédente */
+    *alert = !(n->flags & ANCS_FLAG_PREEXISTING) ||
+             (s_since[0] && n->date[0] && strcmp(n->date, s_since) >= 0);
     return &s_e[pos];
+}
+
+void ns_set_alert_since(const char *date)
+{
+    if (date) strlcpy(s_since, date, sizeof(s_since));
+    else s_since[0] = 0;
+}
+
+int ns_prune_invalid(void)
+{
+    int n = 0;
+    for (int i = s_n - 1; i >= 0; i--) {
+        if (!s_e[i].uid_valid) { remove_at(i); n++; }
+    }
+    return n;
 }
 
 bool ns_remove_uid(uint32_t uid)

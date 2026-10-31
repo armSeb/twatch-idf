@@ -17,7 +17,7 @@
 #include <time.h>
 #include "lvgl.h"
 
-enum { PUB_LINK_OFF = 0, PUB_LINK_ADV, PUB_LINK_WAIT, PUB_LINK_READY };
+enum { PUB_LINK_OFF = 0, PUB_LINK_ADV, PUB_LINK_WAIT, PUB_LINK_READY, PUB_LINK_ECO };
 
 lv_obj_t *face_pub_create(lv_obj_t *parent);               /* conteneur 240×240 */
 void      face_pub_set_time(const struct tm *tm, bool force);

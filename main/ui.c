@@ -16,6 +16,7 @@
 #include "settings.h"
 #include "display.h"
 #include "sound.h"
+#include "blesync.h"
 #include "axp202.h"
 #include "esp_timer.h"
 #include "esp_system.h"
@@ -61,6 +62,7 @@ static bool c_uid_valid;
 /* menu */
 static uint32_t s_pending_hash;   /* notif reçue écran éteint, pas encore vue */
 static lv_obj_t *m_sw_nwake, *m_sw_tap;
+static lv_obj_t *m_sw_eco, *m_bm_eco;
 static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_bm_lang, *m_toast;
 static void menu_lang_cb(lv_event_t *ev);
 static lv_timer_t *w_clock_t;
@@ -70,6 +72,7 @@ static void ota_ui_idle(void);
 static void build_ota(void);
 static void back_cb(lv_event_t *ev);
 static void menu_bt_refresh(void);
+static void eco_sync_widgets(void);
 static scr_id_t menu_parent(scr_id_t id);
 static void nav_open(scr_id_t id, lv_screen_load_anim_t anim);
 static void menu_refresh_summaries(void);
@@ -261,6 +264,10 @@ static void show(scr_id_t id, lv_screen_load_anim_t anim)
 {
     ensure_screen(id);
     if (!s_scr[id]) id = SCR_WATCH;                    /* sécurité : rien à afficher */
+    /* économie d'énergie : ces écrans ont besoin de la liaison iPhone */
+    static bool s_link_held;
+    bool need = id == SCR_MEDIA || id == SCR_LIST || id == SCR_DETAIL || id == SCR_PAIR;
+    if (need != s_link_held) { s_link_held = need; blesync_hold(need); }
     if (s_cur == SCR_APP && id != SCR_APP && s_app_cur && s_app_cur->on_hide) s_app_cur->on_hide();
     if (id == SCR_APP && s_cur != SCR_APP && s_app_cur && s_app_cur->on_show) s_app_cur->on_show();
     if (id == SCR_QUICK) quick_refresh();
@@ -377,7 +384,7 @@ static void watch_refresh_status(void)
     case BLE_ST_CONNECTED:
     case BLE_ST_SECURED:     bc = C_WARN; break;
     case BLE_ST_ADVERTISING: bc = C_DIM; break;
-    default:                 bc = C_OFF; break;
+    default:                 bc = blesync_sleeping() ? C_DIM : C_OFF; break;
     }
     lv_obj_set_style_text_color(w_ble, bc, 0);
 
@@ -399,11 +406,13 @@ static void watch_refresh_status(void)
     if (n > 0) lv_label_set_text_fmt(w_notif, "%s" LV_SYMBOL_BELL " %d", dnd, n);
     else lv_label_set_text(w_notif, settings_get()->dnd ? SYM_MOON : "");
 
-    if (w_classic) face_classic_set_status(p, power_charging(), bi.state == BLE_ST_READY, bi.state != BLE_ST_OFF, n);
+    bool eco = blesync_sleeping();
+    if (w_classic) face_classic_set_status(p, power_charging(), bi.state == BLE_ST_READY,
+                                           bi.state != BLE_ST_OFF || eco, n);
     if (w_pub) {
         int link = bi.state == BLE_ST_READY ? PUB_LINK_READY :
                    (bi.state == BLE_ST_CONNECTED || bi.state == BLE_ST_SECURED) ? PUB_LINK_WAIT :
-                   bi.state == BLE_ST_ADVERTISING ? PUB_LINK_ADV : PUB_LINK_OFF;
+                   bi.state == BLE_ST_ADVERTISING ? PUB_LINK_ADV : eco ? PUB_LINK_ECO : PUB_LINK_OFF;
         face_pub_set_status(p, power_charging(), link, n);
     }
 }
@@ -716,13 +725,46 @@ static void menu_tap_cb(lv_event_t *ev)
     display_tap_enable(on);
 }
 
+static const uint8_t ECO_MIN[3] = { 2, 5, 15 };
+
+static void eco_sync_widgets(void)
+{
+    if (!m_sw_eco) return;
+    const settings_t *st = settings_get();
+    lv_obj_set_state(m_sw_eco, LV_STATE_CHECKED, st->ble_eco);
+    for (int i = 0; i < 3; i++)
+        if (ECO_MIN[i] == st->eco_min) lv_buttonmatrix_set_button_ctrl(m_bm_eco, i, LV_BUTTONMATRIX_CTRL_CHECKED);
+    if (st->ble_eco && st->ble_enabled) lv_obj_remove_state(m_bm_eco, LV_STATE_DISABLED);
+    else lv_obj_add_state(m_bm_eco, LV_STATE_DISABLED);
+}
+
+static void menu_eco_cb(lv_event_t *ev)
+{
+    settings_get()->ble_eco = lv_obj_has_state(m_sw_eco, LV_STATE_CHECKED);
+    settings_save();
+    blesync_apply();
+    eco_sync_widgets();
+    menu_bt_refresh();
+}
+
+static void menu_eco_min_cb(lv_event_t *ev)
+{
+    uint32_t i = lv_buttonmatrix_get_selected_button(m_bm_eco);
+    if (i >= 3) return;
+    settings_get()->eco_min = ECO_MIN[i];
+    settings_save();
+    blesync_apply();
+    menu_bt_refresh();
+}
+
 static void menu_bt_cb(lv_event_t *ev)
 {
     bool on = lv_obj_has_state(m_sw_bt, LV_STATE_CHECKED);
     settings_get()->ble_enabled = on;
     settings_save();
-    if (on) { ble_start(); toast(_("Bluetooth activé")); }
-    else { ble_stop(); toast(_("Mode avion")); }
+    blesync_apply();
+    toast(on ? _("Bluetooth activé") : _("Mode avion"));
+    menu_bt_refresh();
 }
 
 /* Faces dans l'ordre du sélecteur → valeur settings.watchface */
@@ -811,11 +853,13 @@ static void menu_nav_cb(lv_event_t *ev)
 {
     scr_id_t id = (scr_id_t)(uintptr_t)lv_event_get_user_data(ev);
     if (id == SCR_PAIR) {
-        if (!ble_running()) { toast(_("Activez d'abord le Bluetooth")); return; }
+        if (!settings_get()->ble_enabled) { toast(_("Activez d'abord le Bluetooth")); return; }
         lv_label_set_text(pa_code, "------");
         lv_obj_set_style_text_color(pa_code, C_DIM, 0);
         lv_label_set_text(pa_hint, _("iPhone : Réglages > Bluetooth\n> T-Watch, puis « Jumeler »"));
+        nav_open(id, LV_SCR_LOAD_ANIM_MOVE_LEFT);    /* l'écran retient la liaison (économie) */
         ble_pairing_mode();
+        return;
     }
     nav_open(id, LV_SCR_LOAD_ANIM_MOVE_LEFT);
 }
@@ -975,12 +1019,31 @@ static lv_obj_t *mk_segmented(lv_obj_t *col, const char *const *map, lv_event_cb
 
 lv_obj_t *ui_segmented(lv_obj_t *p, const char *const *map, lv_event_cb_t cb) { return mk_segmented(p, map, cb); }
 
+/* économie d'énergie, radio éteinte : « relevé il y a x min » */
+static bool eco_text(char *b, size_t n, bool shrt)
+{
+    if (!blesync_sleeping()) return false;
+    int64_t a = blesync_last_sync_s();
+    if (shrt) {
+        if (a < 60) snprintf(b, n, "%s", _("BLE éco · relève à venir"));
+        else snprintf(b, n, _("BLE éco · il y a %d min"), (int)(a / 60));
+    } else if (a < 0) snprintf(b, n, "%s", _("Économie : en attente de relève"));
+    else if (a < 60) snprintf(b, n, "%s", _("Économie : relevé à l'instant"));
+    else snprintf(b, n, _("Économie : relevé il y a %d min"), (int)(a / 60));
+    return true;
+}
+
 static void menu_bt_refresh(void)
 {
+    if (!m_bt_info) return;
     ble_info_t bi;
     ble_get_info(&bi);
     const char *st;
-    if (!settings_get()->ble_enabled || bi.state == BLE_ST_OFF) st = _("Coupé (mode avion)");
+    char eco[48];
+    eco_sync_widgets();
+    if (!settings_get()->ble_enabled) st = _("Coupé (mode avion)");
+    else if (eco_text(eco, sizeof(eco), false)) st = eco;
+    else if (bi.state == BLE_ST_OFF) st = _("Coupé (mode avion)");
     else if (bi.state == BLE_ST_READY) st = _("Connecté à l'iPhone");
     else if (bi.state == BLE_ST_ADVERTISING) st = _("En attente de l'iPhone");
     else st = _("Connexion en cours…");
@@ -1008,7 +1071,11 @@ static void menu_refresh_summaries(void)
 
     ble_info_t bi;
     ble_get_info(&bi);
-    lv_label_set_text(m_sum[2], !st->ble_enabled ? _("Mode avion") :
+    char eco[48];
+    if (st->ble_enabled && st->ble_eco) {
+        snprintf(eco, sizeof(eco), _("Économie · relève %d min"), st->eco_min);
+        lv_label_set_text(m_sum[2], eco);
+    } else lv_label_set_text(m_sum[2], !st->ble_enabled ? _("Mode avion") :
                       bi.state == BLE_ST_READY ? _("Connecté") :
                       bi.state == BLE_ST_ADVERTISING ? _("En attente de l'iPhone") : _("Connexion…"));
 
@@ -1087,6 +1154,9 @@ static void build_menu(void)
     /* ---- bluetooth ---- */
     col = mk_page(SCR_SET_BT, _("Bluetooth"));
     m_sw_bt = mk_switch_row(col, _("Bluetooth"), _("Coupé = mode avion"), menu_bt_cb);
+    m_sw_eco = mk_switch_row(col, _("Économie d'énergie"), _("Relève périodique des notifs"), menu_eco_cb);
+    static const char *eco_map[] = { "2 min", "5 min", "15 min", "" };
+    m_bm_eco = mk_segmented(col, eco_map, menu_eco_min_cb);
     m_bt_info = mk_label(col, &font_small_11, C_DIM, "");
     lv_obj_set_style_pad_bottom(m_bt_info, 4, 0);
     lv_obj_t *pb = mk_button(col, with_sym(LV_SYMBOL_BLUETOOTH, _("Appairer un iPhone")), C_CARD, menu_nav_cb,
@@ -1384,7 +1454,9 @@ static void power_refresh(void)
     lv_label_set_text(p_lbl[3], s);
 
     static const char *const ST[] = { N_("coupé"), N_("publicité"), N_("connecté"), N_("chiffré"), N_("prêt") };
-    if (b.itvl_x125) {
+    if (eco_text(s, sizeof(s), true)) {
+        /* économie, radio éteinte */
+    } else if (b.itvl_x125) {
         snprintf(s, sizeof(s), "BLE %s · %.0f ms · lat %u", _(ST[b.state]), b.itvl_x125 * 1.25f, b.latency);
     } else {
         snprintf(s, sizeof(s), "BLE %s%s", _(ST[b.state]),
@@ -1809,10 +1881,11 @@ static void quick_refresh(void)
     ble_get_info(&bi);
     const char *lk = bi.state == BLE_ST_READY ? _("iPhone connecté") :
                      (bi.state == BLE_ST_CONNECTED || bi.state == BLE_ST_SECURED) ? _("Connexion…") :
-                     bi.state == BLE_ST_OFF ? _("Bluetooth coupé") : _("iPhone absent");
+                     bi.state == BLE_ST_OFF ? (blesync_sleeping() ? _("Économie") : _("Bluetooth coupé"))
+                                            : _("iPhone absent");
     lv_label_set_text_fmt(q_info, "%s%d%%  ·  %s", power_charging() ? LV_SYMBOL_CHARGE " " : "",
                           power_percent(), lk);
-    q_set_tile(Q_BT, ble_running());
+    q_set_tile(Q_BT, settings_get()->ble_enabled);
     q_set_tile(Q_DND, settings_get()->dnd);
     lv_bar_set_value(q_bri, settings_get()->brightness, LV_ANIM_OFF);
 }
@@ -1823,10 +1896,10 @@ static void quick_tile_cb(lv_event_t *ev)
     settings_t *st = settings_get();
     switch (i) {
     case Q_BT:
-        st->ble_enabled = !ble_running();
+        st->ble_enabled = !st->ble_enabled;
         settings_save();
-        if (st->ble_enabled) { ble_start(); toast(_("Bluetooth activé")); }
-        else { ble_stop(); toast(_("Mode avion")); }
+        blesync_apply();
+        toast(st->ble_enabled ? _("Bluetooth activé") : _("Mode avion"));
         break;
     case Q_DND:
         st->dnd = !st->dnd;
@@ -2039,6 +2112,7 @@ static void release_menu(void)
     }
     /* plus aucun pointeur vers des objets détruits */
     m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = m_bm_lang = NULL;
+    m_sw_eco = m_bm_eco = NULL;
     m_bt_info = m_confirm = NULL;
     o_info = o_bar = o_status = o_btn = o_pw = o_prev = o_prev_modal = NULL;
     memset(m_sum, 0, sizeof(m_sum));
@@ -2206,7 +2280,7 @@ void ui_on_ble_state(int st)
     watch_refresh_status();
     if (s_cur == SCR_QUICK) quick_refresh();
     /* l'interrupteur suit l'état réel de la pile (page construite à la demande) */
-    if (m_sw_bt) lv_obj_set_state(m_sw_bt, LV_STATE_CHECKED, ble_running());
+    if (m_sw_bt) lv_obj_set_state(m_sw_bt, LV_STATE_CHECKED, settings_get()->ble_enabled);
 }
 
 void ui_on_power(void)

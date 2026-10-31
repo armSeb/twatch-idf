@@ -73,7 +73,28 @@ verrou `ESP_PM_NO_LIGHT_SLEEP`, quel que soit le framework. Tout le reste est do
 | Périphériques | BMA423 en suspend, CLKOUT du PCF8563 coupé, GPIO inutilisés à un niveau défini |
 | Mode avion | contrôleur BT arrêté → **light sleep automatique** |
 
-Résultat typique : environ **7,7 mA en veille**, iPhone connecté et notifications actives.
+Résultat typique : environ **7,7 mA en veille**, iPhone connecté et notifications actives,
+**1,2 mA** en mode avion.
+
+## Économie d'énergie (`blesync.c`)
+
+C'est le contrôleur Bluetooth qui empêche le light sleep : l'économie coupe donc toute la
+pile entre de courtes **relèves** :
+
+1. Toutes les 2, 5 ou 15 minutes (ou dès qu'un écran qui a besoin de la liaison s'ouvre :
+   lecture en cours, liste ou détail des notifications, appairage), `ble_start()` publie ;
+   l'iPhone lié se reconnecte de lui-même, chiffre, et ANCS rejoue les notifications
+   présentes, marquées *PreExisting*. AMS et l'heure (CTS) sont mis à jour au passage.
+2. Les notifications rejouées datées d'après la fin de la relève précédente (moins une
+   marge de 2 minutes) sont traitées comme nouvelles ; leurs alertes sont regroupées en une
+   seule vibration. Les entrées non rejouées ont été effacées sur l'iPhone et sont retirées.
+3. Quand ANCS est calme depuis 5 s et qu'aucun écran ne retient la liaison (20 s de grâce
+   après sa fermeture), `ble_stop()` coupe le contrôleur. Une relève est abandonnée après
+   45 s si l'iPhone ne vient pas, et plafonnée à 2 minutes sinon.
+
+Contreparties : les notifications arrivent avec au plus un intervalle de retard, et les
+appels ne sonnent que s'ils tombent pendant une relève. La logique des relèves est testée
+sur PC (`host_tests/test_sync.c`) avec une pile et des timers simulés.
 
 ## Jauge de batterie adaptative
 
@@ -128,6 +149,7 @@ qu'en test sur banc.
 | `main/power.c`, `axp202.c`, `gauge.c` | PMIC, rails, batterie, verrous PM, rétroéclairage, vibreur, jauge adaptative |
 | `main/sound.c` | bips sur l'ampli I2S |
 | `main/wclock.c` | PCF8563 (UTC), fuseau, resynchro de l'horloge système |
+| `main/blesync.c` | économie d'énergie : relèves périodiques, liaison à la demande |
 | `main/settings.c` | réglages en NVS |
 | `main/i18n.c` | table français → anglais |
 | `main/ota.c` | mise à jour Wi-Fi : point d'accès, page web, écriture OTA, validation, retour arrière |

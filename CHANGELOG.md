@@ -2,6 +2,16 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.16.0 — 2026-10-31
+
+- **Battery saver** (*Settings › Bluetooth*): the radio stays off and the watch fetches
+  notifications every 2, 5 or 15 minutes (≈1 mA between fetches instead of ≈7.7 mA
+  connected). Notifications received in between alert once per fetch; those cleared on the
+  iPhone meanwhile disappear from the watch. Now playing, the notification list, a
+  notification and pairing connect on demand while they are open. Incoming calls only
+  ring if they happen during a fetch.
+- Watch faces show the saver state (*LATER* sign on the Pub face).
+
 ## 0.15.1 — 2026-10-31
 
 - First published release: same firmware as 0.15.0, CI allowed to publish the release

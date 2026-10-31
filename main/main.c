@@ -28,6 +28,7 @@
 #include "ui.h"
 #include "ble.h"
 #include "ota.h"
+#include "blesync.h"
 #include "ancs.h"
 #include "notif_store.h"
 
@@ -113,6 +114,9 @@ static void handle_notifs(void)
         notif_entry_t *e = ns_add(&n, &alert);
         ESP_LOGI(TAG, "notif [%s] « %s » flags=0x%02x alerte=%d (%d en mémoire)",
                  e->n.app_name, e->n.title, e->n.flags, alert, ns_count());
+        blesync_note_notif();
+        /* relève d'économie : une seule alerte pour le lot (sauf appel) */
+        if (alert && e->n.category != ANCS_CAT_INCOMING_CALL && blesync_defer_alert(e->hash)) alert = false;
         if (ui_on_notif(e, alert)) screen_wake();   /* e n'est plus valide après */
     }
 }
@@ -142,6 +146,15 @@ static void handle_event(const app_event_t *ev)
         break;
     case EV_TOUCH_INT:
         if (display_tap_begin()) s_tapping = true;
+        break;
+    case EV_SYNC:
+        if (ev->a == SYNC_EV_FLUSH) {
+            uint32_t h = blesync_take_pending();
+            notif_entry_t *e = h ? ns_find_hash(h) : NULL;
+            if (e && ui_on_notif(e, true)) screen_wake();
+        } else {
+            blesync_on_event(ev->a);
+        }
         break;
     case EV_APP:
         if (ui_on_app_event(ev->a)) screen_wake();   /* alarme d'app : montrer l'app */
@@ -288,11 +301,8 @@ void app_main(void)
     ESP_LOGW(TAG, "DIAGNOSTIC : BLE seul, écran non initialisé");
 #endif
 
-    if (settings_get()->ble_enabled) {
-        ble_start();
-    } else {
-        ESP_LOGW(TAG, "mode avion : BLE non démarré");
-    }
+    if (!settings_get()->ble_enabled) ESP_LOGW(TAG, "mode avion : BLE non démarré");
+    blesync_init();                     /* liaison permanente, économie ou mode avion */
 #if !TW_DIAG_BARE
     ble_set_battery((uint8_t)power_percent());
 #endif

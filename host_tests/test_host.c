@@ -202,6 +202,38 @@ static void test_store(void)
     printf("store : ok\n");
 }
 
+/* économie d'énergie : replay après une coupure */
+static void test_store_eco(void)
+{
+    bool alert;
+    ns_clear();
+    ns_set_alert_since(NULL);
+    ancs_notif_t old = mk(1, "Ancienne", "20261031T080000", ANCS_FLAG_PREEXISTING);
+    ns_add(&old, &alert);
+    CHECK(!alert);                                   /* sans « depuis » : replay silencieux */
+    ancs_notif_t gone = mk(2, "Effacée", "20261031T081000", 0);
+    ns_add(&gone, &alert);
+    CHECK(alert && ns_count() == 2);
+
+    /* fin de relève à 09:00 ; pendant la coupure, une notif arrive, une autre est effacée */
+    ns_set_alert_since("20261031T090000");
+    ns_invalidate_uids();
+    ancs_notif_t old2 = mk(11, "Ancienne", "20261031T080000", ANCS_FLAG_PREEXISTING);
+    ns_add(&old2, &alert);
+    CHECK(!alert);                                   /* déjà connue */
+    ancs_notif_t before = mk(12, "Avant", "20261031T085900", ANCS_FLAG_PREEXISTING);
+    ns_add(&before, &alert);
+    CHECK(!alert);                                   /* antérieure à la relève */
+    ancs_notif_t fresh = mk(13, "Nouvelle", "20261031T090300", ANCS_FLAG_PREEXISTING);
+    ns_add(&fresh, &alert);
+    CHECK(alert);                                    /* arrivée pendant la coupure */
+    CHECK(ns_count() == 4);
+    CHECK(ns_prune_invalid() == 1);                  /* « Effacée » n'a pas été rejouée */
+    CHECK(ns_count() == 3 && ns_find_uid(2) == NULL && ns_find_uid(13) != NULL);
+    ns_set_alert_since(NULL);
+    printf("store éco : ok\n");
+}
+
 int main(void)
 {
     srand(1234);
@@ -209,6 +241,7 @@ int main(void)
     test_app_attrs();
     test_sanitize();
     test_store();
+    test_store_eco();
     printf(fails ? "\n%d ÉCHEC(S)\n" : "\nTOUS LES TESTS PASSENT\n", fails);
     return fails ? 1 : 0;
 }

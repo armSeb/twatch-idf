@@ -48,6 +48,9 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
 - **Écran Énergie** : consommation moyenne mesurée par le compteur coulométrique de l'AXP202,
   décharge précédente, **jauge adaptative** qui apprend la capacité réelle d'une batterie
   usée.
+- **Économie d'énergie** : Bluetooth coupé entre des relèves périodiques (toutes les 2, 5 ou
+  15 min), connexion à la demande quand *Lecture* ou les notifications sont ouvertes —
+  environ 1 mA entre deux relèves au lieu de ~7,7 mA en liaison permanente.
 - Mode avion (Bluetooth coupé → vrai light sleep automatique).
 - Utilise la PSRAM de 8 Mo (4 Mo adressables) pour les grosses allocations.
 - Démarrage quasi instantané, coredump en flash en cas de crash, journal BLE consultable sur
@@ -79,7 +82,7 @@ dans la liste ; les appels sonnent toujours. Une lune le signale sur le cadran.
 
 **Réglages** (← puis *Réglages*) : *Affichage* (cadran, luminosité, extinction, langue),
 *Alertes et réveil* (vibreur, allumage sur notif ou mode discret, double tap, test du
-haut-parleur), *Bluetooth* (mode avion, appairage, *Oublier les appareils* derrière une
+haut-parleur), *Bluetooth* (mode avion, économie d'énergie et son intervalle, appairage, *Oublier les appareils* derrière une
 confirmation), *Énergie*, *À propos*, *Mise à jour*.
 
 ---

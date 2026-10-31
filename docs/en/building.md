@@ -93,6 +93,8 @@ Runs, under AddressSanitizer and UBSan:
 
 - the ANCS parser (10,000 random fragmentations of the Data Source stream), UTF-8 cleanup,
   notification store (dedup, sort, capacity);
+- the battery-saver fetch logic (`test_sync.c`: fetch cycle, merged alerts, on-demand link,
+  iPhone away, mode changes, Wi-Fi update);
 - the adaptive battery gauge (simulated batteries of 150, 220 and 360 mAh, partial charges,
   counter resets);
 - `check_i18n.py`: every `_()`/`N_()` string has an English translation with the same printf

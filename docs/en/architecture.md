@@ -69,7 +69,28 @@ without an external 32 kHz crystal (the T-Watch 2020 has none): the controller h
 | Peripherals | BMA423 suspended, PCF8563 CLKOUT off, unused GPIOs driven to a defined level |
 | Airplane mode | BT controller stopped → **automatic light sleep** |
 
-Typical result: about **7.7 mA in standby** with the iPhone connected and notifications on.
+Typical result: about **7.7 mA in standby** with the iPhone connected and notifications on,
+**1.2 mA** in airplane mode.
+
+## Battery saver (`blesync.c`)
+
+The Bluetooth controller is what prevents light sleep, so the saver simply turns the whole
+stack off between short **fetches**:
+
+1. Every 2, 5 or 15 minutes (or as soon as a screen that needs the link opens: now playing,
+   notification list or detail, pairing), `ble_start()` advertises; the bonded iPhone
+   reconnects by itself, encrypts, and ANCS replays the notifications it holds, flagged
+   *PreExisting*. AMS and the time (CTS) are refreshed on the way.
+2. Replayed notifications dated after the end of the previous fetch (minus a 2-minute
+   margin) are treated as new; their alerts are merged into one vibration. Entries that
+   were not replayed were cleared on the iPhone and are removed.
+3. Once ANCS has been quiet for 5 s and no screen holds the link (20 s grace after closing
+   one), `ble_stop()` turns the controller off. A fetch is abandoned after 45 s if the
+   iPhone does not show up, and capped at 2 minutes otherwise.
+
+Trade-offs: notifications arrive up to one interval late, and calls ring only if they
+happen during a fetch. The session logic is tested on PC (`host_tests/test_sync.c`) with a
+simulated stack and timers.
 
 ## Adaptive battery gauge
 
@@ -122,6 +143,7 @@ resistance hits the cut-off voltage under load peaks earlier than on a bench tes
 | `main/power.c`, `axp202.c`, `gauge.c` | PMIC, rails, battery, PM locks, backlight, vibration, adaptive gauge |
 | `main/sound.c` | beeps on the I2S amplifier |
 | `main/wclock.c` | PCF8563 (UTC), time zone, system clock resync |
+| `main/blesync.c` | battery saver: periodic fetches, on-demand link |
 | `main/settings.c` | settings in NVS |
 | `main/i18n.c` | French → English table |
 | `main/ota.c` | Wi-Fi update: access point, web page, OTA write, validation, going back |

@@ -12,7 +12,9 @@ typedef struct {
     bool    tap_wake;         /* double tap sur l'écran éteint = réveil */
     bool    notif_wake;       /* false = notif : vibre seulement, bouton pour voir */
     uint8_t lang;             /* 0 = français, 1 = anglais (i18n.h) */
-    bool    dnd;              /* ne pas déranger : ni vibration ni allumage (sauf appels) */
+    bool    dnd;
+    bool    ble_eco;          /* économie : relèves périodiques au lieu d'une liaison permanente */
+    uint8_t eco_min;          /* intervalle des relèves, minutes (2, 5, 15) */              /* ne pas déranger : ni vibration ni allumage (sauf appels) */
 } settings_t;
 
 void        settings_load(void);

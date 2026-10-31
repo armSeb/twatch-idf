@@ -43,6 +43,9 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 - **Energy screen**: average consumption measured by the AXP202 coulomb counter, previous
   discharge, and an **adaptive battery gauge** that learns the real capacity of a worn
   battery.
+- **Battery saver**: Bluetooth off between periodic fetches (every 2, 5 or 15 min), with
+  an on-demand connection while *Now playing* or notifications are open — about 1 mA
+  between fetches instead of ~7.7 mA permanently connected.
 - Airplane mode (Bluetooth off → real automatic light sleep).
 - Uses the 8 MB PSRAM (4 MB mapped) for large allocations.
 - Near-instant boot; core dump to flash on crash; on-watch BLE diagnostic log.
@@ -72,7 +75,7 @@ calls still ring. A moon shows on the watch face.
 
 **Settings** (← then *Settings*): *Display* (face, brightness, timeout, language), *Alerts &
 wake* (vibration, wake on notification or silent mode, double tap, speaker test),
-*Bluetooth* (airplane mode, pairing, *Forget devices* behind a confirmation), *Battery*,
+*Bluetooth* (airplane mode, battery saver and its interval, pairing, *Forget devices* behind a confirmation), *Battery*,
 *About*, *Update*.
 
 ---

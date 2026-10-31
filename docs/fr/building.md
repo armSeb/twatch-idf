@@ -94,6 +94,8 @@ Lance, sous AddressSanitizer et UBSan :
 
 - le parseur ANCS (10 000 fragmentations aléatoires du flux Data Source), le nettoyage UTF-8,
   le stockage des notifications (déduplication, tri, capacité) ;
+- la logique des relèves de l'économie d'énergie (`test_sync.c` : cycle de relève, alertes
+  regroupées, liaison à la demande, iPhone absent, changements de mode, mise à jour Wi-Fi) ;
 - la jauge de batterie adaptative (batteries simulées de 150, 220 et 360 mAh, charges
   partielles, remises à zéro des compteurs) ;
 - `check_i18n.py` : chaque chaîne `_()`/`N_()` a sa traduction anglaise, avec les mêmes
