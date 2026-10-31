@@ -30,6 +30,7 @@ typedef struct {
 #define BLE_DIAG_LINES 16
 void ble_diag(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 int  ble_diag_dump(char *out, size_t len);   /* plus récent en premier */
+void ble_diag_boot(void);           /* au démarrage : garde le journal après un plantage */
 
 esp_err_t ble_start(void);              /* init + démarrage de la pile */
 void      ble_stop(void);               /* arrêt complet (contrôleur off) */

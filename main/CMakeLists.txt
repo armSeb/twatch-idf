@@ -33,6 +33,7 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/app_tvoff.c
     ${CMAKE_CURRENT_SOURCE_DIR}/sound.c
     ${CMAKE_CURRENT_SOURCE_DIR}/blesync.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/crashlog.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gauge.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ota.c
     PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wno-unused-parameter;-Wno-missing-field-initializers"

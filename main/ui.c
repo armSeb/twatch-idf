@@ -17,6 +17,7 @@
 #include "display.h"
 #include "sound.h"
 #include "blesync.h"
+#include "crashlog.h"
 #include "axp202.h"
 #include "esp_timer.h"
 #include "esp_system.h"
@@ -1539,7 +1540,7 @@ static void about_refresh(void)
     ble_get_info(&b);
     const esp_app_desc_t *d = esp_app_get_description();
     uint32_t up = (uint32_t)(esp_timer_get_time() / 1000000);
-    static char s[1200];
+    static char s[1700];
     int n = snprintf(s, sizeof(s),
              _("Firmware %s\nESP-IDF %s · LVGL %d.%d.%d\n"
                "BLE %02X:%02X:%02X:%02X:%02X:%02X\nAppareils appairés : %d\n"
@@ -1561,6 +1562,9 @@ static void about_refresh(void)
                       (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024),
                       (unsigned)(heap_caps_get_total_size(MALLOC_CAP_SPIRAM) / 1024),
                       axp_reg(0x12), axp_reg(0x28), axp_reg(0x29), sound_last_error());
+    }
+    if (n > 0 && n < (int)sizeof(s) && crashlog_text()[0]) {
+        n += snprintf(s + n, sizeof(s) - n, "\n\n%s", crashlog_text());
     }
     if (n > 0 && n < (int)sizeof(s)) {
         n += snprintf(s + n, sizeof(s) - n, _("\n\nJournal BLE (pub. %s) :\n"),

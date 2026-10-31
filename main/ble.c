@@ -1,4 +1,7 @@
 #include "ble.h"
+#include "esp_heap_caps.h"
+#include "esp_attr.h"
+#include "esp_system.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -170,8 +173,30 @@ static void adv_set_data(void)
 /* ------------------------------------------------------------------ */
 /* Journal de diagnostic (anneau en RAM, horodaté à l'heure locale)    */
 /* ------------------------------------------------------------------ */
-static char s_diag[BLE_DIAG_LINES][48];
-static int  s_diag_head, s_diag_n;
+/* En mémoire RTC non initialisée : le journal survit à un plantage ou à un
+ * redémarrage logiciel (pas à une coupure d'alimentation), pour voir ce qui
+ * a précédé un reboot. */
+#define DIAG_MAGIC 0x7D1A6B01u
+static RTC_NOINIT_ATTR char s_diag[BLE_DIAG_LINES][48];
+static RTC_NOINIT_ATTR int  s_diag_head, s_diag_n;
+static RTC_NOINIT_ATTR uint32_t s_diag_magic;
+
+void ble_diag_boot(void)
+{
+    esp_reset_reason_t r = esp_reset_reason();
+    bool keep = s_diag_magic == DIAG_MAGIC && r != ESP_RST_POWERON && r != ESP_RST_BROWNOUT &&
+                s_diag_head >= 0 && s_diag_head < BLE_DIAG_LINES && s_diag_n >= 0 && s_diag_n <= BLE_DIAG_LINES;
+    if (!keep) {
+        memset(s_diag, 0, sizeof(s_diag));
+        s_diag_head = s_diag_n = 0;
+        s_diag_magic = DIAG_MAGIC;
+        return;
+    }
+    for (int i = 0; i < BLE_DIAG_LINES; i++) s_diag[i][47] = 0;
+    static const char *const RS[] = { "?", "alim", "ext", "logiciel", "PLANTAGE", "WDT int", "WDT tâche",
+                                      "WDT", "veille", "brownout", "SDIO" };
+    ble_diag("— redémarrage (%s) —", (unsigned)r < sizeof(RS) / sizeof(RS[0]) ? RS[r] : "?");
+}
 static portMUX_TYPE s_diag_mux = portMUX_INITIALIZER_UNLOCKED;
 
 void ble_diag(const char *fmt, ...)
@@ -188,6 +213,12 @@ void ble_diag(const char *fmt, ...)
     snprintf(line, sizeof(line), "%02d:%02d:%02d %s", tm.tm_hour, tm.tm_min, tm.tm_sec, msg);
     ESP_LOGI(TAG, "diag: %s", msg);
     portENTER_CRITICAL(&s_diag_mux);
+    if (s_diag_magic != DIAG_MAGIC || s_diag_head < 0 || s_diag_head >= BLE_DIAG_LINES ||
+        s_diag_n < 0 || s_diag_n > BLE_DIAG_LINES) {        /* mémoire RTC pas encore initialisée */
+        memset(s_diag, 0, sizeof(s_diag));
+        s_diag_head = s_diag_n = 0;
+        s_diag_magic = DIAG_MAGIC;
+    }
     memcpy(s_diag[s_diag_head], line, sizeof(line));
     s_diag_head = (s_diag_head + 1) % BLE_DIAG_LINES;
     if (s_diag_n < BLE_DIAG_LINES) s_diag_n++;
@@ -201,6 +232,7 @@ int ble_diag_dump(char *out, size_t len)
     portENTER_CRITICAL(&s_diag_mux);
     memcpy(copy, s_diag, sizeof(copy));
     n = s_diag_n; head = s_diag_head;
+    if (s_diag_magic != DIAG_MAGIC || head < 0 || head >= BLE_DIAG_LINES || n < 0 || n > BLE_DIAG_LINES) n = head = 0;
     portEXIT_CRITICAL(&s_diag_mux);
     size_t pos = 0;
     out[0] = 0;
@@ -537,7 +569,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 static void on_sync(void)
 {
     int rc = ble_hs_util_ensure_addr(0);
-    assert(rc == 0);
+    if (rc) { ble_diag("ERREUR adresse rc=%d", rc); return; }   /* pas d'assert : pas de reboot */
     /* Adresse aléatoire STATIQUE dérivée de la MAC (stable entre les boots) :
      * une identité que l'iPhone n'a jamais vue, sans cache ni ancienne clé
      * liés à l'adresse publique utilisée par les firmwares précédents. */
@@ -552,7 +584,7 @@ static void on_sync(void)
     } else {
         ESP_LOGW(TAG, "adresse statique refusée rc=%d, adresse publique", rc);
         rc = ble_hs_id_infer_auto(0, &s_own_addr_type);
-        assert(rc == 0);
+        if (rc) { ble_diag("ERREUR adresse auto rc=%d", rc); return; }
     }
     ble_hs_id_copy_addr(s_own_addr_type == BLE_OWN_ADDR_RANDOM ? BLE_ADDR_RANDOM : BLE_ADDR_PUBLIC,
                         s_addr, NULL);
@@ -577,10 +609,11 @@ static void host_task(void *param)
 esp_err_t ble_start(void)
 {
     if (s_running) return ESP_OK;
-    ble_diag("démarrage BLE");
+    ble_diag("démarrage BLE (bloc %u Ko)", (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
     esp_err_t err = nimble_port_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "nimble_port_init: %s", esp_err_to_name(err));
+        ble_diag("ERREUR init BLE 0x%x", err);
         return err;
     }
 
@@ -649,7 +682,12 @@ void ble_stop(void)
         ancs_host_deinit();
         nimble_port_deinit();             /* désactive et libère le contrôleur */
     } else {
+        /* pile toujours en place : ne pas la croire arrêtée, sinon le prochain
+         * nimble_port_init() repartirait sur une pile initialisée */
         ESP_LOGE(TAG, "nimble_port_stop rc=%d", rc);
+        ble_diag("ERREUR arrêt BLE rc=%d", rc);
+        s_stopping = false;
+        return;
     }
     s_running = false;
     s_stopping = false;

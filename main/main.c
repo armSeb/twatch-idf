@@ -29,6 +29,7 @@
 #include "ble.h"
 #include "ota.h"
 #include "blesync.h"
+#include "crashlog.h"
 #include "ancs.h"
 #include "notif_store.h"
 
@@ -293,6 +294,8 @@ void app_main(void)
     ESP_ERROR_CHECK(power_init());
     if (wclock_init() != ESP_OK) ESP_LOGE(TAG, "RTC indisponible");
 #endif
+    ble_diag_boot();                    /* journal BLE gardé après un plantage */
+    crashlog_init();
     ancs_module_init();
 #if !TW_DIAG_BLE_ONLY
     ESP_ERROR_CHECK(display_init());
