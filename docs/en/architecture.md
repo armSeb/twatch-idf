@@ -88,6 +88,10 @@ stack off between short **fetches**:
    one), `ble_stop()` turns the controller off. A fetch is abandoned after 45 s if the
    iPhone does not show up, and capped at 2 minutes otherwise.
 
+The stack starts at full CPU speed, kept until the link is encrypted (8 s at most): started
+from a timer with the screen off (CPU at 10 MHz, PLL off after light sleep), the iPhone could
+not establish the link. After 6 failed attempts within a fetch the stack is restarted once.
+
 Trade-offs: notifications arrive up to one interval late, and calls ring only if they
 happen during a fetch. The session logic is tested on PC (`host_tests/test_sync.c`) with a
 simulated stack and timers.

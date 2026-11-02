@@ -32,6 +32,7 @@
 #define SESSION_MAX_MS   120000   /* plafond d'une relève sans écran qui la retient */
 #define HOLD_LINGER_MS   20000    /* garder la liaison un peu après la fermeture d'un écran */
 #define FLUSH_MS         1500     /* regroupement des alertes */
+#define FAILS_RESTART    6        /* échecs d'établissement avant de relancer la pile */
 
 extern bool ancs_idle(void);     /* ancs.c (ancs.h tire tout NimBLE) */
 extern bool ancs_ready(void);
@@ -42,6 +43,7 @@ static int64_t  s_t0, s_ready_t, s_last_notif_t, s_release_t;
 static int64_t  s_last_ok_t = -1;
 static int      s_holds;
 static uint32_t s_pending_hash;
+static bool     s_restarted;     /* pile déjà relancée pendant cette relève */
 
 static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 
@@ -90,6 +92,7 @@ static void session_begin(void)
     s_session = true;
     s_t0 = now_ms();
     s_ready_t = s_last_notif_t = 0;
+    s_restarted = false;
     ESP_LOGI(TAG, "relève");
     ble_start();
     esp_timer_start_periodic(s_tick, TICK_MS * 1000);
@@ -123,6 +126,14 @@ static void tick(void)
     ble_get_info(&bi);
     if (bi.state == BLE_ST_READY && !s_ready_t) s_ready_t = t;
 
+    /* l'iPhone tente et échoue en boucle : une relance complète de la pile */
+    if (!s_ready_t && !s_restarted && ble_conn_fails() >= FAILS_RESTART) {
+        s_restarted = true;
+        ble_diag("relance BLE (%u échecs)", (unsigned)ble_conn_fails());
+        ble_stop();
+        ble_start();
+        return;
+    }
     if (s_holds > 0 || (s_release_t && t - s_release_t < HOLD_LINGER_MS)) return;   /* écran en cours */
     if (!s_ready_t) {
         if (t - s_t0 > CONNECT_MAX_MS) session_end(false);

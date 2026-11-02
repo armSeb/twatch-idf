@@ -35,6 +35,7 @@ void ble_diag_boot(void);           /* au démarrage : garde le journal après u
 esp_err_t ble_start(void);              /* init + démarrage de la pile */
 void      ble_stop(void);               /* arrêt complet (contrôleur off) */
 bool      ble_running(void);
+uint32_t  ble_conn_fails(void);         /* échecs d'établissement depuis ble_start() */
 void      ble_get_info(ble_info_t *out);
 void      ble_set_battery(uint8_t pct); /* thread-safe */
 void      ble_forget_all(void);         /* thread-safe : efface les bonds, déconnecte */

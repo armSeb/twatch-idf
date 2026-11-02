@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "lvgl.h"
+#include "src/display/lv_display_private.h"   /* act_scr / prev_scr / scr_to_load */
 #include "fonts/fonts.h"
 #include "face_classic.h"
 #include "face_pub.h"
@@ -102,6 +103,37 @@ static void gesture_cb(lv_event_t *e);
 static void bubble(lv_obj_t *o)
 {
     lv_obj_add_flag(o, LV_OBJ_FLAG_GESTURE_BUBBLE);
+}
+
+/* Changement d'écran animé en cours : LVGL garde l'ancien écran (prev_scr)
+ * et l'anime jusqu'au bout. Le détruire avant la fin (extinction, appui
+ * bouton, libération d'un groupe pendant les 200 ms d'animation) laisse
+ * LVGL écrire dans de la mémoire libérée → tas corrompu, plantage plus tard
+ * dans un realloc. On termine donc net toute animation avant de détruire
+ * un écran. */
+static void scr_anim_settle(void)
+{
+    lv_display_t *d = lv_display_get_default();
+    if (!d || (!d->prev_scr && !d->scr_to_load)) return;
+    lv_obj_t *scr[3] = { d->prev_scr, d->scr_to_load, d->act_scr };
+    for (int i = 0; i < 3; i++) {
+        if (!scr[i]) continue;
+        lv_anim_delete(scr[i], NULL);
+        lv_obj_set_pos(scr[i], 0, 0);
+        lv_obj_remove_local_style_prop(scr[i], LV_STYLE_OPA, 0);
+    }
+    if (d->scr_to_load) d->act_scr = d->scr_to_load;   /* animation pas encore démarrée */
+    d->prev_scr = NULL;
+    d->scr_to_load = NULL;
+    d->draw_prev_over_act = false;
+    d->del_prev = false;
+    if (d->act_scr) lv_obj_invalidate(d->act_scr);
+}
+
+static void scr_delete(lv_obj_t *o)
+{
+    scr_anim_settle();
+    lv_obj_delete(o);
 }
 
 static lv_obj_t *mk_screen(void)
@@ -282,6 +314,7 @@ static void show(scr_id_t id, lv_screen_load_anim_t anim)
     if (id == SCR_SET_BT) { menu_bt_refresh(); lv_obj_add_flag(m_confirm, LV_OBJ_FLAG_HIDDEN); }
     if (id == SCR_WATCH) { watch_update_time(true); watch_refresh_status(); }
     s_cur = id;
+    scr_anim_settle();                                 /* jamais deux animations empilées */
     if (!display_is_on() || lv_screen_active() == s_scr[id]) anim = LV_SCR_LOAD_ANIM_NONE;
     if (anim == LV_SCR_LOAD_ANIM_NONE) lv_screen_load(s_scr[id]);
     else lv_screen_load_anim(s_scr[id], anim, ANIM_MS, 0, false);
@@ -808,6 +841,7 @@ static void relang_async(void *arg)
 {
     scr_id_t back = s_cur;
     lv_obj_t *tmp = lv_obj_create(NULL);
+    scr_anim_settle();
     lv_screen_load(tmp);
     s_cur = SCR_WATCH;                       /* plus aucun groupe « affiché » */
     for (int g = G_MENU; g <= G_APP; g++) release_group(g);
@@ -817,7 +851,7 @@ static void relang_async(void *arg)
     if (pa_timer) { lv_timer_delete(pa_timer); pa_timer = NULL; }
     static const scr_id_t perm[] = { SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_POWER, SCR_PAIR, SCR_ABOUT };
     for (size_t i = 0; i < sizeof(perm) / sizeof(perm[0]); i++) {
-        if (s_scr[perm[i]]) { lv_obj_delete(s_scr[perm[i]]); s_scr[perm[i]] = NULL; }
+        if (s_scr[perm[i]]) { scr_delete(s_scr[perm[i]]); s_scr[perm[i]] = NULL; }
     }
     w_classic = w_pub = w_dnd = NULL;
     l_dirty = true;
@@ -830,7 +864,7 @@ static void relang_async(void *arg)
     build_pair();
     build_about();
     show(back, LV_SCR_LOAD_ANIM_NONE);       /* reconstruit le groupe réglages */
-    lv_obj_delete(tmp);
+    scr_delete(tmp);
 }
 
 static void menu_lang_cb(lv_event_t *ev)
@@ -1855,7 +1889,7 @@ static void build_launcher(void)
 static void release_launcher(void)
 {
     if (!s_scr[SCR_LAUNCHER] || s_cur == SCR_LAUNCHER) return;
-    lv_obj_delete(s_scr[SCR_LAUNCHER]);
+    scr_delete(s_scr[SCR_LAUNCHER]);
     s_scr[SCR_LAUNCHER] = NULL;
 }
 
@@ -1991,7 +2025,7 @@ static void build_quick(void)
 static void release_quick(void)
 {
     if (!s_scr[SCR_QUICK] || s_cur == SCR_QUICK) return;
-    lv_obj_delete(s_scr[SCR_QUICK]);
+    scr_delete(s_scr[SCR_QUICK]);
     s_scr[SCR_QUICK] = NULL;
     q_info = q_bri = NULL;
     memset(q_tile, 0, sizeof(q_tile));
@@ -2016,7 +2050,7 @@ static void app_drop_screen(void)
 {
     if (!s_scr[SCR_APP]) return;
     if (s_app_cur && s_app_cur->destroy) s_app_cur->destroy();
-    lv_obj_delete(s_scr[SCR_APP]);
+    scr_delete(s_scr[SCR_APP]);
     s_scr[SCR_APP] = NULL;
 }
 
@@ -2038,8 +2072,9 @@ void app_open(const app_t *a)
         s_app_cur = a;
         app_build(a);
         if (a->on_show) a->on_show();
+        scr_anim_settle();
         lv_screen_load(s_scr[SCR_APP]);
-        lv_obj_delete(old);
+        scr_delete(old);
         return;
     }
     if (s_app_cur != a) app_drop_screen();   /* vue d'une autre app, en réserve */
@@ -2112,7 +2147,7 @@ static void release_menu(void)
     if (!s_scr[SCR_MENU] || is_menu_group(s_cur)) return;
     static const scr_id_t grp[] = { SCR_MENU, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT, SCR_OTA };
     for (size_t i = 0; i < sizeof(grp) / sizeof(grp[0]); i++) {
-        if (s_scr[grp[i]]) { lv_obj_delete(s_scr[grp[i]]); s_scr[grp[i]] = NULL; }
+        if (s_scr[grp[i]]) { scr_delete(s_scr[grp[i]]); s_scr[grp[i]] = NULL; }
     }
     /* plus aucun pointeur vers des objets détruits */
     m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = m_bm_lang = NULL;
@@ -2126,7 +2161,7 @@ static void release_media(void)
 {
     if (!s_scr[SCR_MEDIA] || s_cur == SCR_MEDIA) return;
     if (mu_timer) { lv_timer_delete(mu_timer); mu_timer = NULL; }
-    lv_obj_delete(s_scr[SCR_MEDIA]);
+    scr_delete(s_scr[SCR_MEDIA]);
     s_scr[SCR_MEDIA] = NULL;
     mu_box = mu_empty = mu_player = mu_title = mu_artist = mu_album = NULL;
     mu_bar = mu_pos = mu_dur = mu_play_lbl = mu_vol = NULL;
@@ -2149,6 +2184,7 @@ void ui_release_idle(void)
 {
     /* une animation de changement d'écran en cours garde l'ancien écran
      * affiché : on la termine avant de libérer quoi que ce soit */
+    scr_anim_settle();
     if (s_scr[s_cur] && lv_screen_active() != s_scr[s_cur]) lv_screen_load(s_scr[s_cur]);
     for (int g = G_MENU; g <= G_APP; g++) release_group(g);
 }

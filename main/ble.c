@@ -18,6 +18,10 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+#include "esp_timer.h"
+#include "esp_private/esp_clk.h"
+#include "freertos/FreeRTOS.h"
+#include "power.h"
 
 static const char *TAG = "ble";
 
@@ -77,6 +81,45 @@ static bool    s_cut_noenc;        /* coupure « pas chiffré » : pause avant r
  * qu'au bout de 30 s. On coupe plus tôt : l'iPhone se reconnecte aussitôt. */
 #define ENC_WATCHDOG_MS 8000
 static struct ble_npl_event s_ev_batt, s_ev_forget, s_ev_pair;
+static volatile uint32_t s_conn_fails;   /* échecs d'établissement depuis ble_start() */
+
+/* Pleine vitesse pendant le démarrage de la pile et jusqu'au chiffrement.
+ * En économie d'énergie, ble_start() part d'un timer, écran éteint, CPU à
+ * 10 MHz sur le quartz et PLL coupée par le light sleep : c'est la seule
+ * différence avec un démarrage « écran allumé » (boot, interrupteur), et
+ * l'iPhone n'arrivait plus à établir la liaison (échec immédiat, en boucle).
+ * Relâché au chiffrement, ou au plus tard BOOST_MS après. */
+#define BOOST_MS       8000
+#define BOOST_FAIL_MS  3000
+static portMUX_TYPE s_boost_mux = portMUX_INITIALIZER_UNLOCKED;
+static bool s_boost;
+static esp_timer_handle_t s_boost_t;
+
+static void boost_off(void)
+{
+    portENTER_CRITICAL(&s_boost_mux);
+    bool rel = s_boost;
+    s_boost = false;
+    portEXIT_CRITICAL(&s_boost_mux);
+    if (rel) power_hold_active(false);
+}
+
+static void boost_t_cb(void *arg) { boost_off(); }
+
+static void boost_on(uint32_t ms)
+{
+    if (!s_boost_t) {
+        const esp_timer_create_args_t a = { .callback = boost_t_cb, .name = "ble_boost" };
+        if (esp_timer_create(&a, &s_boost_t) != ESP_OK) return;
+    }
+    portENTER_CRITICAL(&s_boost_mux);
+    bool acq = !s_boost;
+    s_boost = true;
+    portEXIT_CRITICAL(&s_boost_mux);
+    if (acq) power_hold_active(true);
+    esp_timer_stop(s_boost_t);
+    esp_timer_start_once(s_boost_t, (uint64_t)ms * 1000);
+}
 
 static int gap_event(struct ble_gap_event *event, void *arg);
 static void adv_start(bool fast, uint32_t fast_ms);
@@ -423,6 +466,8 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         } else {
             ESP_LOGW(TAG, "échec connexion status=%d", event->connect.status);
             ble_diag("échec conn st=%d", event->connect.status);
+            s_conn_fails++;
+            boost_on(BOOST_FAIL_MS);
             /* laisser la pile libérer la connexion avortée avant de republier */
             ble_npl_callout_reset(&s_co_readv, ble_npl_time_ms_to_ticks32(300));
         }
@@ -454,6 +499,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_ENC_CHANGE:
         if (event->enc_change.status == 0) {
             ESP_LOGI(TAG, "lien chiffré");
+            boost_off();
             ble_npl_callout_stop(&s_co_enc);
             ble_npl_callout_stop(&s_co_sec);
             int ms = (int)((esp_timer_get_time() - s_conn_t0_us) / 1000);
@@ -609,9 +655,13 @@ static void host_task(void *param)
 esp_err_t ble_start(void)
 {
     if (s_running) return ESP_OK;
-    ble_diag("démarrage BLE (bloc %u Ko)", (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+    unsigned mhz = (unsigned)(esp_clk_cpu_freq() / 1000000);
+    boost_on(BOOST_MS);
+    s_conn_fails = 0;
+    ble_diag("démarrage BLE (bloc %u Ko, %u MHz)", (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024), mhz);
     esp_err_t err = nimble_port_init();
     if (err != ESP_OK) {
+        boost_off();
         ESP_LOGE(TAG, "nimble_port_init: %s", esp_err_to_name(err));
         ble_diag("ERREUR init BLE 0x%x", err);
         return err;
@@ -691,12 +741,15 @@ void ble_stop(void)
     }
     s_running = false;
     s_stopping = false;
+    boost_off();
     s_conn = BLE_HS_CONN_HANDLE_NONE;
     s_itvl = s_lat = s_tmo = 0;
     set_state(BLE_ST_OFF);
 }
 
 bool ble_running(void) { return s_running; }
+
+uint32_t ble_conn_fails(void) { return s_conn_fails; }
 
 void ble_get_info(ble_info_t *o)
 {

@@ -92,6 +92,11 @@ pile entre de courtes **relèves** :
    après sa fermeture), `ble_stop()` coupe le contrôleur. Une relève est abandonnée après
    45 s si l'iPhone ne vient pas, et plafonnée à 2 minutes sinon.
 
+La pile démarre à pleine vitesse CPU, gardée jusqu'au chiffrement (8 s au plus) : lancée
+par un timer écran éteint (CPU à 10 MHz, PLL coupée après le light sleep), l'iPhone
+n'arrivait pas à établir la liaison. Après 6 échecs pendant une relève, la pile est relancée
+une fois.
+
 Contreparties : les notifications arrivent avec au plus un intervalle de retard, et les
 appels ne sonnent que s'ils tombent pendant une relève. La logique des relèves est testée
 sur PC (`host_tests/test_sync.c`) avec une pile et des timers simulés.

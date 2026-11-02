@@ -2,6 +2,25 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.16.2 — 2026-11-02
+
+- **Fixed random crashes** (heap corruption reported later in a `realloc`): a screen could
+  be freed while its slide animation was still running (button pressed or screen turned
+  off right after a swipe, a notification arriving mid-animation…); LVGL then kept
+  animating freed memory. Any running screen animation is now finished before a screen is
+  freed or another one is loaded. Found with a randomized UI test under AddressSanitizer.
+- **Battery saver**: the iPhone could not re-establish the link after a fetch started with
+  the screen off (immediate connection failures in a loop). The Bluetooth stack now starts
+  at full CPU speed and keeps it until the link is encrypted (8 s at most); after 6 failed
+  attempts in a fetch, the stack is restarted once.
+- Crash summary in *About* shows the callers instead of the abort frames; the BLE log shows
+  the CPU frequency when the stack starts.
+
+## 0.16.1 — 2026-10-31
+
+- Last crash summary (task, reason, backtrace) in *Settings › About*; BLE log kept across a
+  crash restart.
+
 ## 0.16.0 — 2026-10-31
 
 - **Battery saver** (*Settings › Bluetooth*): the radio stays off and the watch fetches

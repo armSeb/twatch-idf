@@ -33,12 +33,15 @@ static void pump(void)
 }
 
 /* ---- fausse pile BLE ---- */
+static uint32_t FAILS;          /* échecs d'établissement simulés */
 static bool RUN; static int STARTS, STOPS; static ble_state_t ST = BLE_ST_OFF;
 static bool IPHONE = true;      /* l'iPhone se reconnecte-t-il ? */
 static int64_t RUN_T;
-esp_err_t ble_start(void) { if (!RUN) { RUN = true; STARTS++; RUN_T = g_fake_time_us; ST = BLE_ST_ADVERTISING; } return 0; }
+esp_err_t ble_start(void) { if (!RUN) { RUN = true; STARTS++; FAILS = 0; RUN_T = g_fake_time_us; ST = BLE_ST_ADVERTISING; } return 0; }
 void ble_stop(void) { if (RUN) { RUN = false; STOPS++; ST = BLE_ST_OFF; ns_invalidate_uids(); } }
 bool ble_running(void) { return RUN; }
+uint32_t ble_conn_fails(void) { return FAILS; }
+void ble_diag(const char *fmt, ...) { (void)fmt; }
 void ble_get_info(ble_info_t *o) { memset(o, 0, sizeof(*o)); o->state = ST; }
 static bool IDLE = true;
 bool ancs_idle(void) { return ST == BLE_ST_READY && IDLE; }
@@ -138,6 +141,21 @@ int main(void)
     CHECK(RUN);
     run_ms(15000);
     CHECK(!RUN);
+
+    /* l'iPhone échoue en boucle à établir la liaison : une seule relance de la pile */
+    run_ms(5 * 60000);
+    {
+        int st0 = STARTS, sp0 = STOPS;
+        IPHONE = false;
+        run_ms(5 * 60000);                         /* nouvelle relève */
+        CHECK(RUN && STARTS == st0 + 1);
+        FAILS = 6; run_ms(1500);
+        CHECK(RUN && STARTS == st0 + 2 && STOPS == sp0 + 1);  /* relancée */
+        FAILS = 9; run_ms(3000);
+        CHECK(RUN && STARTS == st0 + 2);           /* pas une deuxième fois */
+        IPHONE = true; run_ms(15000);
+        CHECK(!RUN);                               /* puis relève normale */
+    }
 
     /* mise à jour Wi-Fi en cours : pas de relève */
     OTA = true;

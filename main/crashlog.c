@@ -29,7 +29,12 @@ void crashlog_init(void)
                      (const char *)sm.app_elf_sha256, why[0] ? why : "?",
                      (unsigned long)sm.exc_pc, (unsigned long)sm.ex_info.exc_cause,
                      (unsigned long)sm.ex_info.exc_vaddr);
-    for (uint32_t i = 0; i < sm.exc_bt_info.depth && i < 8 && n > 0 && n < (int)sizeof(s_txt); i++)
+    /* assert/abort : les 3 premiers niveaux sont panic_abort, esp_system_abort
+     * et __assert_func/abort, sans intérêt ; on montre plutôt les appelants */
+    uint32_t i0 = (strncmp(why, "assert", 6) == 0 || strncmp(why, "abort", 5) == 0) &&
+                  sm.exc_bt_info.depth > 6 ? 3 : 0;
+    if (i0 && n > 0 && n < (int)sizeof(s_txt)) n += snprintf(s_txt + n, sizeof(s_txt) - n, " …");
+    for (uint32_t i = i0; i < sm.exc_bt_info.depth && i < i0 + 12 && n > 0 && n < (int)sizeof(s_txt); i++)
         n += snprintf(s_txt + n, sizeof(s_txt) - n, " %08lx", (unsigned long)sm.exc_bt_info.bt[i]);
     if (sm.exc_bt_info.corrupted && n > 0 && n < (int)sizeof(s_txt))
         snprintf(s_txt + n, sizeof(s_txt) - n, " (pile corrompue)");
