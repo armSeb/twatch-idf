@@ -11,7 +11,7 @@ All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
   freed or another one is loaded. Found with a randomized UI test under AddressSanitizer.
 - **Battery saver**: the iPhone could not re-establish the link after a fetch started with
   the screen off (immediate connection failures in a loop). The Bluetooth stack now starts
-  at full CPU speed and keeps it until the link is encrypted (8 s at most); after 6 failed
+  with the CPU at 80 MHz (PLL on) and keeps it until the link is encrypted (8 s at most); after 6 failed
   attempts in a fetch, the stack is restarted once.
 - Crash summary in *About* shows the callers instead of the abort frames; the BLE log shows
   the CPU frequency when the stack starts.

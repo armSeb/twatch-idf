@@ -21,7 +21,7 @@
 #include "esp_timer.h"
 #include "esp_private/esp_clk.h"
 #include "freertos/FreeRTOS.h"
-#include "power.h"
+#include "esp_pm.h"
 
 static const char *TAG = "ble";
 
@@ -83,7 +83,7 @@ static bool    s_cut_noenc;        /* coupure « pas chiffré » : pause avant r
 static struct ble_npl_event s_ev_batt, s_ev_forget, s_ev_pair;
 static volatile uint32_t s_conn_fails;   /* échecs d'établissement depuis ble_start() */
 
-/* Pleine vitesse pendant le démarrage de la pile et jusqu'au chiffrement.
+/* 80 MHz (PLL allumée) pendant le démarrage de la pile et jusqu'au chiffrement.
  * En économie d'énergie, ble_start() part d'un timer, écran éteint, CPU à
  * 10 MHz sur le quartz et PLL coupée par le light sleep : c'est la seule
  * différence avec un démarrage « écran allumé » (boot, interrupteur), et
@@ -94,6 +94,7 @@ static volatile uint32_t s_conn_fails;   /* échecs d'établissement depuis ble_
 static portMUX_TYPE s_boost_mux = portMUX_INITIALIZER_UNLOCKED;
 static bool s_boost;
 static esp_timer_handle_t s_boost_t;
+static esp_pm_lock_handle_t s_boost_lock;   /* APB max = CPU 80 MHz, PLL allumée */
 
 static void boost_off(void)
 {
@@ -101,7 +102,7 @@ static void boost_off(void)
     bool rel = s_boost;
     s_boost = false;
     portEXIT_CRITICAL(&s_boost_mux);
-    if (rel) power_hold_active(false);
+    if (rel && s_boost_lock) esp_pm_lock_release(s_boost_lock);
 }
 
 static void boost_t_cb(void *arg) { boost_off(); }
@@ -112,11 +113,12 @@ static void boost_on(uint32_t ms)
         const esp_timer_create_args_t a = { .callback = boost_t_cb, .name = "ble_boost" };
         if (esp_timer_create(&a, &s_boost_t) != ESP_OK) return;
     }
+    if (!s_boost_lock && esp_pm_lock_create(ESP_PM_APB_FREQ_MAX, 0, "ble_boost", &s_boost_lock) != ESP_OK) return;
     portENTER_CRITICAL(&s_boost_mux);
     bool acq = !s_boost;
     s_boost = true;
     portEXIT_CRITICAL(&s_boost_mux);
-    if (acq) power_hold_active(true);
+    if (acq) esp_pm_lock_acquire(s_boost_lock);
     esp_timer_stop(s_boost_t);
     esp_timer_start_once(s_boost_t, (uint64_t)ms * 1000);
 }

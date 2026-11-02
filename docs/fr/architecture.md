@@ -92,7 +92,7 @@ pile entre de courtes **relèves** :
    après sa fermeture), `ble_stop()` coupe le contrôleur. Une relève est abandonnée après
    45 s si l'iPhone ne vient pas, et plafonnée à 2 minutes sinon.
 
-La pile démarre à pleine vitesse CPU, gardée jusqu'au chiffrement (8 s au plus) : lancée
+La pile démarre avec le CPU à 80 MHz (PLL allumée), gardé jusqu'au chiffrement (8 s au plus) : lancée
 par un timer écran éteint (CPU à 10 MHz, PLL coupée après le light sleep), l'iPhone
 n'arrivait pas à établir la liaison. Après 6 échecs pendant une relève, la pile est relancée
 une fois.
