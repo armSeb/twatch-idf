@@ -413,13 +413,12 @@ void face_pub_set_status(int pct, bool charging, int link, int notifs)
     lv_obj_set_style_text_color(s_fuel_lbl, (pct <= 15 && !charging) ? C_RED : C_CREAM, 0);
 
     if (link != s_last_link) {
-        static const char *const TXT[] = { "OFF", "CLOSED", "WAIT", "OPEN", "LATER" };
+        static const char *const TXT[] = { "OFF", "CLOSED", "WAIT", "OPEN" };
         lv_color_t lamp, txt;
         switch (link) {
         case PUB_LINK_READY: lamp = C_LAMP_ON; txt = C_CREAM; break;
         case PUB_LINK_WAIT:  lamp = C_AMBER;   txt = C_AMBER; break;
         case PUB_LINK_ADV:   lamp = C_RED;     txt = C_RED;   break;
-        case PUB_LINK_ECO:   lamp = C_DIM;     txt = C_CREAM; break;   /* économie : relève plus tard */
         default:             lamp = C_DIM;     txt = C_DIM;   link = PUB_LINK_OFF; break;
         }
         lv_label_set_text(s_sign_txt, TXT[link]);

@@ -12,7 +12,6 @@ static settings_t s_set = {
     .watchface = 0,
     .notif_wake = true,
     .tap_wake = true,
-    .eco_min = 5,
 };
 
 void settings_load(void)
@@ -29,8 +28,6 @@ void settings_load(void)
     if (nvs_get_u8(h, "nwake", &u8) == ESP_OK) s_set.notif_wake = u8;
     if (nvs_get_u8(h, "dnd", &u8) == ESP_OK) s_set.dnd = u8;
     if (nvs_get_u8(h, "lang", &u8) == ESP_OK && u8 <= 1) s_set.lang = u8;
-    if (nvs_get_u8(h, "beco", &u8) == ESP_OK) s_set.ble_eco = u8;
-    if (nvs_get_u8(h, "bmin", &u8) == ESP_OK) s_set.eco_min = u8;
     if (nvs_get_u8(h, "tap", &u8) == ESP_OK) s_set.tap_wake = u8;
     nvs_close(h);
     ESP_LOGI(TAG, "lum=%u veille=%us vib=%d bt=%d tz=%+d min", s_set.brightness,
@@ -50,8 +47,6 @@ void settings_save(void)
     nvs_set_u8(h, "nwake", s_set.notif_wake);
     nvs_set_u8(h, "dnd", s_set.dnd);
     nvs_set_u8(h, "lang", s_set.lang);
-    nvs_set_u8(h, "beco", s_set.ble_eco);
-    nvs_set_u8(h, "bmin", s_set.eco_min);
     nvs_set_u8(h, "tap", s_set.tap_wake);
     nvs_commit(h);
     nvs_close(h);

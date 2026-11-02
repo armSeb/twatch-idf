@@ -21,4 +21,3 @@ host_tests/out/
 .DS_Store
 host_tests/test_host
 host_tests/test_gauge
-host_tests/test_sync

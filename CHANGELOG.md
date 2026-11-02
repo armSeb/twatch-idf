@@ -2,6 +2,15 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.17.0 — 2026-11-02
+
+- **Battery saver removed** (back to the permanent link of 0.15): in practice iOS did not
+  come back to a watch that had left on its own, so fetches rarely connected and
+  notifications did not alert. Airplane mode remains for long periods without the iPhone.
+- Keeps the 0.16.x crash fixes and diagnostics: screen animations finished before a
+  screen is freed; heap poisoning and integrity checks; crash summary with the callers and
+  the last UI actions in *About*.
+
 ## 0.16.3 — 2026-11-02
 
 - Diagnostic build for a remaining crash (corrupted LVGL object tree): heap poisoning
