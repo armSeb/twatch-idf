@@ -68,6 +68,7 @@ static void wake_to_pending_or_home(void);
 static void screen_wake(void)
 {
     if (!display_is_on()) {
+        crashlog_mark('I', 0, 0);
         wclock_resync();                 /* l'heure affichée vient de la RTC */
         ui_on_wake();
         display_set_on(true);
@@ -85,8 +86,10 @@ static void handle_axp(void)
             ui_go_home();
             lv_display_trigger_activity(NULL);
         } else {
+            crashlog_mark('K', 1, 0);
             display_set_on(false);
             ui_release_idle();
+            crashlog_heap_check('k');
         }
     }
     if (m & AXP_IRQ_PEK_LONG) {
@@ -200,10 +203,15 @@ static void app_task(void *arg)
         if (display_is_on()) {
             display_perf_tick();
             uint32_t next = lv_timer_handler();
+            static int64_t s_last_hchk;
+            int64_t tn = esp_timer_get_time();
+            if (tn - s_last_hchk > 2000000) { s_last_hchk = tn; crashlog_heap_check('t'); }
             if (lv_display_get_inactive_time(NULL) > ui_timeout_ms()) {
+                crashlog_mark('O', 0, 0);
                 display_set_on(false);
                 ui_go_home_or_app();         /* cadran, ou app active (chrono…) */
                 ui_release_idle();
+                crashlog_heap_check('o');
                 continue;
             }
             wait_ms = (next == LV_NO_TIMER_READY || next > MAX_WAIT_ON_MS) ? MAX_WAIT_ON_MS : next;
@@ -216,8 +224,10 @@ static void app_task(void *arg)
         if (xQueueReceive(s_app_q, &ev, pdMS_TO_TICKS(wait_ms)) == pdTRUE) {
             do {
                 if (!display_is_on() && ev.type < EV_COUNT) g_wake_cnt[ev.type]++;
+                if (ev.type != EV_SYNC && ev.type != EV_TOUCH_INT) crashlog_mark('E', ev.type, ev.a);
                 handle_event(&ev);
             } while (xQueueReceive(s_app_q, &ev, 0) == pdTRUE);
+            if (display_is_on()) crashlog_heap_check('e');
         }
 
         ota_tick();                       /* validation du firmware après 30 s */

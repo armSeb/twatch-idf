@@ -314,6 +314,7 @@ static void show(scr_id_t id, lv_screen_load_anim_t anim)
     if (id == SCR_SET_BT) { menu_bt_refresh(); lv_obj_add_flag(m_confirm, LV_OBJ_FLAG_HIDDEN); }
     if (id == SCR_WATCH) { watch_update_time(true); watch_refresh_status(); }
     s_cur = id;
+    crashlog_mark(anim == LV_SCR_LOAD_ANIM_NONE ? 'S' : 'A', s_cur, id);
     scr_anim_settle();                                 /* jamais deux animations empilées */
     if (!display_is_on() || lv_screen_active() == s_scr[id]) anim = LV_SCR_LOAD_ANIM_NONE;
     if (anim == LV_SCR_LOAD_ANIM_NONE) lv_screen_load(s_scr[id]);
@@ -839,6 +840,7 @@ static void release_group(int g);
 
 static void relang_async(void *arg)
 {
+    crashlog_mark('L', s_cur, 0);
     scr_id_t back = s_cur;
     lv_obj_t *tmp = lv_obj_create(NULL);
     scr_anim_settle();
@@ -2062,6 +2064,7 @@ static void release_app(void)
 
 void app_open(const app_t *a)
 {
+    crashlog_mark('P', app_index(a), s_cur);
     if (!a || app_index(a) < 0) return;
     if (s_cur == SCR_APP) {
         if (s_app_cur == a) return;
@@ -2171,6 +2174,7 @@ static void release_media(void)
 
 static void release_group(int g)
 {
+    crashlog_mark('R', g, s_cur);
     switch (g) {
     case G_MENU:     release_menu(); break;
     case G_MEDIA:    release_media(); break;
@@ -2237,6 +2241,7 @@ void ui_on_wake(void)
 
 bool ui_on_notif(notif_entry_t *e, bool alert)
 {
+    crashlog_mark('N', alert, s_cur);
     l_dirty = true;
     if (s_cur == SCR_LIST) list_rebuild();
     watch_refresh_status();
@@ -2290,6 +2295,7 @@ bool ui_open_pending(void)
 
 void ui_on_notif_removed(uint32_t uid)
 {
+    crashlog_mark('X', 0, s_cur);
     notif_entry_t *e = ns_find_uid(uid);
     uint32_t h = e ? e->hash : 0;
     bool was_call = (s_cur == SCR_CALL && c_uid_valid && c_uid == uid);
@@ -2310,6 +2316,7 @@ void ui_on_notif_removed(uint32_t uid)
 
 void ui_on_ble_state(int st)
 {
+    crashlog_mark('B', st, s_cur);
     if (s_cur == SCR_SET_BT) menu_bt_refresh();
     else if (s_cur == SCR_MENU) menu_refresh_summaries();
     if (st != BLE_ST_READY && st != BLE_ST_SECURED && st != BLE_ST_CONNECTED) {

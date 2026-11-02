@@ -2,6 +2,14 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.16.3 — 2026-11-02
+
+- Diagnostic build for a remaining crash (corrupted LVGL object tree): heap poisoning
+  enabled and the internal heap checked after every event, every 2 s with the screen on
+  and when it turns off, so a corruption stops the watch close to its cause. The crash
+  summary in *About* now ends with the last UI actions before the crash ("Avant : …").
+- Battery saver: the stack starts with the CPU at 80 MHz instead of full speed.
+
 ## 0.16.2 — 2026-11-02
 
 - **Fixed random crashes** (heap corruption reported later in a `realloc`): a screen could
