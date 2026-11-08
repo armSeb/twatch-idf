@@ -32,7 +32,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   window, small seconds), *Pub* (full-screen square, bottle green and brass, harp, FUEL gauge,
   OPEN/CLOSED sign for the phone link) and *Digital*.
 - **Apps**: launcher with *Stopwatch* (laps), *Timer* (beeps and vibrates even with the screen
-  off, then reopens), *Torch* (white/red) and *TV off* (switches off most TVs through the IR
+  off, then reopens), *Torch* (white/red), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and *TV off* (switches off most TVs through the IR
   LED, Europe/USA code sets). A running stopwatch or timer keeps the focus: the screen turns
   off on it and wakes back to it. A small app framework lets you add one in a single file.
 - **Quick controls**: Bluetooth, **Do not disturb**, torch, now playing, brightness.
@@ -58,7 +58,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 |---|---|---|
 | Watch face | swipe ↑ | Notifications (close: ↓ or →) |
 | Watch face | swipe ↓ | Quick controls (close: ↑ or →) |
-| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Battery, Settings |
+| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Carrier, Battery, Settings |
 | Watch face | long press | Choose the watch face |
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |

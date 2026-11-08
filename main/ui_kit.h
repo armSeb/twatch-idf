@@ -30,6 +30,7 @@
 #define SYM_SLIDERS   "\xEF\x87\x9E"   /* U+F1DE */
 #define SYM_GRID      "\xEF\x80\x8A"   /* U+F00A */
 #define SYM_TV        "\xEF\x89\xAC"   /* U+F26C */
+#define SYM_TOWER     "\xEF\x94\x99"   /* U+F519 */
 
 #define UI_ANIM_MS 140
 

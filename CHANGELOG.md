@@ -2,6 +2,13 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.18.0 — 2026-11-08
+
+- New **Carrier** app (RF generator): the ESP32 audio PLL (APLL) output straight on
+  GPIO0 or GPIO1 (CLK_OUT), square wave from 5.31 to 125 MHz, set digit by digit (100 Hz
+  steps), actual programmed frequency shown, automatic stop after 10 minutes. No antenna on
+  those pins: a near-field injector / test signal, with strong odd harmonics.
+
 ## 0.17.0 — 2026-11-02
 
 - **Battery saver removed** (back to the permanent link of 0.15): in practice iOS did not

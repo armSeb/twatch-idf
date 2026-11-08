@@ -35,7 +35,7 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   batterie, guichet date, petite seconde), *Pub* (carré plein écran, vert bouteille et laiton,
   harpe, jauge FUEL, enseigne OPEN/CLOSED pour la liaison iPhone) et *Digital*.
 - **Apps** : lanceur avec *Chrono* (tours), *Minuteur* (bipe et vibre même écran éteint, puis
-  se rouvre), *Lampe* (blanc/rouge) et *TV off* (éteint la plupart des téléviseurs par la LED
+  se rouvre), *Lampe* (blanc/rouge), *Porteuse* (signal HF de test en carré, 5 à 125 MHz, issu de la PLL audio de l'ESP32) et *TV off* (éteint la plupart des téléviseurs par la LED
   infrarouge, codes Europe/USA). Un chrono ou un minuteur en marche garde la main : l'écran
   s'éteint dessus et le réveil y revient. Un petit cadre d'applications permet d'en ajouter
   en un seul fichier.
@@ -65,7 +65,7 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |
