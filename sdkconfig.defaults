@@ -161,5 +161,3 @@ CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 # CONFIG_ESP_EVENT_POST_FROM_IRAM_ISR is not set
 # CONFIG_SPI_MASTER_ISR_IN_IRAM is not set
 
-# Diagnostic (0.16.3) : empoisonnement du tas, vérifié par crashlog_heap_check()
-CONFIG_HEAP_POISONING_COMPREHENSIVE=y

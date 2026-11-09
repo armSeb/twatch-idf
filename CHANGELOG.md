@@ -2,6 +2,14 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.18.1 — 2026-11-09
+
+- **Wi-Fi update could fail with "web server did not start"** (internal RAM too tight,
+  made worse by the heap poisoning of the diagnostic builds): heap poisoning removed (the
+  integrity checks and the crash breadcrumbs stay), fewer server sockets, and a second,
+  leaner attempt if the server still cannot start; the cause and free memory go to the BLE
+  log in *About*.
+
 ## 0.18.0 — 2026-11-08
 
 - New **Carrier** app (RF generator): the ESP32 audio PLL (APLL) output straight on

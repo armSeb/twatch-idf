@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "esp_random.h"
 #include "nvs.h"
@@ -421,7 +422,19 @@ const char *ota_start(void)
     hc.recv_wait_timeout = 10;
     hc.lru_purge_enable = true;        /* Safari ouvre des connexions en avance : on recycle */
     hc.uri_match_fn = httpd_uri_match_wildcard;
-    if (httpd_start(&s_httpd, &hc) != ESP_OK) return N_("Le serveur web n'a pas démarré");
+    hc.max_open_sockets = 4;           /* chaque socket coûte de la RAM interne */
+    esp_err_t he = httpd_start(&s_httpd, &hc);
+    if (he != ESP_OK) {
+        /* note la cause et la mémoire dans le journal (À propos), puis un
+         * second essai plus sobre */
+        ble_diag("OTA serveur web : %s, libre %u Ko, bloc %u Ko", esp_err_to_name(he),
+                 (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                 (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+        hc.stack_size = 4608;
+        hc.max_open_sockets = 2;
+        he = httpd_start(&s_httpd, &hc);
+        if (he != ESP_OK) return N_("Le serveur web n'a pas démarré");
+    }
     static const httpd_uri_t uris[] = {
         { .uri = "/update", .method = HTTP_POST, .handler = update_post },
         { .uri = "/", .method = HTTP_GET, .handler = page_get },
