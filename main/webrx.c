@@ -27,6 +27,7 @@
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
+#include "esp_random.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_transport.h"
@@ -446,17 +447,29 @@ static void server_close(void)
     if (s_par) { esp_transport_destroy(s_par); s_par = NULL; }
 }
 
+/* Message texte en UNE écriture (en-tête + clé de masque + charge masquée).
+ * esp_transport_ws envoie l'en-tête et la charge en deux écritures, donc deux
+ * enregistrements TLS / segments TCP : le serveur OpenWebRX, qui lit son
+ * socket non bloquant par morceaux exacts, perd alors la trame et ferme la
+ * connexion aussitôt (« lecture impossible », 0 octet reçu). */
 static bool ws_text(const char *s)
 {
-    /* esp_transport_ws masque la charge utile SUR PLACE avant l'envoi (puis la
-     * rétablit) : jamais de chaîne en flash ici, on envoie toujours une copie */
-    static char *cp;
-    if (!cp) cp = ps_malloc(512);
-    if (!s_ws || !cp) return false;
-    int n = (int)strlen(s);
-    if (n >= 512) return false;
-    memcpy(cp, s, n + 1);
-    return esp_transport_ws_send_raw(s_ws, WS_TRANSPORT_OPCODES_TEXT | WS_TRANSPORT_OPCODES_FIN, cp, n, 10000) == n;
+    static uint8_t *fr;
+    if (!fr) fr = ps_malloc(520);
+    if (!s_ws || !s_par || !fr) return false;
+    size_t n = strlen(s);
+    if (n > 500) return false;
+    size_t h = 0;
+    fr[h++] = 0x81;                                    /* FIN + texte */
+    if (n < 126) fr[h++] = 0x80 | (uint8_t)n;
+    else { fr[h++] = 0x80 | 126; fr[h++] = (uint8_t)(n >> 8); fr[h++] = (uint8_t)n; }
+    uint32_t key = esp_random();
+    memcpy(fr + h, &key, 4);
+    const uint8_t *m = fr + h;
+    h += 4;
+    for (size_t i = 0; i < n; i++) fr[h + i] = (uint8_t)s[i] ^ m[i & 3];
+    int len = (int)(h + n);
+    return esp_transport_write(s_par, (const char *)fr, len, 10000) == len;
 }
 
 static bool server_connect(void)

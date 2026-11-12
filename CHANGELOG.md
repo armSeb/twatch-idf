@@ -2,6 +2,14 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.21.6 — 2026-11-12
+
+- WebRX: the server closed the connection immediately (0 byte received, TLS "closed by
+  FIN"). `esp_transport_ws` writes a frame's header and payload separately (two TLS records /
+  TCP segments); the OpenWebRX server reads its non-blocking socket in exact-size pieces,
+  loses the frame when the payload is not there yet, and drops the client. Text frames are
+  now built by the watch (header, mask key and masked payload) and sent in a single write.
+
 ## 0.21.5 — 2026-11-12
 
 - WebRX diagnostics: the BLE log keeps 47 characters per line, so the "cut" line was
