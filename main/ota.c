@@ -651,7 +651,10 @@ const char *ota_start(void)
     esp_wifi_set_mode(s_page == OTA_PAGE_WEBRX ? WIFI_MODE_APSTA : WIFI_MODE_AP);
     esp_wifi_set_config(WIFI_IF_AP, &ap);
     if (esp_wifi_start() != ESP_OK) return N_("Le point d'accès n'a pas démarré");
-    if (s_page == OTA_PAGE_WEBRX) scan_networks();
+    if (s_page == OTA_PAGE_WEBRX) {
+        scan_networks();
+        esp_wifi_set_mode(WIFI_MODE_AP);       /* station inutile ensuite : sa RAM est rendue */
+    }
 
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
     hc.stack_size = 6144;
@@ -670,7 +673,12 @@ const char *ota_start(void)
         hc.stack_size = 4608;
         hc.max_open_sockets = 2;
         he = httpd_start(&s_httpd, &hc);
-        if (he != ESP_OK) return N_("Le serveur web n'a pas démarré");
+        if (he != ESP_OK) {
+            ble_diag("OTA serveur web (2e essai) : %s, libre %u Ko, bloc %u Ko", esp_err_to_name(he),
+                     (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                     (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+            return N_("Le serveur web n'a pas démarré");
+        }
     }
     static const httpd_uri_t uris[] = {
         { .uri = "/update", .method = HTTP_POST, .handler = update_post },

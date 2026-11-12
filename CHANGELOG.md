@@ -2,6 +2,13 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.21.1 — 2026-11-12
+
+- WebRX: "Set up" failed with "web server not started" (the access point was up). The app's
+  view and the Wi-Fi station used for the network list kept internal RAM the web server
+  needed: the view is now freed before the access point starts and the station is turned off
+  right after the scan. A second failure is also written to the BLE log with the free memory.
+
 ## 0.21.0 — 2026-11-12
 
 - New **WebRX** app: listens to an OpenWebRX / OpenWebRX+ server over Wi-Fi (`https://`

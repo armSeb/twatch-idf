@@ -2202,7 +2202,10 @@ void app_open_settings_portal(const app_t *a)
     if (idx < 0 || ota_active()) return;
     o_app = idx;
     ota_set_page(OTA_PAGE_WEBRX);
-    show(SCR_OTA, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+    /* sans animation : la vue de l'app est libérée tout de suite, sa RAM
+     * interne revient au serveur web et au Wi-Fi */
+    show(SCR_OTA, LV_SCR_LOAD_ANIM_NONE);
+    release_group(G_APP);
     ota_ui_idle();
     ota_btn_cb(NULL);
 }
