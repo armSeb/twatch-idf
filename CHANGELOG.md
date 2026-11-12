@@ -2,6 +2,17 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.21.4 — 2026-11-12
+
+- WebRX, connection still cut ("read error"): generous timeouts for slow servers (20 s to
+  connect, 8 s between two pieces of a frame, 30 s of silence before giving up, 10 s to
+  send), no Wi-Fi modem sleep while listening (the server closes a client that cannot take
+  its data for 10 s), larger Wi-Fi receive buffers and TCP window, A-MPDU aggregation on
+  receive.
+- WebRX reconnects are spaced out (2, 10, 20, 40 s, then wait for a tap): OpenWebRX+ bans for
+  12 hours an address that reconnects too often. The countdown is shown. The BLE log line
+  of a cut also gives the data received and the Wi-Fi RSSI.
+
 ## 0.21.3 — 2026-11-12
 
 - WebRX: "connection lost" right after connecting. The server sends in 1 KB pieces and the

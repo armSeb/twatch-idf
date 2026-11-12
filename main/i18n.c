@@ -281,6 +281,7 @@ static const tr_t EN[] = {
     { "lecture impossible", "read error" },
     { "plus rien du serveur", "nothing more from the server" },
     { "fermée par le serveur", "closed by the server" },
+    { "Connexion perdue", "Connection lost" },
 };
 
 static int s_lang = LANG_FR;

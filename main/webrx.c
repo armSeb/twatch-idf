@@ -55,7 +55,7 @@ static const char *TAG = "webrx";
 #define TXT_MAX   32768                       /* messages texte plus longs ignorés (liste des modes…) */
 #define BIN_MAX   20480                       /* trame FFT (fft_size jusqu'à 32768) */
 #define NROWS     4
-#define CONNECT_MS 8000
+#define CONNECT_MS 20000                      /* TLS + mise à niveau WebSocket (serveur lent) */
 
 #define BIT_IP    BIT0
 #define BIT_DISC  BIT1
@@ -453,7 +453,7 @@ static bool ws_text(const char *s)
     int n = (int)strlen(s);
     if (n >= 512) return false;
     memcpy(cp, s, n + 1);
-    return esp_transport_ws_send_raw(s_ws, WS_TRANSPORT_OPCODES_TEXT | WS_TRANSPORT_OPCODES_FIN, cp, n, 3000) == n;
+    return esp_transport_ws_send_raw(s_ws, WS_TRANSPORT_OPCODES_TEXT | WS_TRANSPORT_OPCODES_FIN, cp, n, 10000) == n;
 }
 
 static bool server_connect(void)
@@ -656,7 +656,7 @@ static void on_config(cJSON *v)
             char b[160];
             snprintf(b, sizeof b, "{\"type\":\"selectprofile\",\"params\":{\"profile\":\"%s\"}}", s_st.profile);
             s_prof_tried = true;
-            s_prof_wait_us = esp_timer_get_time() + 4000000;
+            s_prof_wait_us = esp_timer_get_time() + 10000000;
             ws_text(b);
             return;
         }
@@ -868,7 +868,7 @@ static void handle_pending(void)
 }
 
 static const char *s_lost;                   /* cause de la dernière coupure (N_) */
-static uint32_t s_frames;
+static uint32_t s_frames, s_bytes;
 
 /* true : fin normale (arrêt demandé) ; false : connexion perdue (s_lost) */
 static bool session(void)
@@ -895,17 +895,18 @@ static bool session(void)
             if (ok) tune_start(true);              /* profil demandé jamais venu : on écoute l'actuel */
         }
         /* délai large : avec le modem sleep et les petits paquets du serveur
-         * (1 Ko), un en-tête WebSocket peut arriver en deux fois à plusieurs
-         * centaines de ms d'écart ; esp_transport_ws traite un en-tête
-         * incomplet à l'échéance comme une erreur fatale */
-        int n = esp_transport_read(s_ws, (char *)rb, RB_LEN, 2500);
+         * (1 Ko) d'un serveur parfois lent, un en-tête WebSocket peut arriver
+         * en deux fois à plusieurs secondes d'écart ; esp_transport_ws traite
+         * un en-tête ou une trame incomplets à l'échéance comme une erreur
+         * fatale */
+        int n = esp_transport_read(s_ws, (char *)rb, RB_LEN, 8000);
         if (n < 0) {
             ESP_LOGW(TAG, "lecture : %d", n);
             s_lost = left ? N_("trame coupée") : N_("lecture impossible");
             return false;
         }
         if (n == 0) {
-            if (esp_timer_get_time() - last_rx > 20LL * 1000000) {      /* serveur muet */
+            if (esp_timer_get_time() - last_rx > 30LL * 1000000) {      /* serveur muet */
                 ESP_LOGW(TAG, "plus rien du serveur");
                 s_lost = N_("plus rien du serveur");
                 return false;
@@ -913,6 +914,7 @@ static bool session(void)
             continue;
         }
         last_rx = esp_timer_get_time();
+        s_bytes += n;
         if (left == 0) {                         /* début de trame */
             opcode = esp_transport_ws_get_read_opcode(s_ws) & 0x0F;
             left = esp_transport_ws_get_read_payload_len(s_ws);
@@ -946,10 +948,13 @@ static bool session(void)
 
 static void net_task(void *arg)
 {
-    int fails = 0;
+    int fails = 0, drops = 0;
     power_set_cpu_max(160);
     esp_wifi_set_mode(WIFI_MODE_STA);
-    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+    /* pas d'économie d'énergie du modem : le serveur envoie en continu
+     * (audio + FFT) et, s'il ne peut plus écrire pendant 10 s parce que la
+     * montre ne reçoit pas assez vite, il coupe la connexion */
+    esp_wifi_set_ps(WIFI_PS_NONE);
     if (esp_wifi_start() != ESP_OK) set_state(WRX_FAIL, N_("Erreur Wi-Fi"), "");
     else while (!s_quit) {
         bool ok = false;
@@ -958,19 +963,38 @@ static void net_task(void *arg)
         if (ok && !s_quit && server_connect()) {
             fails = 0;
             s_lost = NULL;
-            s_frames = 0;
+            s_frames = s_bytes = 0;
             int64_t t0 = esp_timer_get_time();
             bool done = session();
+            long dur = (long)((esp_timer_get_time() - t0) / 1000000);
             if (!done) {
-                ble_diag("WebRX coupé : %s après %lu trames, %ld s, interne %u Ko", s_lost ? s_lost : "?",
-                         (unsigned long)s_frames, (long)((esp_timer_get_time() - t0) / 1000000),
-                         (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
+                wifi_ap_record_t ap = { 0 };
+                esp_wifi_sta_get_ap_info(&ap);
+                ble_diag("WebRX coupé : %s, %lu trames %lu Ko en %ld s, RSSI %d, interne %u Ko",
+                         s_lost ? s_lost : "?", (unsigned long)s_frames, (unsigned long)(s_bytes / 1024), dur,
+                         ap.rssi, (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
             }
             s_audio_on = false;
             server_close();
             if (done) break;
-            if (!s_quit) set_state(WRX_SERVER, N_("Connexion perdue, reprise…"), s_lost ? _(s_lost) : "");
-            vTaskDelay(pdMS_TO_TICKS(500));
+            if (s_quit) break;
+            /* reprises espacées : OpenWebRX+ bannit 12 h une adresse qui se
+             * reconnecte trop souvent (« robot ») ; après 4 coupures rapides
+             * de suite, on attend le bouton */
+            drops = dur >= 60 ? 1 : drops + 1;
+            if (drops > 4) {
+                set_state(WRX_FAIL, N_("Connexion perdue"), s_lost ? _(s_lost) : "");
+                xEventGroupWaitBits(s_evg, BIT_RETRY | BIT_QUIT, pdTRUE, pdFALSE, portMAX_DELAY);
+                drops = 0;
+                continue;
+            }
+            int wait = drops <= 1 ? 2 : 10 << (drops - 2);           /* 2, 10, 20, 40 s */
+            for (int t = wait; t > 0 && !s_quit; t--) {
+                set_state(WRX_SERVER, N_("Connexion perdue, reprise…"), s_lost ? _(s_lost) : "");
+                lock(); s_info.retry_s = t; unlock();
+                if (xEventGroupWaitBits(s_evg, BIT_RETRY | BIT_QUIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(1000)) & BIT_RETRY) break;
+            }
+            lock(); s_info.retry_s = 0; unlock();
             continue;
         }
         s_audio_on = false;

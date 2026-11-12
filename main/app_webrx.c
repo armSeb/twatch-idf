@@ -269,7 +269,8 @@ static void status_draw(void)
         else snprintf(d + n, sizeof d - n, "%s", _("toucher pour réessayer"));
     } else if (m_i.state != WRX_LIVE) {
         snprintf(t, sizeof t, "%s", msg ? msg : "");
-        snprintf(d, sizeof d, "%s", m_i.detail);
+        int n = snprintf(d, sizeof d, "%s%s", m_i.detail, m_i.detail[0] && m_i.retry_s > 0 ? " · " : "");
+        if (m_i.retry_s > 0) snprintf(d + n, sizeof d - n, _("nouvel essai dans %d s"), m_i.retry_s);
     } else if (m_i.msg) {                               /* erreur du récepteur, en direct */
         col = C_WARN;
         snprintf(t, sizeof t, "%s", msg);
