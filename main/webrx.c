@@ -111,6 +111,8 @@ static bool s_adpcm = true, s_fft_adpcm = true, s_have_cfg, s_started, s_prof_tr
 static int64_t s_prof_wait_us;               /* > 0 : en attente de la config du profil demandé */
 static int64_t s_start_freq;                 /* fréquence / mode de départ du profil */
 static char s_start_mod[16];
+static bool s_backoff;                       /* le serveur a refusé le client (« backoff ») */
+static char s_last_type[20];                 /* type du dernier message texte reçu */
 
 static inline void lock(void)   { xSemaphoreTake(s_mx, portMAX_DELAY); }
 static inline void unlock(void) { xSemaphoreGive(s_mx); }
@@ -880,8 +882,6 @@ static void handle_pending(void)
 
 static const char *s_lost;                   /* cause de la dernière coupure (N_) */
 static uint32_t s_frames, s_bytes;
-static bool s_backoff;                       /* le serveur a refusé le client (« backoff ») */
-static char s_last_type[20];                 /* type du dernier message texte reçu */
 
 /* true : fin normale (arrêt demandé) ; false : connexion perdue (s_lost) */
 static bool session(void)
