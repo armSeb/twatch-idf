@@ -12,6 +12,7 @@ extern const app_t app_lamp;
 extern const app_t app_rfgen;
 extern const app_t app_wifi;
 extern const app_t app_sdr;
+extern const app_t app_webrx;
 #ifndef TW_NO_TVOFF
 extern const app_t app_tvoff;          /* codes TV-B-Gone, CC BY-SA 4.0 */
 #endif
@@ -25,6 +26,7 @@ const app_t *const g_apps[] = {
 #endif
     &app_wifi,
     &app_sdr,
+    &app_webrx,
     &app_rfgen,
 };
 const int g_app_count = sizeof(g_apps) / sizeof(g_apps[0]);

@@ -21,6 +21,7 @@
 #include "i18n.h"
 #include "ota.h"
 #include "ble.h"
+#include "power.h"
 #include "display.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -284,6 +285,7 @@ static bool wifi_up(void)
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_set_country_code("FR", false);    /* canaux 1 à 13 */
     esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, scan_done_handler, NULL, &s_evh);
+    power_set_cpu_max(160);                    /* radio en marche : 80 MHz suffisent écran éteint */
     s_inited = true;
     return true;
 }
@@ -295,6 +297,7 @@ static void wifi_down(void)
     if (s_started) esp_wifi_stop();
     esp_event_handler_instance_unregister(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, s_evh);
     esp_wifi_deinit();
+    power_set_cpu_max(0);
     s_inited = s_started = s_scanning = false;
     free(s_rec);
     s_rec = NULL;

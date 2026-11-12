@@ -18,3 +18,8 @@
 void sdr_mode_boot(void);        /* tout début d'app_main */
 bool sdr_mode_active(void);
 void sdr_mode_reboot(bool sdr);  /* redémarre en mode SDR (true) ou normal */
+
+/* App à rouvrir après le prochain redémarrage logiciel (index dans g_apps) :
+ * set avant esp_restart, lu une fois au démarrage (-1 = aucune). */
+void sdr_mode_set_boot_app(int idx);
+int  sdr_mode_boot_app(void);

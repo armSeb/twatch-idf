@@ -72,6 +72,22 @@ d'ESP-IDF 5.
   8 × 512 points, moyennées) et produit des lignes de 240 colonnes en dBFS ; l'interface les
   dessine dans deux canevas RGB565 en PSRAM avec un plancher de bruit suivi automatiquement.
   Quitter l'app redémarre en mode normal ; écran éteint, la radio est complètement arrêtée.
+- **WebRX** (`app_webrx.c`, `webrx.c`, `webrx_cfg.c`) : client OpenWebRX / OpenWebRX+. Les
+  réseaux Wi-Fi (jusqu'à 3) et l'adresse du serveur se saisissent sur une page servie par la
+  montre (`/webrx`, même point d'accès et même serveur web que la mise à jour ; la session se
+  termine par un redémarrage qui rouvre l'app). `webrx.c` fait tourner une tâche sur le cœur 0 :
+  Wi-Fi station (réseaux connus par ordre de préférence, modem sleep), `wss://` par
+  `esp_transport` (TLS avec le paquet de racines d'ESP-IDF, tampons mbedTLS en PSRAM ;
+  `utilisateur:mot_de_passe@` dans l'adresse devient une authentification HTTP Basic), poignée
+  de main OpenWebRX, `connectionproperties` (audio à 12 kHz pour tous les modes),
+  `selectprofile` et `dspcontrol`. La liste `modes` du serveur (modes ajoutés compris) donne
+  les modes écoutables et leur bande passante ; les modes numériques passent par leur mode
+  sous-jacent. Les trames audio (IMA-ADPCM avec mots de synchronisation) sont décodées dans un
+  tampon de 2,7 s en PSRAM ; une seconde tâche sur le cœur 1 garde ~0,4 s d'avance et
+  alimente l'ampli I2S, en sautant ou doublant un échantillon par bloc de 20 ms pour suivre
+  l'horloge du serveur. Les trames FFT donnent la mini-waterfall, seulement écran allumé. Le
+  CPU est plafonné à 160 MHz (80 MHz écran éteint) tant que la radio tourne, et le Bluetooth
+  n'est suspendu que si le pilote Wi-Fi manque de RAM interne.
 - **Changer de langue** reconstruit tous les écrans sur place, sans redémarrer.
 - Les objets LVGL sont alloués sur le tas ; les allocations de plus de 4 Ko vont en PSRAM, la
   RAM interne est gardée pour les piles, les tampons DMA et la radio.

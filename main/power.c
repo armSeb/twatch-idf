@@ -76,6 +76,25 @@ void power_hold_active(bool hold)
 #endif
 }
 
+/* Plafond du CPU. Sur ESP32, avec un maximum de 240 MHz, le mode « APB max »
+ * (exigé par le Wi-Fi, l'I2S…) tourne lui aussi à 240 MHz : la radio en marche
+ * garde le CPU à fond même écran éteint. Plafonné à 160, ce mode descend à
+ * 80 MHz (et 160 écran allumé). */
+void power_set_cpu_max(int mhz)
+{
+#if CONFIG_PM_ENABLE
+    esp_pm_config_t pm = {
+        .max_freq_mhz = mhz > 0 ? mhz : POWER_CPU_MAX_MHZ,
+        .min_freq_mhz = POWER_CPU_MIN_MHZ,
+        .light_sleep_enable = true,
+    };
+    esp_err_t err = esp_pm_configure(&pm);
+    if (err != ESP_OK) ESP_LOGE(TAG, "esp_pm_configure(%d): %s", pm.max_freq_mhz, esp_err_to_name(err));
+#else
+    (void)mhz;
+#endif
+}
+
 void power_hold_nosleep(bool hold)
 {
     portENTER_CRITICAL(&s_mux);
@@ -413,15 +432,7 @@ esp_err_t power_init(void)
 #if CONFIG_PM_ENABLE
     ESP_ERROR_CHECK(esp_pm_lock_create(ESP_PM_CPU_FREQ_MAX, 0, "active", &s_lock_cpu));
     ESP_ERROR_CHECK(esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "nosleep", &s_lock_nosleep));
-    esp_pm_config_t pm = {
-        .max_freq_mhz = POWER_CPU_MAX_MHZ,
-        .min_freq_mhz = POWER_CPU_MIN_MHZ,
-        .light_sleep_enable = true,
-    };
-    esp_err_t err = esp_pm_configure(&pm);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_pm_configure: %s", esp_err_to_name(err));
-    }
+    power_set_cpu_max(0);
 
 #else
     ESP_LOGW(TAG, "PM désactivé (build de diagnostic)");

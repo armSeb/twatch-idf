@@ -316,6 +316,8 @@ void app_main(void)
     } else {
         ESP_LOGW(TAG, "mode avion : BLE non démarré");
     }
+    int reopen = sdr_mode_boot_app();   /* retour dans l'app après ses réglages */
+    if (reopen >= 0 && reopen < g_app_count) app_open(g_apps[reopen]);
 #if !TW_DIAG_BARE
     ble_set_battery((uint8_t)power_percent());
 #endif

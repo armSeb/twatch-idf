@@ -19,10 +19,17 @@ SOC_RESERVE_MEMORY_REGION(SDR_DUMP_START, SDR_DUMP_END, twatch_rf_dump);
 static RTC_NOINIT_ATTR uint32_t s_req;
 static bool s_active;
 
+/* app à rouvrir au prochain démarrage (après les réglages WebRX…) */
+#define APP_MAGIC 0xA9900000u
+static RTC_NOINIT_ATTR uint32_t s_app_req;
+static int s_app = -1;
+
 void sdr_mode_boot(void)
 {
     s_active = s_req == SDR_MAGIC && esp_reset_reason() == ESP_RST_SW;
     s_req = 0;                                   /* un plantage ramène au mode normal */
+    if ((s_app_req & 0xFFFFFF00u) == APP_MAGIC && esp_reset_reason() == ESP_RST_SW) s_app = (int)(s_app_req & 0xFF);
+    s_app_req = 0;
     if (!s_active) {
         esp_err_t e = heap_caps_add_region(SDR_DUMP_START, SDR_DUMP_END);
         if (e != ESP_OK) ESP_LOGE(TAG, "bancs SDR non rendus au tas : %s", esp_err_to_name(e));
@@ -42,3 +49,6 @@ void sdr_mode_reboot(bool sdr)
     s_req = sdr ? SDR_MAGIC : 0;
     esp_restart();
 }
+
+void sdr_mode_set_boot_app(int idx) { s_app_req = idx >= 0 ? (APP_MAGIC | (uint32_t)(idx & 0xFF)) : 0; }
+int  sdr_mode_boot_app(void) { return s_active ? -1 : s_app; }

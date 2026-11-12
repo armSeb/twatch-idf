@@ -43,3 +43,9 @@ void app_post_event(const app_t *app, int code);  /* thread-safe, ISR exclue */
 void app_open(const app_t *app);                  /* ouvrir (depuis la tâche app) */
 void app_close(void);                             /* revenir à l'écran d'origine */
 bool app_is_open(const app_t *app);
+/* réglages de l'app saisis sur la page web de la montre (point d'accès Wi-Fi,
+ * Bluetooth coupé) ; la session finit par un redémarrage qui rouvre l'app */
+void app_open_settings_portal(const app_t *app);
+/* dans on_hide : true si l'on quitte vraiment l'app écran allumé (pas une
+ * extinction, ni une notification ou un appel ouverts par-dessus) */
+bool app_leaving_for_good(void);

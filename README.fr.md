@@ -39,7 +39,10 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   occupation des canaux 2,4 GHz et canal le plus libre ; fiche détaillée de chaque point
   d'accès avec l'historique du signal), **SDR** (spectre et waterfall 2,4 GHz en direct à
   partir des échantillons I/Q bruts de la radio de l'ESP32 : bande entière ou un canal
-  ±10 MHz, marqueur, maintien de crête), *Porteuse* (signal HF de test en carré, 5 à 125 MHz,
+  ±10 MHz, marqueur, maintien de crête), **WebRX** (écoute de ton récepteur OpenWebRX /
+  OpenWebRX+ par le Wi-Fi, `https` compris, sur le haut-parleur de la montre : profils,
+  signets, modes du serveur, squelch, S-mètre et mini-waterfall ; continue écran éteint),
+  *Porteuse* (signal HF de test en carré, 5 à 125 MHz,
   issu de la PLL audio de l'ESP32) et *TV off* (éteint la plupart des téléviseurs par la LED
   infrarouge, codes Europe/USA). Une app ouverte garde la main : l'écran s'éteint dessus et
   le réveil y revient. Un petit cadre d'applications permet d'en ajouter en un seul fichier.
@@ -72,7 +75,7 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Wi-Fi, SDR, Porteuse, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Wi-Fi, SDR, WebRX, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |

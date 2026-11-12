@@ -49,16 +49,14 @@ static void write_tone(i2s_chan_handle_t ch, int freq, int ms)
     }
 }
 
-static void sound_task(void *arg)
+/* L'ampli MAX98357 est seul sur LDO3 (schéma V1), coupé au repos :
+ * allumé à 3,3 V le temps du son.
+ * Démarrage en douceur : allumer à 1,3 V puis monter par pas de 0,1 V.
+ * Allumé d'un coup à 3,3 V, l'appel de courant des condensateurs de
+ * l'ampli fait plonger VCCX sous le seuil de coupure de l'AXP (3,2 V,
+ * batterie usée) : la montre s'éteint. */
+static void amp_on(void)
 {
-    beeps_t r = s_req;
-    i2s_chan_handle_t tx = NULL;
-    /* L'ampli MAX98357 est seul sur LDO3 (schéma V1), coupé au repos :
-     * allumé à 3,3 V le temps du son. */
-    /* Démarrage en douceur : allumer à 1,3 V puis monter par pas de 0,1 V.
-     * Allumé d'un coup à 3,3 V, l'appel de courant des condensateurs de
-     * l'ampli fait plonger VCCX sous le seuil de coupure de l'AXP (3,2 V,
-     * batterie usée) : la montre s'éteint. */
     axp_ldo3_set(LDO3_START);
     axp_set_outputs(AXP_OUT_LDO3, true);
     vTaskDelay(pdMS_TO_TICKS(5));
@@ -68,10 +66,15 @@ static void sound_task(void *arg)
     }
     axp_ldo3_set(AXP_LDO3_3V3);
     vTaskDelay(pdMS_TO_TICKS(20));               /* démarrage de l'ampli */
+}
+
+static esp_err_t i2s_open(int rate, i2s_chan_handle_t *out)
+{
+    i2s_chan_handle_t tx = NULL;
     i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-    cc.auto_clear = true;
+    cc.auto_clear = true;                        /* tampon vide : silence, pas de bouclage */
     i2s_std_config_t sc = {
-        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(RATE),
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(rate),
         /* stéréo explicite : en mono, l'ESP32 ne remplit qu'un canal et
          * l'ampli peut écouter l'autre */
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
@@ -83,18 +86,18 @@ static void sound_task(void *arg)
     esp_err_t e = i2s_new_channel(&cc, &tx, NULL);
     if (e == ESP_OK) e = i2s_channel_init_std_mode(tx, &sc);
     if (e == ESP_OK) e = i2s_channel_enable(tx);
-    s_last_err = e;
-    if (e == ESP_OK) {
-        for (int i = 0; i < r.n; i++) {
-            write_tone(tx, r.freq, r.on_ms);
-            write_tone(tx, 0, i + 1 < r.n ? r.off_ms : 40);   /* silence final : vide le DMA */
-        }
+    if (e != ESP_OK && tx) { i2s_del_channel(tx); tx = NULL; }
+    *out = tx;
+    return e;
+}
+
+/* broches au repos (sorties à 0, comme au démarrage), puis ampli coupé */
+static void amp_off(i2s_chan_handle_t tx)
+{
+    if (tx) {
         i2s_channel_disable(tx);
-    } else {
-        ESP_LOGW(TAG, "I2S indisponible : %s", esp_err_to_name(e));
+        i2s_del_channel(tx);
     }
-    if (tx) i2s_del_channel(tx);
-    /* broches au repos (sorties à 0, comme au démarrage) */
     gpio_config_t out = {
         .pin_bit_mask = (1ULL << PIN_BCK) | (1ULL << PIN_WS) | (1ULL << PIN_DO),
         .mode = GPIO_MODE_OUTPUT,             /* pas de tirage : aucune fuite */
@@ -105,8 +108,76 @@ static void sound_task(void *arg)
     gpio_set_level(PIN_DO, 0);
     axp_set_outputs(AXP_OUT_LDO3, false);        /* broches déjà à 0 : coupure propre */
     axp_ldo3_set(LDO3_START);
+}
+
+static void sound_task(void *arg)
+{
+    beeps_t r = s_req;
+    i2s_chan_handle_t tx = NULL;
+    amp_on();
+    esp_err_t e = i2s_open(RATE, &tx);
+    s_last_err = e;
+    if (e == ESP_OK) {
+        for (int i = 0; i < r.n; i++) {
+            write_tone(tx, r.freq, r.on_ms);
+            write_tone(tx, 0, i + 1 < r.n ? r.off_ms : 40);   /* silence final : vide le DMA */
+        }
+    } else {
+        ESP_LOGW(TAG, "I2S indisponible : %s", esp_err_to_name(e));
+    }
+    amp_off(tx);
     s_busy = false;
     vTaskDelete(NULL);
+}
+
+/* ------------------------------------------------------------------ */
+/* Flux continu (WebRX)                                                 */
+/* ------------------------------------------------------------------ */
+static i2s_chan_handle_t s_stream;
+
+esp_err_t sound_stream_open(int rate)
+{
+    if (s_stream) return ESP_OK;
+    for (int i = 0; s_busy && i < 100; i++) vTaskDelay(pdMS_TO_TICKS(20));   /* bip en cours */
+    if (s_busy) return ESP_ERR_INVALID_STATE;
+    s_busy = true;
+    amp_on();
+    esp_err_t e = i2s_open(rate, &s_stream);
+    s_last_err = e;
+    if (e != ESP_OK) {
+        ESP_LOGW(TAG, "flux I2S indisponible : %s", esp_err_to_name(e));
+        amp_off(NULL);
+        s_stream = NULL;
+        s_busy = false;
+    }
+    return e;
+}
+
+void sound_stream_write(const int16_t *mono, int n, int gain_q12)
+{
+    if (!s_stream) return;
+    int16_t buf[2 * 128];
+    while (n > 0) {
+        int k = n < 128 ? n : 128;
+        for (int i = 0; i < k; i++) {
+            int32_t v = mono ? ((int32_t)mono[i] * gain_q12) >> 12 : 0;
+            if (v > 32767) v = 32767;
+            if (v < -32768) v = -32768;
+            buf[2 * i] = buf[2 * i + 1] = (int16_t)v;
+        }
+        size_t w;
+        i2s_channel_write(s_stream, buf, 2 * k * sizeof(int16_t), &w, pdMS_TO_TICKS(500));
+        if (mono) mono += k;
+        n -= k;
+    }
+}
+
+void sound_stream_close(void)
+{
+    if (!s_stream) return;
+    amp_off(s_stream);
+    s_stream = NULL;
+    s_busy = false;
 }
 
 bool sound_busy(void) { return s_busy; }

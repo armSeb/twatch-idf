@@ -2,6 +2,23 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.21.0 — 2026-11-12
+
+- New **WebRX** app: listens to an OpenWebRX / OpenWebRX+ server over Wi-Fi (`https://`
+  and `http://`, optional `user:password@` for HTTP Basic auth) and plays the audio on the
+  watch speaker. Big frequency display (tap a digit to choose the − / + step), bookmarks of
+  the band, modes taken from the server (custom ones included, with their bandpass), profile
+  list, volume and squelch, S-meter, mini waterfall (tap to tune, ×1/×4/×16 zoom). Listening
+  continues with the screen off; leaving the app stops it. Automatic reconnection; the last
+  profile, frequency, mode, volume and squelch are remembered.
+- WebRX settings (up to three Wi-Fi networks in order of preference, server address) are
+  entered from the phone on a page served by the watch, through the same access point as the
+  update (visible networks are suggested). Saving restarts the watch straight into the app.
+- Wi-Fi analyzer and WebRX cap the CPU at 160 MHz while the radio runs: with a 240 MHz maximum
+  the ESP32 kept the CPU at 240 MHz whenever Wi-Fi was on, even with the screen off; it now
+  drops to 80 MHz.
+- Speaker: continuous audio streaming in addition to beeps.
+
 ## 0.20.1 — 2026-11-12
 
 - SDR: a swipe → on the waterfall in the band view no longer leaves the app (leaving

@@ -26,6 +26,9 @@ esp_err_t power_init(void);           /* AXP, BMA423 suspend, PM, GPIO IRQ, LEDC
 /* Verrous PM (comptés). « active » = écran allumé : CPU max + pas de light sleep. */
 void power_hold_active(bool hold);
 void power_hold_nosleep(bool hold);
+/* plafond CPU (MHz, 80/160/240 ; 0 = défaut) : 160 pendant les apps radio pour
+ * que le Wi-Fi laisse le CPU à 80 MHz écran éteint */
+void power_set_cpu_max(int mhz);
 
 /* à appeler sur EV_AXP_IRQ depuis la tâche app ; retourne le masque d'IRQ */
 uint64_t power_handle_irq(void);

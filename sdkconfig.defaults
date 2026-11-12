@@ -161,3 +161,8 @@ CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 # CONFIG_ESP_EVENT_POST_FROM_IRAM_ISR is not set
 # CONFIG_SPI_MASTER_ISR_IN_IRAM is not set
 
+
+# ---------- WebRX (wss://) ----------
+# Tampons TLS (≈ 40 Ko par connexion) en PSRAM : la RAM interne reste au
+# Bluetooth et au Wi-Fi. Certificats : paquet de racines d'ESP-IDF (défaut).
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y

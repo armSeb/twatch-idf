@@ -12,6 +12,7 @@
 #include "ancs.h"
 #include "media.h"
 #include "ota.h"
+#include "sdr_mode.h"
 #include "app_events.h"
 #include "wclock.h"
 #include "settings.h"
@@ -74,7 +75,8 @@ static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_bm_lan
 static void menu_lang_cb(lv_event_t *ev);
 static lv_timer_t *w_clock_t;
 static lv_obj_t *m_sum[6], *m_bt_info, *m_confirm;
-static lv_obj_t *o_info, *o_bar, *o_status, *o_btn, *o_pw, *o_prev, *o_prev_modal;
+static lv_obj_t *o_info, *o_bar, *o_status, *o_btn, *o_pw, *o_prev, *o_prev_modal, *o_title;
+static int o_app = -1;           /* ≥ 0 : session « réglages » de cette app (WebRX), sinon mise à jour */
 static void ota_ui_idle(void);
 static void build_ota(void);
 static void back_cb(lv_event_t *ev);
@@ -297,10 +299,13 @@ static void ensure_screen(scr_id_t id)
 
 static void quick_refresh(void);
 
+static scr_id_t s_next = SCR_WATCH;                /* écran en cours d'ouverture (show) */
+
 static void show(scr_id_t id, lv_screen_load_anim_t anim)
 {
     ensure_screen(id);
     if (!s_scr[id]) id = SCR_WATCH;                    /* sécurité : rien à afficher */
+    s_next = id;
     if (s_cur == SCR_APP && id != SCR_APP && s_app_cur && s_app_cur->on_hide) s_app_cur->on_hide();
     if (id == SCR_APP && s_cur != SCR_APP && s_app_cur && s_app_cur->on_show) s_app_cur->on_show();
     if (id == SCR_QUICK) quick_refresh();
@@ -873,7 +878,16 @@ static scr_id_t menu_parent(scr_id_t id)
 
 static void back_cb(lv_event_t *ev)
 {
-    if (s_cur == SCR_OTA && ota_active()) { toast(_("Annuler d'abord la mise à jour")); return; }
+    if (s_cur == SCR_OTA && ota_active()) {
+        toast(o_app >= 0 ? _("Annuler d'abord les réglages") : _("Annuler d'abord la mise à jour"));
+        return;
+    }
+    if (s_cur == SCR_OTA && o_app >= 0) {            /* réglages non lancés : retour à l'app */
+        int a = o_app;
+        o_app = -1;
+        ota_set_page(OTA_PAGE_UPDATE);
+        if (a < g_app_count) { app_open(g_apps[a]); return; }
+    }
     show(menu_parent(s_cur), LV_SCR_LOAD_ANIM_MOVE_RIGHT);
 }
 
@@ -1320,8 +1334,14 @@ static lv_timer_t *o_reboot_t;
 
 static void ota_reboot_cb(lv_timer_t *t) { ota_reboot_now(); }
 
+static void ota_title(void)
+{
+    if (o_title) lv_label_set_text(o_title, o_app >= 0 ? _("Réglages WebRX") : _("Mise à jour"));
+}
+
 static void ota_ui_running(void)
 {
+    ota_title();
     /* identifiants en gros, mot de passe groupé par 4 */
     const char *pw = ota_password();
     char g[40] = "";
@@ -1347,7 +1367,10 @@ static void ota_ui_running(void)
 static void ota_ui_idle(void)
 {
     char b[220];
-    snprintf(b, sizeof(b), _("Version installée : %s\n\nLa montre crée un réseau Wi-Fi ; le Bluetooth est coupé "
+    ota_title();
+    if (o_app >= 0) snprintf(b, sizeof(b), "%s", _("La montre crée un réseau Wi-Fi pour saisir les réglages ; "
+                                                 "le Bluetooth est coupé pendant ce temps."));
+    else snprintf(b, sizeof(b), _("Version installée : %s\n\nLa montre crée un réseau Wi-Fi ; le Bluetooth est coupé "
              "le temps de la mise à jour.%s"), esp_app_get_description()->version,
              ota_rolled_back() ? _("\n\nLa dernière mise à jour avait échoué : ancien firmware restauré.") : "");
     lv_label_set_text(o_info, b);
@@ -1358,7 +1381,7 @@ static void ota_ui_idle(void)
     lv_obj_add_flag(o_bar, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(lv_obj_get_child(o_btn, 0), with_sym(LV_SYMBOL_REFRESH, _("Démarrer")));
     lv_obj_set_style_bg_color(o_btn, C_ACC, 0);
-    const char *pv = ota_other_version();
+    const char *pv = o_app >= 0 ? NULL : ota_other_version();
     if (o_prev && pv) {
         char t[64];
         snprintf(t, sizeof(t), _("Revenir à la %s"), pv);
@@ -1429,7 +1452,11 @@ static lv_obj_t *mk_modal(lv_obj_t *parent, const char *q, const char *sub, cons
 
 static void ota_btn_cb(lv_event_t *ev)
 {
-    if (ota_active()) { ota_cancel(); return; }
+    if (ota_active()) {
+        if (o_app >= 0) sdr_mode_set_boot_app(o_app);   /* l'abandon redémarre : retour dans l'app */
+        ota_cancel();
+        return;
+    }
     lv_label_set_text(o_status, _("Démarrage du Wi-Fi…"));
     lv_refr_now(NULL);
     const char *err = ota_start();
@@ -1452,6 +1479,13 @@ void ui_on_ota(int code)
         snprintf(b, sizeof(b), _("Réception… %d %%"), code);
         lv_obj_set_style_text_color(o_status, C_FG, 0);
         lv_label_set_text(o_status, b);
+    } else if (code == OTA_EV_SAVED) {
+        snprintf(b, sizeof(b), LV_SYMBOL_OK " %s", _("Réglages enregistrés\nRedémarrage…"));
+        lv_obj_set_style_text_color(o_status, C_OK, 0);
+        lv_label_set_text(o_status, b);
+        lv_obj_add_flag(o_btn, LV_OBJ_FLAG_HIDDEN);
+        if (o_app >= 0) sdr_mode_set_boot_app(o_app);
+        if (!o_reboot_t) o_reboot_t = lv_timer_create(ota_reboot_cb, 2000, NULL);
     } else if (code == OTA_EV_CLIENT) {
         lv_label_set_text(o_status, _("Appareil connecté : ouvrir http://192.168.4.1"));
     } else if (code == OTA_EV_DONE) {
@@ -1477,6 +1511,7 @@ void ui_on_ota(int code)
 static void build_ota(void)
 {
     lv_obj_t *col = mk_page(SCR_OTA, _("Mise à jour"));
+    o_title = lv_obj_get_child(lv_obj_get_child(s_scr[SCR_OTA], 0), 1);
     o_info = mk_label(col, &font_text_16, C_FG, "");
     o_pw = mk_label(col, &font_num_44, C_FG, "");          /* mot de passe, bien lisible */
     lv_obj_add_flag(o_pw, LV_OBJ_FLAG_HIDDEN);
@@ -2157,6 +2192,27 @@ void app_open(const app_t *a)
     if (s_app_cur != a) app_drop_screen();   /* vue d'une autre app, en réserve */
     s_app_cur = a;
     nav_open(SCR_APP, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+}
+
+/* Réglages d'une app par la page web de la montre (point d'accès de la mise
+ * à jour). La session se termine toujours par un redémarrage, qui rouvre l'app. */
+void app_open_settings_portal(const app_t *a)
+{
+    int idx = app_index(a);
+    if (idx < 0 || ota_active()) return;
+    o_app = idx;
+    ota_set_page(OTA_PAGE_WEBRX);
+    show(SCR_OTA, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+    ota_ui_idle();
+    ota_btn_cb(NULL);
+}
+
+bool app_leaving_for_good(void)
+{
+    if (!display_is_on()) return false;
+    if (s_next == SCR_DETAIL && d_return == SCR_APP) return false;
+    if (s_next == SCR_CALL && c_return == SCR_APP) return false;
+    return true;
 }
 
 void app_close(void)

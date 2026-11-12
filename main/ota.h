@@ -21,6 +21,7 @@
 #define OTA_EV_PROGRESS_MAX 100   /* 0..100 : pourcentage reçu */
 #define OTA_EV_CLIENT       200   /* un appareil s'est connecté au point d'accès */
 #define OTA_EV_DONE         300   /* image vérifiée, démarrage programmé */
+#define OTA_EV_SAVED        400   /* réglages WebRX enregistrés */
 #define OTA_EV_ERR_IMAGE    (-1)  /* pas un firmware T-Watch / image corrompue */
 #define OTA_EV_ERR_WRITE    (-2)  /* erreur d'écriture flash */
 #define OTA_EV_ERR_SIZE     (-3)  /* trop gros pour l'emplacement */
@@ -32,6 +33,10 @@ void        ota_tick(void);                /* tâche app, périodique : validati
 bool        ota_rolled_back(void);         /* l'image précédente avait échoué */
 
 /* depuis la tâche app (UI) */
+/* page servie sur http://192.168.4.1 (avant ota_start) ; l'autre reste
+ * accessible par un lien */
+enum { OTA_PAGE_UPDATE = 0, OTA_PAGE_WEBRX = 1 };
+void        ota_set_page(int page);
 const char *ota_start(void);               /* NULL si démarré, sinon raison du refus */
 void        ota_cancel(void);              /* abandon : redémarrage propre */
 bool        ota_active(void);

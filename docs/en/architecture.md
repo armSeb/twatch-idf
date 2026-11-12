@@ -66,6 +66,20 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   (16 × 256 or 8 × 512 points, averaged) and builds 240-column rows in dBFS; the UI draws them
   into two RGB565 canvases in PSRAM with an auto-tracking noise floor. Leaving the app restarts
   in normal mode; with the screen off the radio is fully stopped.
+- **WebRX** (`app_webrx.c`, `webrx.c`, `webrx_cfg.c`): OpenWebRX / OpenWebRX+ client. The
+  Wi-Fi networks (up to 3) and the server URL are entered on a page served by the watch
+  (`/webrx`, same access point and web server as the update; the session ends with a restart
+  that reopens the app). `webrx.c` runs a task on core 0: Wi-Fi station (known networks in
+  order of preference, modem sleep), `wss://` through `esp_transport` (TLS with the ESP-IDF
+  root bundle, mbedTLS buffers in PSRAM; `user:password@` in the URL becomes HTTP Basic auth),
+  the OpenWebRX handshake, `connectionproperties` (12 kHz audio for every mode),
+  `selectprofile` and `dspcontrol`. The server's `modes` list (custom modes included) gives
+  the listenable modes and their bandpass; digital modes fall back to their underlying mode.
+  Audio frames (IMA-ADPCM with sync words) are decoded into a 2.7 s ring in PSRAM; a second
+  task on core 1 keeps ~0.4 s ahead and feeds the I2S amplifier, skipping or doubling one
+  sample per 20 ms block to follow the server's clock. FFT frames become the mini waterfall
+  only while the screen is on. CPU is capped at 160 MHz (80 MHz screen off) while the radio
+  runs, and Bluetooth is paused only if the Wi-Fi driver cannot get its internal RAM.
 - **Language change** rebuilds every screen in place, without a restart.
 - LVGL objects are allocated from the heap; allocations above 4 KB go to PSRAM, the internal
   RAM is kept for stacks, DMA buffers and the radio.

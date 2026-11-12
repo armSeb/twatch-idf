@@ -22,6 +22,8 @@
 #include "app_events.h"
 #include "ble.h"
 #include "power.h"
+#include "net.h"
+#include "webrx_cfg.h"
 
 static const char *TAG = "ota";
 
@@ -134,8 +136,8 @@ static const char PAGE_TAIL[] =
     "</b></p><p id=h></p>"
     "<input type=file id=f accept='.bin,application/octet-stream'>"
     "<button id=b onclick=go()></button><progress id=p max=100 value=0 hidden></progress>"
-    "<div id=m></div><script>"
-    "var T={fr:{t:'T-Watch 2020 · mise à jour',v:'Version installée :',"
+    "<div id=m></div><p><a id=w href=/webrx style='color:#9aa'></a></p><script>"
+    "var T={fr:{w:'Réglages WebRX →',t:'T-Watch 2020 · mise à jour',v:'Version installée :',"
     "h:'Choisir le fichier <b>twatch2020v1-app.bin</b>. L’ancien firmware reste en place jusqu’à la fin : une coupure ne casse rien.',"
     "b:'Envoyer',nf:'Choisis d’abord le fichier.',s:'Envoi…',ok:'Terminé : la montre redémarre ',"
     "ko:'Échec : ',lost:'Connexion perdue.',"
@@ -144,7 +146,7 @@ static const char PAGE_TAIL[] =
     "not_twatch:'ce n’est pas un firmware T-Watch',flash_prep:'impossible de préparer la flash',"
     "flash_write:'erreur d’écriture flash',corrupt:'image corrompue',rejected:'image refusée',"
     "activate:'impossible d’activer la nouvelle image'},"
-    "en:{t:'T-Watch 2020 · update',v:'Installed version:',"
+    "en:{w:'WebRX settings →',t:'T-Watch 2020 · update',v:'Installed version:',"
     "h:'Choose the <b>twatch2020v1-app.bin</b> file. The current firmware stays in place until the end: an interruption breaks nothing.',"
     "b:'Send',nf:'Choose the file first.',s:'Sending…',ok:'Done: the watch is restarting ',"
     "ko:'Failed: ',lost:'Connection lost.',"
@@ -156,7 +158,7 @@ static const char PAGE_TAIL[] =
     "var L=(navigator.language||'en').slice(0,2)=='fr'?'fr':'en';"
     "function $(i){return document.getElementById(i);}"
     "function tr(k){return T[L][k]||k;}"
-    "function draw(){document.documentElement.lang=L;['t','v','b'].forEach(function(k){$(k).textContent=tr(k);});"
+    "function draw(){document.documentElement.lang=L;['t','v','b','w'].forEach(function(k){$(k).textContent=tr(k);});"
     "$('h').innerHTML=tr('h');$('l').textContent=L=='fr'?'English':'Français';}"
     "function sw(){L=L=='fr'?'en':'fr';draw();}"
     "function go(){var f=$('f').files[0],m=$('m'),p=$('p'),b=$('b');"
@@ -331,6 +333,240 @@ static esp_err_t update_post(httpd_req_t *r)
     return ESP_OK;
 }
 
+/* ------------------------------------------------------------------ */
+/* Page « Réglages WebRX » : réseaux Wi-Fi connus et adresse du serveur */
+/* ------------------------------------------------------------------ */
+static int s_page;                         /* OTA_PAGE_* : page servie sur « / » */
+#define SCAN_MAX 16
+static char s_scan[SCAN_MAX][33];          /* réseaux vus au démarrage du point d'accès */
+static int s_nscan;
+
+void ota_set_page(int page) { s_page = page; }
+
+static const char WRX_HEAD[] =
+    "<!doctype html><html><head><meta charset=utf-8>"
+    "<meta name=viewport content='width=device-width,initial-scale=1'>"
+    "<title>WebRX</title><style>"
+    "body{font:16px -apple-system,system-ui,sans-serif;background:#111;color:#eee;margin:0;padding:24px;max-width:480px}"
+    "h1{font-size:22px;margin:0 0 4px}p{color:#9aa}h2{font-size:15px;color:#9aa;margin:20px 0 4px;font-weight:600}"
+    "input{width:100%;box-sizing:border-box;font-size:16px;padding:10px;margin:4px 0;background:#1d2026;"
+    "color:#eee;border:1px solid #3a3d44;border-radius:8px}"
+    "button{font-size:17px;padding:12px 20px;border:0;border-radius:10px;background:#3b82f6;color:#fff;width:100%;margin-top:20px}"
+    "button:disabled{background:#334}#m{margin-top:12px;min-height:1.4em}.ok{color:#4ade80}.ko{color:#f87171}"
+    "#l{float:right;background:none;border:1px solid #445;color:#9aa;width:auto;padding:4px 10px;font-size:13px;margin:0}"
+    "a{color:#9aa}"
+    "</style></head><body><button id=l type=button onclick=sw()></button><h1 id=t></h1><p id=h></p><form id=f onsubmit='return go()'>";
+static const char WRX_TAIL[] =
+    "<button id=b></button></form><div id=m></div><p><a id=o href=/update.html></a></p><script>"
+    "var T={fr:{t:'WebRX · réglages',h:'Réseaux Wi-Fi que la montre peut utiliser (dans l’ordre de préférence) "
+    "et adresse de ton serveur OpenWebRX, par exemple <b>https://sdr.exemple.fr/</b>.',"
+    "n:'Wi-Fi ',s:'Nom du réseau',p:'Mot de passe',k:'•••• enregistré (vide = inchangé)',"
+    "u:'Serveur OpenWebRX',b:'Enregistrer',w:'Enregistrement…',ok:'Enregistré : la montre redémarre sur WebRX.',"
+    "ko:'Échec : ',lost:'Connexion perdue.',url:'l’adresse doit commencer par http:// ou https://',"
+    "net:'indiquer au moins un réseau',size:'champ trop long',nvs:'écriture impossible',o:'Mise à jour du firmware →'},"
+    "en:{t:'WebRX · settings',h:'Wi-Fi networks the watch may use (in order of preference) "
+    "and the address of your OpenWebRX server, for example <b>https://sdr.example.org/</b>.',"
+    "n:'Wi-Fi ',s:'Network name',p:'Password',k:'•••• saved (empty = unchanged)',"
+    "u:'OpenWebRX server',b:'Save',w:'Saving…',ok:'Saved: the watch restarts into WebRX.',"
+    "ko:'Failed: ',lost:'Connection lost.',url:'the address must start with http:// or https://',"
+    "net:'enter at least one network',size:'field too long',nvs:'could not save',o:'Firmware update →'}};"
+    "var L=(navigator.language||'en').slice(0,2)=='fr'?'fr':'en';"
+    "function $(i){return document.getElementById(i);}"
+    "function tr(k){return T[L][k]||k;}"
+    "function draw(){document.documentElement.lang=L;['t','b','u','o'].forEach(function(k){$(k).textContent=tr(k);});"
+    "$('h').innerHTML=tr('h');$('l').textContent=L=='fr'?'English':'Français';"
+    "for(var i=0;i<3;i++){$('n'+i).textContent=tr('n')+(i+1);var s=$('s'+i),p=$('p'+i);s.placeholder=tr('s');"
+    "p.placeholder=p.dataset.k?tr('k'):tr('p');}}"
+    "function sw(){L=L=='fr'?'en':'fr';draw();}"
+    "function go(){var f=$('f'),m=$('m'),b=$('b'),q=[];"
+    "for(var i=0;i<f.elements.length;i++){var e=f.elements[i];if(e.name)q.push(e.name+'='+encodeURIComponent(e.value));}"
+    "b.disabled=true;m.className='';m.textContent=tr('w');"
+    "var x=new XMLHttpRequest();x.open('POST','/webrx');"
+    "x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');"
+    "x.onload=function(){if(x.status==200){m.className='ok';m.textContent=tr('ok');}"
+    "else{m.className='ko';m.textContent=tr('ko')+tr(x.responseText);b.disabled=false;}};"
+    "x.onerror=function(){m.className='ko';m.textContent=tr('lost');b.disabled=false;};"
+    "x.send(q.join('&'));return false;}draw();</script></body></html>";
+
+/* copie échappée pour un attribut HTML entre apostrophes */
+static size_t esc(char *o, size_t cap, const char *s)
+{
+    size_t n = 0;
+    for (; *s; s++) {
+        const char *r = NULL;
+        switch (*s) {
+        case '&': r = "&amp;"; break;
+        case '<': r = "&lt;"; break;
+        case '>': r = "&gt;"; break;
+        case '\'': r = "&#39;"; break;
+        case '"': r = "&quot;"; break;
+        }
+        size_t l = r ? strlen(r) : 1;
+        if (n + l + 1 > cap) break;
+        if (r) memcpy(o + n, r, l); else o[n] = *s;
+        n += l;
+    }
+    o[n] = 0;
+    return n;
+}
+
+static esp_err_t webrx_get(httpd_req_t *r)
+{
+    s_last_activity_us = esp_timer_get_time();
+    static wrx_cfg_t c;
+    wrx_cfg_load(&c);
+    const size_t cap = sizeof(WRX_HEAD) + sizeof(WRX_TAIL) + 4096;
+    char *pg = heap_caps_malloc(cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!pg) pg = malloc(cap);
+    if (!pg) return httpd_resp_send_500(r);
+    size_t n = strlcpy(pg, WRX_HEAD, cap);
+    char e[3 * sizeof c.url];
+    for (int i = 0; i < WRX_NETS; i++) {
+        esc(e, sizeof e, c.ssid[i]);
+        n += snprintf(pg + n, cap - n,
+                      "<h2 id=n%d></h2><input id=s%d name=s%d list=ss maxlength=32 autocapitalize=off "
+                      "autocomplete=off value='%s'><input id=p%d name=p%d type=password maxlength=64%s>",
+                      i, i, i, e, i, i, c.pass[i][0] ? " data-k=1" : "");
+    }
+    esc(e, sizeof e, c.url);
+    n += snprintf(pg + n, cap - n,
+                  "<h2 id=u></h2><input name=u type=url maxlength=190 autocapitalize=off "
+                  "placeholder='https://' value='%s'><datalist id=ss>", e);
+    for (int i = 0; i < s_nscan && n < cap - 200; i++) {
+        esc(e, sizeof e, s_scan[i]);
+        n += snprintf(pg + n, cap - n, "<option value='%s'>", e);
+    }
+    n += snprintf(pg + n, cap - n, "</datalist>%s", WRX_TAIL);
+    httpd_resp_set_type(r, "text/html; charset=utf-8");
+    httpd_resp_set_hdr(r, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(r, "Connection", "close");
+    esp_err_t ret = httpd_resp_send(r, pg, n < cap ? n : cap - 1);
+    free(pg);
+    return ret;
+}
+
+static esp_err_t root_get(httpd_req_t *r)
+{
+    return s_page == OTA_PAGE_WEBRX ? webrx_get(r) : page_get(r);
+}
+
+static int hexv(char c)
+{
+    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 :
+           c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+}
+
+/* valeur décodée du champ `key` d'un corps x-www-form-urlencoded :
+ * 1 trouvée, 0 absente (out vide), -1 trop longue */
+static int form_get(const char *body, const char *key, char *out, size_t cap)
+{
+    size_t kl = strlen(key);
+    for (const char *p = body; p && *p; p = strchr(p, '&') ? strchr(p, '&') + 1 : NULL) {
+        if (strncmp(p, key, kl) || p[kl] != '=') continue;
+        p += kl + 1;
+        size_t n = 0;
+        while (*p && *p != '&') {
+            char c = *p++;
+            if (c == '+') c = ' ';
+            else if (c == '%' && hexv(p[0]) >= 0 && hexv(p[1]) >= 0) { c = (char)(hexv(p[0]) * 16 + hexv(p[1])); p += 2; }
+            if (n + 1 >= cap) { out[0] = 0; return -1; }
+            out[n++] = c;
+        }
+        out[n] = 0;
+        return 1;
+    }
+    out[0] = 0;
+    return 0;
+}
+
+static esp_err_t webrx_bad(httpd_req_t *r, const char *code)
+{
+    httpd_resp_set_status(r, "400 Bad Request");
+    httpd_resp_set_type(r, "text/plain; charset=utf-8");
+    return httpd_resp_sendstr(r, code);
+}
+
+static esp_err_t webrx_post(httpd_req_t *r)
+{
+    s_last_activity_us = esp_timer_get_time();
+    #define BODY_MAX 1536
+    static char *body;                     /* en PSRAM, gardé pour la session */
+    if (!body) body = heap_caps_malloc(BODY_MAX, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!body) return webrx_bad(r, "nvs");
+    if (r->content_len <= 0 || r->content_len >= BODY_MAX) return webrx_bad(r, "size");
+    int got = 0;
+    while (got < (int)r->content_len) {
+        int n = httpd_req_recv(r, body + got, r->content_len - got);
+        if (n <= 0) return webrx_bad(r, "net");
+        got += n;
+    }
+    body[got] = 0;
+    static wrx_cfg_t old, c;
+    wrx_cfg_load(&old);
+    memset(&c, 0, sizeof c);
+    bool ok = true, any = false;
+    for (int i = 0; i < WRX_NETS; i++) {
+        char k[4] = { 's', (char)('0' + i), 0 };
+        if (form_get(body, k, c.ssid[i], sizeof c.ssid[i]) < 0) ok = false;
+        k[0] = 'p';
+        if (form_get(body, k, c.pass[i], sizeof c.pass[i]) < 0) ok = false;
+        /* mot de passe laissé vide pour un réseau déjà enregistré : on le garde */
+        if (!c.pass[i][0] && c.ssid[i][0]) {
+            for (int j = 0; j < WRX_NETS; j++)
+                if (!strcmp(old.ssid[j], c.ssid[i])) { strlcpy(c.pass[i], old.pass[j], sizeof c.pass[i]); break; }
+        }
+        if (!c.ssid[i][0]) c.pass[i][0] = 0;
+        any |= c.ssid[i][0] != 0;
+    }
+    if (form_get(body, "u", c.url, sizeof c.url) < 0) ok = false;
+    if (!ok) return webrx_bad(r, "size");
+    /* espaces autour de l'adresse (copier-coller) */
+    char *u = c.url;
+    while (*u == ' ') u++;
+    memmove(c.url, u, strlen(u) + 1);
+    for (size_t l = strlen(c.url); l && c.url[l - 1] == ' '; l--) c.url[l - 1] = 0;
+    if (strncmp(c.url, "http://", 7) && strncmp(c.url, "https://", 8)) return webrx_bad(r, "url");
+    if (!any) return webrx_bad(r, "net");
+    /* réseaux tassés vers le haut (ordre de préférence conservé) */
+    for (int i = 0, j = 0; i < WRX_NETS; i++) {
+        if (!c.ssid[i][0]) continue;
+        if (i != j) {
+            memcpy(c.ssid[j], c.ssid[i], sizeof c.ssid[j]);
+            memcpy(c.pass[j], c.pass[i], sizeof c.pass[j]);
+            c.ssid[i][0] = c.pass[i][0] = 0;
+        }
+        j++;
+    }
+    if (wrx_cfg_save(&c) != ESP_OK) return webrx_bad(r, "nvs");
+    ESP_LOGI(TAG, "réglages WebRX enregistrés");
+    httpd_resp_set_type(r, "text/plain; charset=utf-8");
+    httpd_resp_set_hdr(r, "Connection", "close");
+    httpd_resp_sendstr(r, "ok");
+    post_ev(OTA_EV_SAVED);
+    return ESP_OK;
+}
+
+/* réseaux visibles, proposés dans la page (point d'accès + station) */
+static void scan_networks(void)
+{
+    s_nscan = 0;
+    wifi_scan_config_t sc = { .show_hidden = false };
+    if (esp_wifi_scan_start(&sc, true) != ESP_OK) return;
+    uint16_t n = 20;
+    wifi_ap_record_t *rec = heap_caps_calloc(n, sizeof *rec, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!rec) { esp_wifi_clear_ap_list(); return; }
+    if (esp_wifi_scan_get_ap_records(&n, rec) == ESP_OK) {
+        for (int i = 0; i < n && s_nscan < SCAN_MAX; i++) {
+            const char *ss = (const char *)rec[i].ssid;
+            if (!ss[0]) continue;
+            bool dup = false;
+            for (int j = 0; j < s_nscan; j++) dup |= !strcmp(s_scan[j], ss);
+            if (!dup) strlcpy(s_scan[s_nscan++], ss, sizeof s_scan[0]);
+        }
+    }
+    free(rec);
+}
+
 /* toute autre adresse renvoie la page (pratique si l'iPhone teste le réseau) */
 
 /* Mot de passe du point d'accès : tiré au sort une seule fois puis gardé
@@ -372,7 +608,7 @@ static void idle_cb(void *arg)
 const char *ota_start(void)
 {
     if (s_active) return NULL;
-    if (!power_vbus() && power_percent() < MIN_BATT_PCT) return N_("Batterie trop faible (30 % mini) : brancher l'USB");
+    if (s_page == OTA_PAGE_UPDATE && !power_vbus() && power_percent() < MIN_BATT_PCT) return N_("Batterie trop faible (30 % mini) : brancher l'USB");
     if (!esp_ota_get_next_update_partition(NULL)) return N_("Table de partitions sans OTA : un flash USB est nécessaire");
 
     ble_stop();                                  /* libère la radio et la RAM du Bluetooth */
@@ -384,10 +620,9 @@ const char *ota_start(void)
 
     static bool net_inited;
     if (!net_inited) {
-        esp_netif_init();
-        esp_err_t e = esp_event_loop_create_default();
-        if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) return N_("Erreur réseau (boucle d'événements)");
-        esp_netif_t *apif = esp_netif_create_default_wifi_ap();
+        if (net_base_init() != ESP_OK) return N_("Erreur réseau (boucle d'événements)");
+        esp_netif_t *apif = net_ap_netif();
+        if (!apif) return N_("Erreur réseau (boucle d'événements)");
         /* le DHCP annonce la montre comme serveur DNS (voir dns_task) */
         esp_netif_dhcps_stop(apif);
         esp_netif_dns_info_t dns = { 0 };
@@ -412,13 +647,15 @@ const char *ota_start(void)
     ap.ap.authmode = WIFI_AUTH_WPA2_PSK;
     ap.ap.channel = 6;
     ap.ap.max_connection = 2;
-    esp_wifi_set_mode(WIFI_MODE_AP);
+    /* réglages WebRX : station en plus, pour proposer les réseaux visibles */
+    esp_wifi_set_mode(s_page == OTA_PAGE_WEBRX ? WIFI_MODE_APSTA : WIFI_MODE_AP);
     esp_wifi_set_config(WIFI_IF_AP, &ap);
     if (esp_wifi_start() != ESP_OK) return N_("Le point d'accès n'a pas démarré");
+    if (s_page == OTA_PAGE_WEBRX) scan_networks();
 
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
     hc.stack_size = 6144;
-    hc.max_uri_handlers = 8;
+    hc.max_uri_handlers = 12;
     hc.recv_wait_timeout = 10;
     hc.lru_purge_enable = true;        /* Safari ouvre des connexions en avance : on recycle */
     hc.uri_match_fn = httpd_uri_match_wildcard;
@@ -437,8 +674,11 @@ const char *ota_start(void)
     }
     static const httpd_uri_t uris[] = {
         { .uri = "/update", .method = HTTP_POST, .handler = update_post },
-        { .uri = "/", .method = HTTP_GET, .handler = page_get },
-        { .uri = "/index.html", .method = HTTP_GET, .handler = page_get },
+        { .uri = "/", .method = HTTP_GET, .handler = root_get },
+        { .uri = "/index.html", .method = HTTP_GET, .handler = root_get },
+        { .uri = "/update.html", .method = HTTP_GET, .handler = page_get },
+        { .uri = "/webrx", .method = HTTP_GET, .handler = webrx_get },
+        { .uri = "/webrx", .method = HTTP_POST, .handler = webrx_post },
         { .uri = "/hotspot-detect.html", .method = HTTP_GET, .handler = probe_apple },
         { .uri = "/library/test/success.html", .method = HTTP_GET, .handler = probe_apple },
         { .uri = "/generate_204", .method = HTTP_GET, .handler = probe_204 },
