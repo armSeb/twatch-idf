@@ -2,6 +2,14 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.21.3 — 2026-11-12
+
+- WebRX: "connection lost" right after connecting. The server sends in 1 KB pieces and the
+  Wi-Fi modem sleep delays packets; when a WebSocket frame header arrived in two parts more
+  than 200 ms apart, `esp_transport_ws` gave up with a fatal error. Reads now wait up to
+  2.5 s. The reason of a cut (frame cut, read error, closed by the server, silence, Wi-Fi
+  lost) is shown under "Connection lost" and logged with the number of frames received.
+
 ## 0.21.2 — 2026-11-12
 
 - **Internal RAM given back** (the OTA update failed again with `ESP_ERR_HTTPD_TASK`, 7 KB

@@ -867,7 +867,10 @@ static void handle_pending(void)
     if ((p & PEND_DSP) && s_have_cfg) send_dsp(false);
 }
 
-/* true : fin normale (arrêt demandé) ; false : connexion perdue */
+static const char *s_lost;                   /* cause de la dernière coupure (N_) */
+static uint32_t s_frames;
+
+/* true : fin normale (arrêt demandé) ; false : connexion perdue (s_lost) */
 static bool session(void)
 {
     uint8_t *rb = s_rb;
@@ -885,20 +888,26 @@ static bool session(void)
     s_info.samp_rate = 0;
     unlock();
     while (!s_quit) {
-        if (xEventGroupGetBits(s_evg) & BIT_DISC) return false;     /* Wi-Fi perdu */
+        if (xEventGroupGetBits(s_evg) & BIT_DISC) { s_lost = N_("Wi-Fi perdu"); return false; }
         handle_pending();
         if (!s_have_cfg && s_prof_wait_us && esp_timer_get_time() > s_prof_wait_us) {
             lock(); bool ok = s_info.center && s_info.samp_rate; unlock();
             if (ok) tune_start(true);              /* profil demandé jamais venu : on écoute l'actuel */
         }
-        int n = esp_transport_read(s_ws, (char *)rb, RB_LEN, 200);
+        /* délai large : avec le modem sleep et les petits paquets du serveur
+         * (1 Ko), un en-tête WebSocket peut arriver en deux fois à plusieurs
+         * centaines de ms d'écart ; esp_transport_ws traite un en-tête
+         * incomplet à l'échéance comme une erreur fatale */
+        int n = esp_transport_read(s_ws, (char *)rb, RB_LEN, 2500);
         if (n < 0) {
             ESP_LOGW(TAG, "lecture : %d", n);
+            s_lost = left ? N_("trame coupée") : N_("lecture impossible");
             return false;
         }
         if (n == 0) {
             if (esp_timer_get_time() - last_rx > 20LL * 1000000) {      /* serveur muet */
                 ESP_LOGW(TAG, "plus rien du serveur");
+                s_lost = N_("plus rien du serveur");
                 return false;
             }
             continue;
@@ -908,7 +917,8 @@ static bool session(void)
             opcode = esp_transport_ws_get_read_opcode(s_ws) & 0x0F;
             left = esp_transport_ws_get_read_payload_len(s_ws);
             binary_type_read = false;
-            if (opcode == WS_TRANSPORT_OPCODES_CLOSE) return false;
+            if (opcode == WS_TRANSPORT_OPCODES_CLOSE) { s_lost = N_("fermée par le serveur"); return false; }
+            s_frames++;
             s_txt_n = 0;
             s_bin_n = 0;
         }
@@ -947,11 +957,19 @@ static void net_task(void *arg)
         else ok = true;
         if (ok && !s_quit && server_connect()) {
             fails = 0;
+            s_lost = NULL;
+            s_frames = 0;
+            int64_t t0 = esp_timer_get_time();
             bool done = session();
+            if (!done) {
+                ble_diag("WebRX coupé : %s après %lu trames, %ld s, interne %u Ko", s_lost ? s_lost : "?",
+                         (unsigned long)s_frames, (long)((esp_timer_get_time() - t0) / 1000000),
+                         (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
+            }
             s_audio_on = false;
             server_close();
             if (done) break;
-            if (!s_quit) set_state(WRX_SERVER, N_("Connexion perdue, reprise…"), "");
+            if (!s_quit) set_state(WRX_SERVER, N_("Connexion perdue, reprise…"), s_lost ? _(s_lost) : "");
             vTaskDelay(pdMS_TO_TICKS(500));
             continue;
         }

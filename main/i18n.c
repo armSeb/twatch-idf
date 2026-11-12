@@ -276,6 +276,11 @@ static const tr_t EN[] = {
     { "pas de réponse du réseau", "no answer from the network" },
     { "Le serveur ne répond pas", "The server does not answer" },
     { "Oui", "Yes" },
+    { "Wi-Fi perdu", "Wi-Fi lost" },
+    { "trame coupée", "frame cut" },
+    { "lecture impossible", "read error" },
+    { "plus rien du serveur", "nothing more from the server" },
+    { "fermée par le serveur", "closed by the server" },
 };
 
 static int s_lang = LANG_FR;
