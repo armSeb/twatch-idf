@@ -49,9 +49,17 @@ d'ESP-IDF 5.
   hébergée sont construits à la demande et détruits à l'extinction de l'écran ; la RAM ne
   contient que ce qui est affiché. Écrans permanents : cadran, liste des notifications,
   détail, appel, énergie, appairage, à propos.
-- **Apps** (`app.h`) : voir [apps-and-i18n.md](apps-and-i18n.md). Une app qui se déclare
-  *occupée* (chrono lancé, minuteur en cours, TV off en émission) garde l'écran sur sa vue à
-  l'extinction et au réveil.
+- **Apps** (`app.h`) : voir [apps-and-i18n.md](apps-and-i18n.md). L'app ouverte reste
+  construite écran éteint (elle reçoit `on_hide()`, puis `on_show()` au réveil) et la montre
+  se réveille dessus.
+- **Bannière de notification** : hors du cadran, une nouvelle notification glisse sur la
+  couche supérieure au lieu de changer d'écran ; la toucher ouvre le détail, qui ramène
+  exactement à l'écran d'avant. Les appels prennent toujours tout l'écran et y ramènent
+  ensuite.
+- **Analyseur Wi-Fi** (`app_wifi.c`) : le pilote Wi-Fi n'existe que tant que l'app est
+  visible écran allumé (`esp_wifi_init` dans `on_show`, `esp_wifi_deinit` dans `on_hide`) ;
+  chaque relève allume la radio, fait un balayage actif (~1,2 s) puis la coupe 4 s. Le BLE
+  reste connecté (coexistence logicielle).
 - **Changer de langue** reconstruit tous les écrans sur place, sans redémarrer.
 - Les objets LVGL sont alloués sur le tas ; les allocations de plus de 4 Ko vont en PSRAM, la
   RAM interne est gardée pour les piles, les tampons DMA et la radio.

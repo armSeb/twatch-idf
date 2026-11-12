@@ -32,6 +32,7 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/i18n.c
     ${CMAKE_CURRENT_SOURCE_DIR}/app_tvoff.c
     ${CMAKE_CURRENT_SOURCE_DIR}/app_rfgen.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_wifi.c
     ${CMAKE_CURRENT_SOURCE_DIR}/sound.c
     ${CMAKE_CURRENT_SOURCE_DIR}/crashlog.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gauge.c

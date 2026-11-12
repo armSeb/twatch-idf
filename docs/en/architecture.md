@@ -45,9 +45,16 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
 - **Lazy screens**: settings, now playing, launcher, quick controls and the hosted app are
   built on demand and destroyed when the screen turns off, so RAM only holds what is shown.
   Permanent screens: watch face, notification list, detail, call, battery, pairing, about.
-- **Apps** (`app.h`): see [apps-and-i18n.md](apps-and-i18n.md). An app that reports itself
-  *busy* (running stopwatch, counting timer, TV off sending) keeps the screen on its view
-  across sleep and wake.
+- **Apps** (`app.h`): see [apps-and-i18n.md](apps-and-i18n.md). The open app stays built
+  when the screen turns off (it gets `on_hide()`, then `on_show()` on wake) and the watch
+  wakes back to it.
+- **Notification banner**: outside the watch face, a new notification slides in on the top
+  layer instead of switching screens; tapping it opens the detail, which returns to the exact
+  screen you were on. Incoming calls still take the full screen and return there afterwards.
+- **Wi-Fi analyzer** (`app_wifi.c`): the Wi-Fi driver only exists while the app is visible
+  with the screen on (`esp_wifi_init` in `on_show`, `esp_wifi_deinit` in `on_hide`); each
+  fetch starts the radio, runs an active scan (~1.2 s) and stops it again for 4 s. BLE stays
+  connected (software coexistence).
 - **Language change** rebuilds every screen in place, without a restart.
 - LVGL objects are allocated from the heap; allocations above 4 KB go to PSRAM, the internal
   RAM is kept for stacks, DMA buffers and the radio.

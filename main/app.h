@@ -3,8 +3,8 @@
  *
  * Une app = une fiche app_t enregistrée dans apps.c. Le système lui fournit
  * un écran vide (gestes de retour déjà gérés) quand on l'ouvre depuis le
- * lanceur, et le détruit à l'extinction de l'écran ou à l'ouverture d'une
- * autre app : l'état durable de l'app vit donc dans ses variables statiques
+ * lanceur, et le détruit quand on la quitte ou à l'ouverture d'une autre
+ * app (écran éteint, elle reste construite et cachée) : l'état durable de l'app vit donc dans ses variables statiques
  * (modèle), jamais dans les objets LVGL (vue).
  *
  * Toutes les fonctions sont appelées depuis la tâche app (propriétaire de
@@ -28,8 +28,9 @@ typedef struct app_s {
      * et allumer l'écran (alarme…) */
     bool (*on_event)(int code);
     uint32_t screen_timeout_ms;       /* 0 = réglage utilisateur */
-    /* optionnel : true = l'app travaille (chrono lancé…) ; l'écran s'éteint
-     * alors sur l'app et le réveil y revient au lieu du cadran */
+    /* optionnel : true = l'app travaille (chrono lancé…). Toute app ouverte
+     * est retrouvée au réveil ; écran éteint, on_hide() est appelé et
+     * on_show() au réveil (couper le Wi-Fi, les timers d'affichage…) */
     bool (*busy)(void);
 } app_t;
 

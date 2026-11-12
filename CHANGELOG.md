@@ -2,6 +2,21 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.19.0 — 2026-11-12
+
+- New **Wi-Fi analyzer** app: networks sorted by signal (RSSI, channel, security, width),
+  2.4 GHz channel occupancy chart with the least busy of 1/6/11, and a detail sheet per access
+  point (BSSID, universal/random address, channel and frequency, 20/40 MHz, security and
+  ciphers, 802.11 modes, WPS, advertised country, signal history). Pause/resume chip. The Wi-Fi
+  driver only runs while the app is on screen and the radio is off between fetches; it is
+  fully de-initialised when leaving the app or when the screen turns off.
+- **Notifications no longer pull you out of an app or a menu**: a banner slides in on top
+  (tap to open the detail, which then returns to the same screen; swipe up to dismiss; 5 s).
+  On the watch face, notifications still open full screen. Incoming calls return to the app
+  afterwards.
+- **Any open app is kept across sleep**: the watch wakes back to it (not only a running
+  stopwatch or timer); apps get `on_hide()`/`on_show()` around sleep.
+
 ## 0.18.1 — 2026-11-09
 
 - **Wi-Fi update could fail with "web server did not start"** (internal RAM too tight,

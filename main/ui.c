@@ -62,6 +62,13 @@ static uint32_t c_uid;
 static bool c_uid_valid;
 /* menu */
 static uint32_t s_pending_hash;   /* notif reçue écran éteint, pas encore vue */
+static scr_id_t c_return = SCR_WATCH;   /* écran retrouvé après un appel */
+/* bannière de notification (couche supérieure) : affichée par-dessus une app
+ * ou un menu au lieu de quitter l'écran en cours */
+static lv_obj_t *b_card, *b_icon, *b_app, *b_title, *b_msg;
+static lv_timer_t *b_timer;
+static uint32_t b_hash;
+static void banner_hide(bool anim);
 static lv_obj_t *m_sw_nwake, *m_sw_tap;
 static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_bm_lang, *m_toast;
 static void menu_lang_cb(lv_event_t *ev);
@@ -590,7 +597,7 @@ static void call_btn_cb(lv_event_t *ev)
 {
     int act = (int)(uintptr_t)lv_event_get_user_data(ev);   /* 0 décrocher, 1 refuser */
     if (c_uid_valid) ancs_request_action(c_uid, (uint8_t)act);
-    show(SCR_WATCH, LV_SCR_LOAD_ANIM_FADE_OUT);
+    show(c_return, LV_SCR_LOAD_ANIM_FADE_OUT);
 }
 
 static void build_call(void)
@@ -1073,6 +1080,143 @@ static void build_toast(void)
     m_toast_t = lv_timer_create(toast_hide_cb, 1800, NULL);
     lv_timer_set_repeat_count(m_toast_t, -1);
     lv_timer_pause(m_toast_t);
+}
+
+#define BANNER_H   68
+#define BANNER_MS  5000
+
+static void banner_anim_y(void *o, int32_t v) { lv_obj_set_style_translate_y(o, v, 0); }
+static void banner_hidden_cb(lv_anim_t *a) { lv_obj_add_flag(b_card, LV_OBJ_FLAG_HIDDEN); }
+
+static void banner_hide(bool anim)
+{
+    if (!b_card || lv_obj_has_flag(b_card, LV_OBJ_FLAG_HIDDEN)) return;
+    lv_timer_pause(b_timer);
+    lv_anim_delete(b_card, banner_anim_y);
+    if (!anim || !display_is_on()) {
+        lv_obj_add_flag(b_card, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, b_card);
+    lv_anim_set_exec_cb(&a, banner_anim_y);
+    lv_anim_set_values(&a, lv_obj_get_style_translate_y(b_card, 0), -(BANNER_H + 12));
+    lv_anim_set_duration(&a, 160);
+    lv_anim_set_completed_cb(&a, banner_hidden_cb);
+    lv_anim_start(&a);
+}
+
+static void banner_timer_cb(lv_timer_t *t) { banner_hide(true); }
+
+static void banner_click_cb(lv_event_t *ev)
+{
+    notif_entry_t *e = ns_find_hash(b_hash);
+    banner_hide(false);
+    if (!e) return;
+    /* détail, puis retour exactement là où l'on était (app, menu…) */
+    if (s_cur != SCR_DETAIL && s_cur != SCR_CALL) d_return = s_cur;
+    detail_fill(e);
+    show(SCR_DETAIL, LV_SCR_LOAD_ANIM_OVER_TOP);
+}
+
+static void banner_gesture_cb(lv_event_t *ev)
+{
+    lv_indev_t *in = lv_indev_active();
+    if (!in) return;
+    lv_dir_t d = lv_indev_get_gesture_dir(in);
+    if (d == LV_DIR_TOP || d == LV_DIR_LEFT || d == LV_DIR_RIGHT) {
+        banner_hide(true);
+        lv_indev_wait_release(in);
+    }
+}
+
+static void banner_show(const notif_entry_t *e)
+{
+    b_hash = e->hash;
+    lv_label_set_text(b_icon, cat_icon(e->n.category));
+    lv_obj_set_style_bg_color(b_icon, cat_color(e->n.category), 0);
+    char when[16];
+    fmt_when(e->n.date, when, sizeof(when));
+    char app[ANCS_APPNAME_MAX + 24];
+    snprintf(app, sizeof(app), "%.32s · %s", e->n.app_name, when);
+    lv_label_set_text(b_app, app);
+    lv_label_set_text(b_title, e->n.title[0] ? e->n.title : e->n.app_name);
+    lv_label_set_text(b_msg, e->n.message);
+    lv_obj_move_foreground(b_card);
+    bool was_hidden = lv_obj_has_flag(b_card, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(b_card, LV_OBJ_FLAG_HIDDEN);
+    lv_anim_delete(b_card, banner_anim_y);
+    if (was_hidden && display_is_on()) {
+        lv_anim_t a;
+        lv_anim_init(&a);
+        lv_anim_set_var(&a, b_card);
+        lv_anim_set_exec_cb(&a, banner_anim_y);
+        lv_anim_set_values(&a, -(BANNER_H + 12), 0);
+        lv_anim_set_duration(&a, 200);
+        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+        lv_anim_start(&a);
+    } else {
+        lv_obj_set_style_translate_y(b_card, 0, 0);
+    }
+    lv_timer_set_period(b_timer, display_is_on() ? BANNER_MS : BANNER_MS + 2000);
+    lv_timer_reset(b_timer);
+    lv_timer_resume(b_timer);
+}
+
+static void build_banner(void)
+{
+    b_card = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(b_card, BOARD_LCD_W - 12, BANNER_H);
+    lv_obj_align(b_card, LV_ALIGN_TOP_MID, 0, 4);
+    lv_obj_set_style_bg_color(b_card, lv_color_hex(0x22252C), 0);
+    lv_obj_set_style_bg_opa(b_card, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(b_card, 18, 0);
+    lv_obj_set_style_border_width(b_card, 1, 0);
+    lv_obj_set_style_border_color(b_card, lv_color_hex(0x3A3F4A), 0);
+    lv_obj_set_style_shadow_width(b_card, 18, 0);
+    lv_obj_set_style_shadow_color(b_card, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_shadow_opa(b_card, LV_OPA_80, 0);
+    lv_obj_set_style_pad_all(b_card, 0, 0);
+    lv_obj_remove_flag(b_card, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_flag(b_card, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_event_cb(b_card, banner_click_cb, LV_EVENT_SHORT_CLICKED, NULL);
+    lv_obj_add_event_cb(b_card, banner_gesture_cb, LV_EVENT_GESTURE, NULL);
+
+    b_icon = lv_label_create(b_card);
+    lv_obj_set_size(b_icon, 36, 36);
+    lv_obj_set_style_radius(b_icon, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(b_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_font(b_icon, &font_text_16, 0);
+    lv_obj_set_style_text_color(b_icon, C_FG, 0);
+    lv_obj_set_style_text_align(b_icon, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_pad_top(b_icon, 9, 0);
+    lv_obj_align(b_icon, LV_ALIGN_LEFT_MID, 10, 0);
+
+    b_app = lv_label_create(b_card);
+    lv_obj_set_style_text_font(b_app, &font_small_11, 0);
+    lv_obj_set_style_text_color(b_app, C_DIM, 0);
+    lv_label_set_long_mode(b_app, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(b_app, 166);
+    lv_obj_set_pos(b_app, 56, 7);
+
+    b_title = lv_label_create(b_card);
+    lv_obj_set_style_text_font(b_title, &font_text_16, 0);
+    lv_obj_set_style_text_color(b_title, C_FG, 0);
+    lv_label_set_long_mode(b_title, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(b_title, 166);
+    lv_obj_set_pos(b_title, 56, 22);
+
+    b_msg = lv_label_create(b_card);
+    lv_obj_set_style_text_font(b_msg, &font_small_11, 0);
+    lv_obj_set_style_text_color(b_msg, lv_color_hex(0xC4C8D0), 0);
+    lv_label_set_long_mode(b_msg, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(b_msg, 166);
+    lv_obj_set_pos(b_msg, 56, 44);
+
+    b_timer = lv_timer_create(banner_timer_cb, BANNER_MS, NULL);
+    lv_timer_set_repeat_count(b_timer, -1);
+    lv_timer_pause(b_timer);
 }
 
 static void build_menu(void)
@@ -2066,6 +2210,7 @@ void ui_init(void)
     build_detail();
     build_call();
     build_toast();
+    build_banner();
     build_power();
     build_pair();
     build_about();
@@ -2112,6 +2257,10 @@ static void release_group(int g)
 
 void ui_release_idle(void)
 {
+    banner_hide(false);
+    /* l'app reste construite écran éteint : on lui dit qu'elle n'est plus
+     * visible (Wi-Fi, timers d'affichage…) ; ui_on_wake() la réveille */
+    if (s_cur == SCR_APP && s_app_cur && s_app_cur->on_hide) s_app_cur->on_hide();
     /* une animation de changement d'écran en cours garde l'ancien écran
      * affiché : on la termine avant de libérer quoi que ce soit */
     scr_anim_settle();
@@ -2119,16 +2268,17 @@ void ui_release_idle(void)
     for (int g = G_MENU; g <= G_APP; g++) release_group(g);
 }
 
-static bool app_busy(void)
-{
-    return s_app_cur && s_app_cur->busy && s_app_cur->busy();
-}
-
-/* extinction et réveil : on reste sur une app qui travaille (chrono lancé,
- * minuteur en cours) pour la retrouver au réveil, sinon retour au cadran */
+/* extinction et réveil : on reste sur l'app ouverte pour la retrouver au
+ * réveil (y compris si l'on regardait une notif ou un appel ouvert depuis
+ * elle), sinon retour au cadran */
 void ui_go_home_or_app(void)
 {
-    if (s_cur == SCR_APP && app_busy()) return;
+    if (s_cur == SCR_APP) return;
+    if (s_scr[SCR_APP] && s_app_cur &&
+        ((s_cur == SCR_DETAIL && d_return == SCR_APP) || (s_cur == SCR_CALL && c_return == SCR_APP))) {
+        show(SCR_APP, LV_SCR_LOAD_ANIM_NONE);
+        return;
+    }
     ui_go_home();
 }
 
@@ -2161,6 +2311,7 @@ uint32_t ui_timeout_ms(void)
 
 void ui_on_wake(void)
 {
+    if (s_cur == SCR_APP && s_app_cur && s_app_cur->on_show) s_app_cur->on_show();
     if (s_cur == SCR_WATCH) { watch_update_time(true); watch_refresh_status(); }
     if (s_cur == SCR_POWER) power_refresh();
 }
@@ -2192,14 +2343,20 @@ bool ui_on_notif(notif_entry_t *e, bool alert)
 
     bool vib = settings_get()->vibrate && !(e->n.flags & ANCS_FLAG_SILENT);
     if (e->n.category == ANCS_CAT_INCOMING_CALL) {
+        banner_hide(false);
+        if (s_cur != SCR_CALL) c_return = (s_cur == SCR_APP || s_cur == SCR_LIST || s_cur == SCR_MEDIA) ? s_cur : SCR_WATCH;
         c_uid = e->n.uid;
         c_uid_valid = e->uid_valid;
         lv_label_set_text(c_who, e->n.title[0] ? e->n.title : _("Inconnu"));
         show(SCR_CALL, LV_SCR_LOAD_ANIM_OVER_TOP);
         if (vib) power_vibrate(VIB_CALL);
+    } else if (s_cur != SCR_WATCH) {
+        /* dans une app, un menu, la liste… : bannière par-dessus, on ne
+         * quitte pas l'écran en cours ; un toucher ouvre le détail */
+        banner_show(e);
+        if (vib) power_vibrate(VIB_NOTIF);
     } else {
-        if (s_cur != SCR_DETAIL)
-            d_return = (s_cur == SCR_LIST || s_cur == SCR_APP) ? s_cur : SCR_WATCH;
+        d_return = SCR_WATCH;
         detail_fill(e);
         show(SCR_DETAIL, LV_SCR_LOAD_ANIM_OVER_TOP);
         if (vib) power_vibrate(VIB_NOTIF);
@@ -2234,7 +2391,7 @@ void ui_on_notif_removed(uint32_t uid)
     }
     if (was_call) {
         c_uid_valid = false;
-        show(SCR_WATCH, LV_SCR_LOAD_ANIM_FADE_OUT);
+        show(c_return, LV_SCR_LOAD_ANIM_FADE_OUT);
     } else if (s_cur == SCR_DETAIL && h && h == d_hash) {
         show(d_return, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
     }
@@ -2248,7 +2405,7 @@ void ui_on_ble_state(int st)
     if (st != BLE_ST_READY && st != BLE_ST_SECURED && st != BLE_ST_CONNECTED) {
         ns_invalidate_uids();
         c_uid_valid = false;
-        if (s_cur == SCR_CALL) show(SCR_WATCH, LV_SCR_LOAD_ANIM_NONE);
+        if (s_cur == SCR_CALL) show(c_return, LV_SCR_LOAD_ANIM_NONE);
     }
     watch_refresh_status();
     if (s_cur == SCR_QUICK) quick_refresh();

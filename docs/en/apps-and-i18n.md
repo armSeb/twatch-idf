@@ -35,8 +35,9 @@ typedef struct app_s {
   the app opened and the screen woken (alarm).
 - Periodic refresh: create an `lv_timer` in `create()`, pause it in `on_hide()`, resume it in
   `on_show()`, delete it in `destroy()`.
-- `busy()` returning true (running stopwatch…) makes the screen turn off *on* the app and wake
-  back to it instead of the watch face.
+- The open app is kept across sleep: the screen turns off *on* it (`on_hide()`) and wakes back
+  to it (`on_show()`). Stop anything costly (radio, sensors) in `on_hide()`. `busy()` is
+  informative (e.g. an app that is working).
 
 ### Building blocks (`ui_kit.h`)
 

@@ -32,9 +32,14 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   window, small seconds), *Pub* (full-screen square, bottle green and brass, harp, FUEL gauge,
   OPEN/CLOSED sign for the phone link) and *Digital*.
 - **Apps**: launcher with *Stopwatch* (laps), *Timer* (beeps and vibrates even with the screen
-  off, then reopens), *Torch* (white/red), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and *TV off* (switches off most TVs through the IR
-  LED, Europe/USA code sets). A running stopwatch or timer keeps the focus: the screen turns
-  off on it and wakes back to it. A small app framework lets you add one in a single file.
+  off, then reopens), *Torch* (white/red), **Wi-Fi analyzer** (networks with RSSI, channel,
+  security; 2.4 GHz channel occupancy with the least busy channel; per-AP detail with signal
+  history), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and
+  *TV off* (switches off most TVs through the IR LED, Europe/USA code sets). An open app stays
+  put: the screen turns off on it and wakes back to it. A small app framework lets you add
+  one in a single file.
+- **Notifications never pull you out of an app or menu**: they slide in as a banner on top
+  (tap to read, swipe up to dismiss); on the watch face they open full screen as before.
 - **Quick controls**: Bluetooth, **Do not disturb**, torch, now playing, brightness.
 - **French or English UI**, switched instantly without a restart.
 - **Over-the-air updates** from the iPhone over Wi-Fi (the watch becomes an access point),
@@ -58,7 +63,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 |---|---|---|
 | Watch face | swipe ↑ | Notifications (close: ↓ or →) |
 | Watch face | swipe ↓ | Quick controls (close: ↑ or →) |
-| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Carrier, Battery, Settings |
+| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Wi-Fi, Carrier, Battery, Settings |
 | Watch face | long press | Choose the watch face |
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |

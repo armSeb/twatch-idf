@@ -35,8 +35,9 @@ typedef struct app_s {
   l'app soit ouverte et l'écran allumé (alarme).
 - Rafraîchissement périodique : créer un `lv_timer` dans `create()`, le mettre en pause dans
   `on_hide()`, le relancer dans `on_show()`, le supprimer dans `destroy()`.
-- `busy()` qui renvoie vrai (chrono lancé…) fait s'éteindre l'écran *sur* l'app et le réveil
-  y revenir au lieu du cadran.
+- L'app ouverte est gardée pendant la veille : l'écran s'éteint *sur* elle (`on_hide()`) et
+  le réveil y revient (`on_show()`). Arrêter dans `on_hide()` tout ce qui coûte (radio,
+  capteurs). `busy()` est indicatif (app en train de travailler).
 
 ### Briques (`ui_kit.h`)
 
