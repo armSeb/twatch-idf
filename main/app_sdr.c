@@ -12,6 +12,7 @@
  *
  * Toucher : marqueur (fréquence, niveau). Appui long (vue bande) : zoom sur le
  * canal touché. Vue zoom : glisser ← → change de canal. Titre : pause.
+ * Quitter : « ‹ » ou le bouton (un glissé sur le waterfall ne quitte pas).
  */
 #include <stdio.h>
 #include <string.h>
@@ -288,10 +289,9 @@ static void gesture_cb(lv_event_t *e)
         int ch = m_ch + (d == LV_DIR_LEFT ? 1 : -1);
         if (ch >= 1 && ch <= 13) { m_ch = ch; m_mark = -1; apply_config(); }
         lv_indev_wait_release(in);
-    } else if (d == LV_DIR_RIGHT) {
-        lv_indev_wait_release(in);
-        app_close();                             /* vue bande : → = quitter, comme partout */
     }
+    /* vue bande : un glissé sur le spectre ne fait rien. Quitter redémarre la
+     * montre : seulement par « ‹ » ou le bouton, jamais par un geste accidentel */
 }
 
 static void zoom_cb(lv_event_t *e)

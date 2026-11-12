@@ -2,6 +2,12 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.20.1 — 2026-11-12
+
+- SDR: a swipe → on the waterfall in the band view no longer leaves the app (leaving
+  restarts the watch, which looked like a crash while handling the waterfall). Leave with
+  « ‹ » or the button.
+
 ## 0.20.0 — 2026-11-12
 
 - New **SDR** app: live 2.4 GHz spectrum and waterfall computed on the watch from the raw
