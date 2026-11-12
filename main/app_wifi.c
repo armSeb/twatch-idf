@@ -14,6 +14,7 @@
  * en veille : au réveil, la liste réapparaît telle quelle puis se rafraîchit.
  */
 #include <stdio.h>
+#include "esp_attr.h"
 #include <string.h>
 #include <math.h>
 #include "app.h"
@@ -85,7 +86,7 @@ static lv_obj_t *v_scr, *v_status, *v_tabs, *v_list, *v_chart, *v_best, *v_empty
 static lv_timer_t *v_tick;
 static int v_tab;               /* 0 réseaux, 1 canaux */
 typedef struct { lv_obj_t *row, *bar, *ssid, *sub, *rssi, *lock; } row_t;
-static row_t v_rows[LIST_ROWS];
+EXT_RAM_BSS_ATTR static row_t v_rows[LIST_ROWS];
 static int v_nrows;
 static bool v_list_dirty;
 /* détail */

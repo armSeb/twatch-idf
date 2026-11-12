@@ -40,9 +40,11 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/webrx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/webrx_cfg.c
     ${CMAKE_CURRENT_SOURCE_DIR}/net.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/lv_mem_psram.c
     ${CMAKE_CURRENT_SOURCE_DIR}/sound.c
     ${CMAKE_CURRENT_SOURCE_DIR}/crashlog.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gauge.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ota.c
     PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wno-unused-parameter;-Wno-missing-field-initializers"
 )
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-u lv_mem_init")

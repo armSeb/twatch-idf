@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "esp_attr.h"
 #include <stdio.h>
 #include <string.h>
 #include "lvgl.h"
@@ -24,6 +25,7 @@
 #include "esp_system.h"
 #include "esp_heap_caps.h"
 #include "esp_app_desc.h"
+#include "esp_ota_ops.h"
 #include "esp_idf_version.h"
 
 #include "ui_kit.h"
@@ -1686,7 +1688,7 @@ static void about_refresh(void)
     ble_get_info(&b);
     const esp_app_desc_t *d = esp_app_get_description();
     uint32_t up = (uint32_t)(esp_timer_get_time() / 1000000);
-    static char s[1700];
+    EXT_RAM_BSS_ATTR static char s[1700];
     int n = snprintf(s, sizeof(s),
              _("Firmware %s\nESP-IDF %s · LVGL %d.%d.%d\n"
                "BLE %02X:%02X:%02X:%02X:%02X:%02X\nAppareils appairés : %d\n"
@@ -1720,6 +1722,26 @@ static void about_refresh(void)
     lv_label_set_text(a_lbl, s);
 }
 
+static lv_obj_t *a_modal;
+
+static void reboot_confirm_cb(lv_event_t *ev)
+{
+    bool ok = (uintptr_t)lv_event_get_user_data(ev) != 0;
+    lv_obj_add_flag(a_modal, LV_OBJ_FLAG_HIDDEN);
+    if (!ok) return;
+    /* redémarrage voulu : une mise à jour encore « à l'essai » est validée,
+     * sinon le bootloader reviendrait à l'ancienne version */
+    esp_ota_mark_app_valid_cancel_rollback();
+    esp_restart();
+}
+
+static void reboot_cb(lv_event_t *ev)
+{
+    lv_obj_scroll_to_y(s_scr[SCR_ABOUT], 0, LV_ANIM_OFF);
+    lv_obj_remove_flag(a_modal, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(a_modal);
+}
+
 static void build_about(void)
 {
     lv_obj_t *s = s_scr[SCR_ABOUT] = mk_screen();
@@ -1728,8 +1750,13 @@ static void build_about(void)
     a_lbl = mk_label(s, &font_text_16, C_DIM, "");
     lv_obj_set_width(a_lbl, BOARD_LCD_W - 24);
     lv_label_set_long_mode(a_lbl, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(a_lbl, 12, 44);
+    lv_obj_set_pos(a_lbl, 12, 92);
     lv_obj_set_style_pad_bottom(a_lbl, 16, 0);
+    lv_obj_t *rb = mk_button(s, with_sym(LV_SYMBOL_REFRESH, _("Redémarrer la montre")), C_CARD, reboot_cb, NULL);
+    lv_obj_set_size(rb, BOARD_LCD_W - 24, 40);
+    lv_obj_set_pos(rb, 12, 42);
+    a_modal = mk_modal(s, _("Redémarrer ?"), _("Réglages et appairage sont conservés."),
+                       _("Oui"), C_WARN, reboot_confirm_cb);
     lv_obj_add_flag(s, LV_OBJ_FLAG_SCROLLABLE);       /* journal BLE en dessous */
     lv_obj_set_scroll_dir(s, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(s, LV_SCROLLBAR_MODE_ACTIVE);
@@ -2357,6 +2384,7 @@ uint32_t ui_timeout_ms(void)
     if (ota_active()) return 10u * 60 * 1000;   /* écran allumé pendant la mise à jour */
     switch (s_cur) {
     case SCR_APP:
+        if (s_app_cur && s_app_cur->keep_screen_on && s_app_cur->keep_screen_on()) return UINT32_MAX;
         if (s_app_cur && s_app_cur->screen_timeout_ms) return s_app_cur->screen_timeout_ms;
         return base;
     case SCR_LAUNCHER:

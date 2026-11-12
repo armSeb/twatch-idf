@@ -269,6 +269,13 @@ static const tr_t EN[] = {
     { "nouvel essai dans %d s", "retrying in %d s" },
     { "toucher pour réessayer", "tap to retry" },
     { "Signal : %d dB", "Signal: %d dB" },
+    { "Redémarrer la montre", "Restart the watch" },
+    { "Redémarrer ?", "Restart?" },
+    { "Réglages et appairage sont conservés.", "Settings and pairing are kept." },
+    { "raison %d", "reason %d" },
+    { "pas de réponse du réseau", "no answer from the network" },
+    { "Le serveur ne répond pas", "The server does not answer" },
+    { "Oui", "Yes" },
 };
 
 static int s_lang = LANG_FR;

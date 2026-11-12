@@ -2,7 +2,9 @@
 #include "webrx_cfg.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "nvs.h"
+#include "esp_heap_caps.h"
 
 #define NS "webrx"
 
@@ -46,11 +48,14 @@ esp_err_t wrx_cfg_save(const wrx_cfg_t *c)
 
 bool wrx_cfg_ready(void)
 {
-    static wrx_cfg_t c;                  /* 500 o : hors pile */
-    wrx_cfg_load(&c);
+    wrx_cfg_t *c = heap_caps_malloc(sizeof *c, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!c) return false;
+    wrx_cfg_load(c);
     bool net = false;
-    for (int i = 0; i < WRX_NETS; i++) net |= c.ssid[i][0] != 0;
-    return net && c.url[0];
+    for (int i = 0; i < WRX_NETS; i++) net |= c->ssid[i][0] != 0;
+    bool ok = net && c->url[0];
+    free(c);
+    return ok;
 }
 
 void wrx_state_load(wrx_state_t *s)

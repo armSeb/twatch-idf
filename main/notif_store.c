@@ -1,11 +1,12 @@
 #include "notif_store.h"
+#include "esp_attr.h"
 #include <string.h>
 #include "esp_timer.h"
 #include "esp_log.h"
 
 static const char *TAG = "store";
 
-static notif_entry_t s_e[NS_MAX];
+EXT_RAM_BSS_ATTR static notif_entry_t s_e[NS_MAX];   /* 9,6 Ko : en PSRAM */
 static int s_n;
 
 /* ------------------------------------------------------------------ */

@@ -228,7 +228,7 @@ void ble_diag(const char *fmt, ...)
 
 int ble_diag_dump(char *out, size_t len)
 {
-    static char copy[BLE_DIAG_LINES][48];
+    EXT_RAM_BSS_ATTR static char copy[BLE_DIAG_LINES][48];
     int n, head;
     portENTER_CRITICAL(&s_diag_mux);
     memcpy(copy, s_diag, sizeof(copy));

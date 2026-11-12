@@ -82,7 +82,8 @@ static wrx_mode_t *s_modes; static int s_nmodes;           /* analogiques (écou
 static struct { char mod[16]; char under[16]; int lo, hi; bool bp; } *s_digi;   /* numériques → BLU… */
 static int s_ndigi;
 static wrx_state_t s_st;                     /* réglages durables (NVS) */
-static wrx_cfg_t s_cfg;
+static wrx_cfg_t *s_cfg_p;                   /* PSRAM */
+#define s_cfg (*s_cfg_p)
 
 enum { PEND_DSP = 1, PEND_PROFILE = 2, PEND_START = 4 };
 static uint32_t s_pend;
@@ -239,7 +240,7 @@ static void audio_bytes(const uint8_t *p, int n)
 
 static void play_task(void *arg)
 {
-    static int16_t buf[CHUNK + 1];
+    int16_t buf[CHUNK + 1];                      /* pile de la tâche (≈ 0,5 Ko) */
     bool open = false, buffering = true;
     while (!s_quit) {
         if (!s_audio_on) {
@@ -327,6 +328,7 @@ static bool wifi_connect(void)
     int order[WRX_NETS], no = 0;
     for (int k = 0; k < WRX_NETS; k++) if (s_cfg.ssid[k][0] && (seen[k] || !nseen)) order[no++] = k;
     bool bad_pass = false;
+    int last_reason = 0;
     for (int j = 0; j < no && !s_quit; j++) {
         int k = order[j];
         set_state(WRX_WIFI, N_("Connexion au Wi-Fi"), s_cfg.ssid[k]);
@@ -348,16 +350,24 @@ static bool wifi_connect(void)
             return true;
         }
         int r = s_disc_reason;
+        last_reason = r;
         if (r == WIFI_REASON_AUTH_FAIL || r == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT ||
             r == WIFI_REASON_HANDSHAKE_TIMEOUT || r == WIFI_REASON_MIC_FAILURE) bad_pass = true;
         ESP_LOGW(TAG, "Wi-Fi « %s » : échec (raison %d)", s_cfg.ssid[k], r);
+        ble_diag("WebRX Wi-Fi %s : raison %d, interne %u Ko", s_cfg.ssid[k], r,
+                 (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
         esp_wifi_disconnect();
         xEventGroupWaitBits(s_evg, BIT_DISC | BIT_QUIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(500));
     }
     if (s_quit) return false;
     if (bad_pass) set_state(WRX_FAIL, N_("Mot de passe Wi-Fi refusé"), "");
     else if (!nseen) set_state(WRX_FAIL, N_("Aucun réseau connu à portée"), "");
-    else set_state(WRX_FAIL, N_("Connexion Wi-Fi impossible"), "");
+    else {
+        char d[32];
+        if (last_reason) snprintf(d, sizeof d, _("raison %d"), last_reason);
+        else snprintf(d, sizeof d, "%s", _("pas de réponse du réseau"));
+        set_state(WRX_FAIL, N_("Connexion Wi-Fi impossible"), d);
+    }
     return false;
 }
 
@@ -435,9 +445,15 @@ static void server_close(void)
 
 static bool ws_text(const char *s)
 {
-    if (!s_ws) return false;
+    /* esp_transport_ws masque la charge utile SUR PLACE avant l'envoi (puis la
+     * rétablit) : jamais de chaîne en flash ici, on envoie toujours une copie */
+    static char *cp;
+    if (!cp) cp = ps_malloc(512);
+    if (!s_ws || !cp) return false;
     int n = (int)strlen(s);
-    return esp_transport_ws_send_raw(s_ws, WS_TRANSPORT_OPCODES_TEXT | WS_TRANSPORT_OPCODES_FIN, s, n, 3000) == n;
+    if (n >= 512) return false;
+    memcpy(cp, s, n + 1);
+    return esp_transport_ws_send_raw(s_ws, WS_TRANSPORT_OPCODES_TEXT | WS_TRANSPORT_OPCODES_FIN, cp, n, 3000) == n;
 }
 
 static bool server_connect(void)
@@ -472,17 +488,27 @@ static bool server_connect(void)
             set_state(WRX_FAIL, u.tls ? N_("Serveur injoignable ou certificat refusé") : N_("Serveur injoignable"), u.host);
         }
         ESP_LOGW(TAG, "connexion à %s:%d%s : échec (HTTP %d)", u.host, u.port, u.path, code);
+        ble_diag("WebRX %s:%d : échec (HTTP %d), interne %u Ko", u.host, u.port, code,
+                 (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
         return false;
     }
     lock();
     s_sock = esp_transport_get_socket(s_ws);
     unlock();
     ESP_LOGI(TAG, "connecté à %s:%d%s", u.host, u.port, u.path);
-    if (!ws_text("SERVER DE CLIENT client=twatch type=receiver")) { server_close(); return false; }
+    if (!ws_text("SERVER DE CLIENT client=twatch type=receiver")) {
+        server_close();
+        set_state(WRX_FAIL, N_("Le serveur ne répond pas"), u.host);
+        return false;
+    }
     char b[96];
     snprintf(b, sizeof b, "{\"type\":\"connectionproperties\",\"params\":{\"output_rate\":%d,\"hd_output_rate\":%d}}",
              WRX_RATE, WRX_RATE);
-    if (!ws_text(b)) { server_close(); return false; }
+    if (!ws_text(b)) {
+        server_close();
+        set_state(WRX_FAIL, N_("Le serveur ne répond pas"), u.host);
+        return false;
+    }
     return true;
 }
 
@@ -968,11 +994,12 @@ static bool alloc_buffers(void)
     if (!s_rows) s_rows = ps_malloc(NROWS * sizeof(wrx_row_t));
     if (!s_bm) s_bm = ps_malloc(WRX_BM_MAX * sizeof(wrx_bm_t));
     if (!s_prof) s_prof = ps_malloc(WRX_PROF_MAX * sizeof(wrx_prof_t));
+    if (!s_cfg_p) s_cfg_p = ps_malloc(sizeof(wrx_cfg_t));
     if (!s_modes) s_modes = ps_malloc(WRX_MODE_MAX * sizeof(wrx_mode_t));
     if (!s_digi) s_digi = ps_malloc(DIGI_MAX * sizeof *s_digi);
     if (!s_pcm) s_pcm = ps_malloc(2 * 1024 * sizeof(int16_t));
     if (!s_rb) s_rb = ps_malloc(RB_LEN);
-    return s_modes && s_digi && s_ring && s_txt && s_bin && s_rows && s_bm && s_prof && s_pcm && s_rb;
+    return s_cfg_p && s_modes && s_digi && s_ring && s_txt && s_bin && s_rows && s_bm && s_prof && s_pcm && s_rb;
 }
 
 esp_err_t webrx_start(void)
@@ -1035,7 +1062,7 @@ esp_err_t webrx_start(void)
         webrx_stop();
         return ESP_ERR_NO_MEM;
     }
-    if (xTaskCreatePinnedToCore(play_task, "wrxplay", 3072, NULL, 6, NULL, 1) != pdPASS) {
+    if (xTaskCreatePinnedToCore(play_task, "wrxplay", 3584, NULL, 6, NULL, 1) != pdPASS) {
         xEventGroupSetBits(s_evg, BIT_PLAYEND);
     }
     return ESP_OK;

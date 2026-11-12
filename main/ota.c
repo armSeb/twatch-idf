@@ -1,4 +1,5 @@
 #include "i18n.h"
+#include "esp_attr.h"
 #include "ota.h"
 #include <string.h>
 #include <stdio.h>
@@ -176,7 +177,7 @@ static const char PAGE_TAIL[] =
  * garde sinon plusieurs connexions ouvertes et sature le serveur. */
 static esp_err_t page_get(httpd_req_t *r)
 {
-    static char page[sizeof(PAGE_HEAD) + sizeof(PAGE_TAIL) + 40];
+    EXT_RAM_BSS_ATTR static char page[sizeof(PAGE_HEAD) + sizeof(PAGE_TAIL) + 40];
     s_last_activity_us = esp_timer_get_time();
     int n = snprintf(page, sizeof(page), "%s%s%s", PAGE_HEAD, esp_app_get_description()->version, PAGE_TAIL);
     httpd_resp_set_type(r, "text/html; charset=utf-8");
@@ -272,7 +273,7 @@ static esp_err_t fail(httpd_req_t *r, esp_ota_handle_t h, int32_t code, const ch
 /* Réception en flux : 4 Ko à la fois, écrits dans l'emplacement libre */
 static esp_err_t update_post(httpd_req_t *r)
 {
-    static char buf[4096];
+    EXT_RAM_BSS_ATTR static char buf[4096];   /* PSRAM : esp_ota_write recopie par blocs */
     const esp_partition_t *dst = esp_ota_get_next_update_partition(NULL);
     s_last_activity_us = esp_timer_get_time();
     if (!dst) return fail(r, 0, OTA_EV_ERR_WRITE, "no_slot");
@@ -338,7 +339,7 @@ static esp_err_t update_post(httpd_req_t *r)
 /* ------------------------------------------------------------------ */
 static int s_page;                         /* OTA_PAGE_* : page servie sur « / » */
 #define SCAN_MAX 16
-static char s_scan[SCAN_MAX][33];          /* réseaux vus au démarrage du point d'accès */
+static char (*s_scan)[33];                 /* réseaux vus au démarrage du point d'accès (PSRAM) */
 static int s_nscan;
 
 void ota_set_page(int page) { s_page = page; }
@@ -413,7 +414,10 @@ static size_t esc(char *o, size_t cap, const char *s)
 static esp_err_t webrx_get(httpd_req_t *r)
 {
     s_last_activity_us = esp_timer_get_time();
-    static wrx_cfg_t c;
+    static wrx_cfg_t *cp;                  /* PSRAM, gardé pour la session */
+    if (!cp) cp = heap_caps_malloc(sizeof *cp, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!cp) return httpd_resp_send_500(r);
+#define c (*cp)
     wrx_cfg_load(&c);
     const size_t cap = sizeof(WRX_HEAD) + sizeof(WRX_TAIL) + 4096;
     char *pg = heap_caps_malloc(cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -443,6 +447,7 @@ static esp_err_t webrx_get(httpd_req_t *r)
     esp_err_t ret = httpd_resp_send(r, pg, n < cap ? n : cap - 1);
     free(pg);
     return ret;
+#undef c
 }
 
 static esp_err_t root_get(httpd_req_t *r)
@@ -501,7 +506,12 @@ static esp_err_t webrx_post(httpd_req_t *r)
         got += n;
     }
     body[got] = 0;
-    static wrx_cfg_t old, c;
+    static wrx_cfg_t *op, *cp;             /* PSRAM, gardés pour la session */
+    if (!op) op = heap_caps_malloc(sizeof *op, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!cp) cp = heap_caps_malloc(sizeof *cp, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!op || !cp) return webrx_bad(r, "nvs");
+#define old (*op)
+#define c (*cp)
     wrx_cfg_load(&old);
     memset(&c, 0, sizeof c);
     bool ok = true, any = false;
@@ -544,12 +554,16 @@ static esp_err_t webrx_post(httpd_req_t *r)
     httpd_resp_sendstr(r, "ok");
     post_ev(OTA_EV_SAVED);
     return ESP_OK;
+#undef old
+#undef c
 }
 
 /* réseaux visibles, proposés dans la page (point d'accès + station) */
 static void scan_networks(void)
 {
     s_nscan = 0;
+    if (!s_scan) s_scan = heap_caps_malloc(SCAN_MAX * sizeof *s_scan, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_scan) return;
     wifi_scan_config_t sc = { .show_hidden = false };
     if (esp_wifi_scan_start(&sc, true) != ESP_OK) return;
     uint16_t n = 20;

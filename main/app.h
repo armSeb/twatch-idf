@@ -32,6 +32,9 @@ typedef struct app_s {
      * est retrouvée au réveil ; écran éteint, on_hide() est appelé et
      * on_show() au réveil (couper le Wi-Fi, les timers d'affichage…) */
     bool (*busy)(void);
+    /* optionnel : true = écran gardé allumé tant que l'app est affichée
+     * (le bouton l'éteint quand même) */
+    bool (*keep_screen_on)(void);
 } app_t;
 
 /* registre (apps.c) */

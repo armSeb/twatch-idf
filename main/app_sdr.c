@@ -15,6 +15,7 @@
  * Quitter : « ‹ » ou le bouton (un glissé sur le waterfall ne quitte pas).
  */
 #include <stdio.h>
+#include "esp_attr.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -40,7 +41,8 @@ static int   m_view = SDR_VIEW_BAND, m_ch = 6, m_gain = 3;
 static bool  m_paused, m_started;
 static int   m_mark = -1;            /* colonne du marqueur, -1 = aucun */
 static float m_floor = -90.0f;       /* bruit de fond estimé (dBFS) */
-static float m_last[SDR_W], m_peak[SDR_W];
+EXT_RAM_BSS_ATTR static float m_last[SDR_W];
+EXT_RAM_BSS_ATTR static float m_peak[SDR_W];
 static bool  m_have, m_sat;
 static esp_timer_handle_t m_boot_t;
 
@@ -48,7 +50,7 @@ static esp_timer_handle_t m_boot_t;
 static lv_obj_t *v_mline, *v_title, *v_sat, *v_minfo, *v_zoom, *v_gain, *v_spec, *v_wf, *v_touch, *v_axis[5], *v_msg;
 static uint16_t *v_spec_buf, *v_wf_buf;
 static lv_timer_t *v_tick;
-static uint16_t s_pal[256];
+EXT_RAM_BSS_ATTR static uint16_t s_pal[256];
 
 static uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
 {

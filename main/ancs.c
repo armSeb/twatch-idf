@@ -16,6 +16,7 @@
  *    reconnexion).
  */
 #include "ancs.h"
+#include "esp_attr.h"
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
@@ -142,7 +143,7 @@ static bool s_cp_inflight;
 
 /* cache appId → nom affiché (Get App Attributes) */
 #define APPCACHE 12
-static struct { char id[ANCS_APPID_MAX + 1]; char name[ANCS_APPNAME_MAX + 1]; } s_app[APPCACHE];
+EXT_RAM_BSS_ATTR static struct { char id[ANCS_APPID_MAX + 1]; char name[ANCS_APPNAME_MAX + 1]; } s_app[APPCACHE];
 static int s_app_next;
 
 static void setup_step(void);

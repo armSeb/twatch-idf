@@ -2,6 +2,21 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.21.2 — 2026-11-12
+
+- **Internal RAM given back** (the OTA update failed again with `ESP_ERR_HTTPD_TASK`, 7 KB
+  largest block): LVGL objects now live in PSRAM (custom allocator `lv_mem_psram.c`), the
+  big static tables (notifications, ANCS app cache, BLE log copy, update page and buffer,
+  About text, waterfall rows, Wi-Fi list rows…) are placed in PSRAM (`EXT_RAM_BSS_ATTR`),
+  and so are the `.bss` of the Bluetooth host, Wi-Fi and lwIP as ESP-IDF allows
+  (`CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY`). Static internal RAM: 66 KB → 19 KB.
+- WebRX: fixed a crash on connection — `esp_transport_ws` masks the payload in place, and the
+  handshake was a string constant in flash; it now always sends a copy.
+- WebRX: the screen stays on while listening (the button still turns it off; listening goes
+  on). Wi-Fi failures show the reason code; Wi-Fi and server failures go to the BLE log
+  with the free internal memory.
+- About: "Restart the watch" button (with confirmation).
+
 ## 0.21.1 — 2026-11-12
 
 - WebRX: "Set up" failed with "web server not started" (the access point was up). The app's

@@ -73,10 +73,9 @@ CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
 # ---------- LVGL 9.2 (Kconfig, pas de lv_conf.h) ----------
 CONFIG_LV_CONF_SKIP=y
 CONFIG_LV_COLOR_DEPTH_16=y
-# Objets LVGL alloués dans le tas ESP-IDF (malloc) plutôt qu'un pool statique :
-# la RAM non utilisée sert au Bluetooth, à l'UI ou au Wi-Fi (mise à jour) selon
-# le moment, au lieu de réserver 64–72 Ko en permanence.
-CONFIG_LV_USE_CLIB_MALLOC=y
+# Objets LVGL alloués en PSRAM (main/lv_mem_psram.c) plutôt qu'un pool statique
+# ou la RAM interne : celle-ci reste au Bluetooth, au Wi-Fi et au serveur web.
+CONFIG_LV_USE_CUSTOM_MALLOC=y
 CONFIG_LV_DEF_REFR_PERIOD=33
 CONFIG_LV_DPI_DEF=130
 CONFIG_LV_OS_NONE=y
@@ -166,3 +165,6 @@ CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 # Tampons TLS (≈ 40 Ko par connexion) en PSRAM : la RAM interne reste au
 # Bluetooth et au Wi-Fi. Certificats : paquet de racines d'ESP-IDF (défaut).
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+# Grands tableaux statiques (notifications, journal, tampons de page…) marqués
+# EXT_RAM_BSS_ATTR : en PSRAM, la RAM interne reste à la radio et aux piles.
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y

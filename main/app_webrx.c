@@ -12,6 +12,7 @@
  * l'arrête et rend le Bluetooth s'il avait fallu le suspendre.
  */
 #include <stdio.h>
+#include "esp_attr.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -56,7 +57,7 @@ static lv_obj_t *v_sheet, *v_sheet_title, *v_sheet_list;
 static lv_obj_t *v_vol, *v_vol_lbl, *v_sq, *v_sq_lbl, *v_sq_sig;
 static uint16_t *v_wf_buf;
 static lv_timer_t *v_tick;
-static uint16_t s_pal[256];
+EXT_RAM_BSS_ATTR static uint16_t s_pal[256];
 static int v_sheet_kind;
 enum { SH_NONE, SH_PROF, SH_BM, SH_MODE, SH_SOUND };
 
@@ -134,8 +135,10 @@ static int cmpf(const void *a, const void *b)
 static void wf_push(const wrx_row_t *r)
 {
     if (!v_wf_buf) return;
-    static float tmp[WRX_FFT_W];
-    memcpy(tmp, r->db, sizeof tmp);
+    static float *tmp;                                  /* PSRAM */
+    if (!tmp) tmp = heap_caps_malloc(WRX_FFT_W * sizeof(float), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!tmp) return;
+    memcpy(tmp, r->db, WRX_FFT_W * sizeof(float));
     qsort(tmp, WRX_FFT_W, sizeof(float), cmpf);
     float p = tmp[WRX_FFT_W / 5];                       /* 20e centile ≈ bruit */
     m_floor = m_have_floor ? m_floor + 0.1f * (p - m_floor) : p;
@@ -302,13 +305,14 @@ static void refresh(bool force)
     lv_color_t dc = !run ? C_OFF : live ? C_OK : m_i.state == WRX_FAIL ? C_BAD : C_WARN;
     lv_obj_set_style_bg_color(v_dot, dc, 0);
     /* profil */
-    static wrx_prof_t pl[WRX_PROF_MAX];
+    static wrx_prof_t *pl;                               /* PSRAM */
+    if (!pl) pl = heap_caps_malloc(WRX_PROF_MAX * sizeof *pl, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     static uint32_t pver = ~0u;
     static char pname[48];
     if (pver != m_i.prof_ver || force) {
         pver = m_i.prof_ver;
         pname[0] = 0;
-        int n = webrx_profiles(pl, WRX_PROF_MAX);
+        int n = pl ? webrx_profiles(pl, WRX_PROF_MAX) : 0;
         for (int i = 0; i < n; i++) if (!strcmp(pl[i].id, m_i.profile)) strlcpy(pname, pl[i].name, sizeof pname);
     }
     set_text(v_prof, pname[0] ? pname : "WebRX");
@@ -351,8 +355,9 @@ static void tick_cb(lv_timer_t *t)
     static int64_t last_freq;
     static char last_mod[16];
     wrx_row_t *r = NULL;
-    static wrx_row_t row;
-    if (webrx_fft_pop(&row)) r = &row;
+    static wrx_row_t *row;                               /* PSRAM */
+    if (!row) row = heap_caps_malloc(sizeof *row, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (row && webrx_fft_pop(row)) r = row;
     refresh(false);
     if (r) wf_push(r);
     if (m_i.freq != last_freq || strcmp(m_i.mod, last_mod)) {
@@ -939,6 +944,9 @@ static void on_hide(void)
 
 static bool busy(void) { return webrx_running(); }
 
+/* écoute en cours : écran gardé allumé (fréquence, S-mètre, waterfall) */
+static bool keep_on(void) { return webrx_running(); }
+
 const app_t app_webrx = {
     .name = "WebRX",
     .icon = SYM_HEADPHONES,
@@ -948,4 +956,5 @@ const app_t app_webrx = {
     .on_show = on_show,
     .on_hide = on_hide,
     .busy = busy,
+    .keep_screen_on = keep_on,
 };
