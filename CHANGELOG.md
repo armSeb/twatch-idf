@@ -2,6 +2,15 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.21.5 — 2026-11-12
+
+- WebRX diagnostics: the BLE log keeps 47 characters per line, so the "cut" line was
+  truncated. It is now split into short lines: cause; frames, bytes, duration and RSSI; last
+  message type received; and on a read error the transport/errno/TLS codes.
+- WebRX: a refusal from the server ("backoff": too many listeners, address banned by the
+  OpenWebRX+ robot protection…) is shown with the server's own message, logged, and no longer
+  triggers automatic reconnections (tap to retry).
+
 ## 0.21.4 — 2026-11-12
 
 - WebRX, connection still cut ("read error"): generous timeouts for slow servers (20 s to

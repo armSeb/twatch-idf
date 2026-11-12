@@ -34,6 +34,7 @@
 #include "esp_transport_ssl.h"
 #include "esp_transport_ws.h"
 #include "esp_crt_bundle.h"
+#include "esp_tls.h"
 #include "mbedtls/base64.h"
 #include "lwip/sockets.h"
 #include "cJSON.h"
@@ -354,7 +355,7 @@ static bool wifi_connect(void)
         if (r == WIFI_REASON_AUTH_FAIL || r == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT ||
             r == WIFI_REASON_HANDSHAKE_TIMEOUT || r == WIFI_REASON_MIC_FAILURE) bad_pass = true;
         ESP_LOGW(TAG, "Wi-Fi « %s » : échec (raison %d)", s_cfg.ssid[k], r);
-        ble_diag("WebRX Wi-Fi %s : raison %d, interne %u Ko", s_cfg.ssid[k], r,
+        ble_diag("WRX wifi %.16s r%d int %u Ko", s_cfg.ssid[k], r,
                  (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
         esp_wifi_disconnect();
         xEventGroupWaitBits(s_evg, BIT_DISC | BIT_QUIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(500));
@@ -488,7 +489,7 @@ static bool server_connect(void)
             set_state(WRX_FAIL, u.tls ? N_("Serveur injoignable ou certificat refusé") : N_("Serveur injoignable"), u.host);
         }
         ESP_LOGW(TAG, "connexion à %s:%d%s : échec (HTTP %d)", u.host, u.port, u.path, code);
-        ble_diag("WebRX %s:%d : échec (HTTP %d), interne %u Ko", u.host, u.port, code,
+        ble_diag("WRX %.18s HTTP %d int %u Ko", u.host, code,
                  (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
         return false;
     }
@@ -747,6 +748,11 @@ static void on_text(char *t, int n)
     ty = strchr(ty + 6, '"');
     if (!ty) return;
     ty++;
+    {
+        size_t k = 0;
+        while (k + 1 < sizeof s_last_type && ty[k] && ty[k] != '"') { s_last_type[k] = ty[k]; k++; }
+        s_last_type[k] = 0;
+    }
     if (!strncmp(ty, "smeter\"", 7)) {
         char *v = strstr(ty, "\"value\"");
         if (v && (v = strchr(v, ':'))) {
@@ -780,7 +786,12 @@ static void on_text(char *t, int n)
             lock(); strlcpy(s_info.station, t, sizeof s_info.station); unlock();
         }
     } else if (!strcmp(type, "backoff")) {
-        set_state(WRX_FAIL, N_("Serveur complet (trop d'auditeurs)"), cJSON_IsString(v) ? v->valuestring : "");
+        /* refus du serveur : trop d'auditeurs, adresse bannie (anti-robot
+         * d'OpenWebRX+)… le message dit pourquoi ; pas de reconnexion auto */
+        const char *why = cJSON_IsString(v) ? v->valuestring : "";
+        s_backoff = true;
+        set_state(WRX_FAIL, N_("Refusé par le serveur"), why);
+        ble_diag("WRX refus : %.34s", why);
     } else if (!strcmp(type, "sdr_error") || !strcmp(type, "demodulator_error")) {
         lock();
         strlcpy(s_info.detail, cJSON_IsString(v) ? v->valuestring : "", sizeof s_info.detail);
@@ -869,6 +880,8 @@ static void handle_pending(void)
 
 static const char *s_lost;                   /* cause de la dernière coupure (N_) */
 static uint32_t s_frames, s_bytes;
+static bool s_backoff;                       /* le serveur a refusé le client (« backoff ») */
+static char s_last_type[20];                 /* type du dernier message texte reçu */
 
 /* true : fin normale (arrêt demandé) ; false : connexion perdue (s_lost) */
 static bool session(void)
@@ -902,6 +915,9 @@ static bool session(void)
         int n = esp_transport_read(s_ws, (char *)rb, RB_LEN, 8000);
         if (n < 0) {
             ESP_LOGW(TAG, "lecture : %d", n);
+            esp_tls_error_handle_t eh = s_par ? esp_transport_get_error_handle(s_par) : NULL;
+            ble_diag("WRX lect %d errno %d tls %x/%x", n, s_par ? esp_transport_get_errno(s_par) : 0,
+                     eh ? (unsigned)eh->last_error : 0u, eh ? (unsigned)-eh->esp_tls_error_code : 0u);
             s_lost = left ? N_("trame coupée") : N_("lecture impossible");
             return false;
         }
@@ -963,21 +979,29 @@ static void net_task(void *arg)
         if (ok && !s_quit && server_connect()) {
             fails = 0;
             s_lost = NULL;
+            s_backoff = false;
+            s_last_type[0] = 0;
             s_frames = s_bytes = 0;
             int64_t t0 = esp_timer_get_time();
             bool done = session();
             long dur = (long)((esp_timer_get_time() - t0) / 1000000);
             if (!done) {
+                /* lignes courtes : le journal garde 47 caractères par ligne */
                 wifi_ap_record_t ap = { 0 };
                 esp_wifi_sta_get_ap_info(&ap);
-                ble_diag("WebRX coupé : %s, %lu trames %lu Ko en %ld s, RSSI %d, interne %u Ko",
-                         s_lost ? s_lost : "?", (unsigned long)s_frames, (unsigned long)(s_bytes / 1024), dur,
-                         ap.rssi, (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
+                ble_diag("WRX coupé : %s", s_lost ? s_lost : "?");
+                ble_diag("WRX %lu tr %lu o %lds RSSI %d", (unsigned long)s_frames, (unsigned long)s_bytes, dur, ap.rssi);
+                ble_diag("WRX dernier : %s, int %u Ko", s_last_type[0] ? s_last_type : "-",
+                         (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
             }
             s_audio_on = false;
             server_close();
             if (done) break;
             if (s_quit) break;
+            if (s_backoff) {                       /* refusé : on attend le bouton */
+                xEventGroupWaitBits(s_evg, BIT_RETRY | BIT_QUIT, pdTRUE, pdFALSE, portMAX_DELAY);
+                continue;
+            }
             /* reprises espacées : OpenWebRX+ bannit 12 h une adresse qui se
              * reconnecte trop souvent (« robot ») ; après 4 coupures rapides
              * de suite, on attend le bouton */

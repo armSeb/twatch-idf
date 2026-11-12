@@ -260,7 +260,6 @@ static const tr_t EN[] = {
     { "Pas de WebSocket OpenWebRX à cette adresse", "No OpenWebRX WebSocket at this address" },
     { "Serveur injoignable ou certificat refusé", "Server unreachable or certificate rejected" },
     { "Serveur injoignable", "Server unreachable" },
-    { "Serveur complet (trop d'auditeurs)", "Server full (too many listeners)" },
     { "Erreur du récepteur", "Receiver error" },
     { "Erreur Wi-Fi", "Wi-Fi error" },
     { "Connexion perdue, reprise…", "Connection lost, resuming…" },
@@ -282,6 +281,7 @@ static const tr_t EN[] = {
     { "plus rien du serveur", "nothing more from the server" },
     { "fermée par le serveur", "closed by the server" },
     { "Connexion perdue", "Connection lost" },
+    { "Refusé par le serveur", "Refused by the server" },
 };
 
 static int s_lang = LANG_FR;
