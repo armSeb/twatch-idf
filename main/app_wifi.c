@@ -20,6 +20,8 @@
 #include "ui_kit.h"
 #include "i18n.h"
 #include "ota.h"
+#include "ble.h"
+#include "display.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_heap_caps.h"
@@ -68,6 +70,8 @@ static uint32_t s_scan_no;
 static wifi_ap_record_t *s_rec; /* tampon de relève, alloué pendant la vie du Wi-Fi */
 
 static bool    s_inited, s_started, s_scanning, s_paused, s_visible, s_err_mem;
+static bool    s_ble_paused;   /* Bluetooth arrêté par l'app faute de RAM, à relancer en sortant */
+static void    ble_resume(void);
 static int64_t s_next_us, s_scan_t0;
 static esp_event_handler_instance_t s_evh;
 static uint8_t s_det[6];        /* AP affiché en détail */
@@ -255,11 +259,25 @@ static bool wifi_up(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     cfg.nvs_enable = 0;                        /* rien à mémoriser */
     e = esp_wifi_init(&cfg);
+    if (e != ESP_OK && ble_running()) {
+        /* pas assez de RAM interne à côté du Bluetooth : on le suspend le
+         * temps de l'analyse (relancé dans wifi_down) et on réessaie */
+        ESP_LOGW(TAG, "esp_wifi_init: %s, Bluetooth suspendu", esp_err_to_name(e));
+        ble_diag("Wi-Fi : Bluetooth suspendu (RAM)");
+        ble_stop();
+        if (!ble_running()) {
+            s_ble_paused = true;
+            ui_toast(_("Bluetooth en pause pendant l'analyse"));
+            esp_wifi_deinit();                   /* au cas où l'échec ait laissé un état partiel */
+            e = esp_wifi_init(&cfg);
+        }
+    }
     if (e != ESP_OK) {
         ESP_LOGW(TAG, "esp_wifi_init: %s (interne libre %u, bloc %u)", esp_err_to_name(e),
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
         s_err_mem = true;
+        ble_resume();
         return false;
     }
     esp_wifi_set_storage(WIFI_STORAGE_RAM);
@@ -280,6 +298,16 @@ static void wifi_down(void)
     s_inited = s_started = s_scanning = false;
     free(s_rec);
     s_rec = NULL;
+    /* Bluetooth suspendu : rendu en quittant l'app, pas pendant une simple
+     * mise en veille sur l'app (on éviterait mal des arrêts/relances en boucle) */
+    if (s_ble_paused && display_is_on()) ble_resume();
+}
+
+static void ble_resume(void)
+{
+    if (!s_ble_paused) return;
+    s_ble_paused = false;
+    ble_start();
 }
 
 static void scan_kick(void)
@@ -887,6 +915,8 @@ static void create(lv_obj_t *scr)
 
 static void destroy(void)
 {
+    wifi_down();
+    ble_resume();
     if (v_tick) lv_timer_delete(v_tick);
     v_tick = NULL;
     v_scr = v_status = v_tabs = v_list = v_chart = v_best = v_empty = NULL;

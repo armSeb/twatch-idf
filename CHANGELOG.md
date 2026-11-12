@@ -2,6 +2,13 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.19.1 — 2026-11-12
+
+- Wi-Fi analyzer: if the Wi-Fi driver cannot get enough internal RAM next to Bluetooth,
+  Bluetooth is paused while the app is in use (kept off while the watch sleeps on the app,
+  restarted as soon as you leave it). A toast and the BLE log say so.
+- Long toasts now wrap instead of overflowing the screen.
+
 ## 0.19.0 — 2026-11-12
 
 - New **Wi-Fi analyzer** app: networks sorted by signal (RSSI, channel, security, width),

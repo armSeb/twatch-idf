@@ -208,6 +208,7 @@ static const tr_t EN[] = {
     { "perdu", "lost" },
     { "universelle (constructeur)", "universal (vendor)" },
     { "à l'instant", "just now" },
+    { "Bluetooth en pause pendant l'analyse", "Bluetooth paused while scanning" },
     { "Erreur APLL", "APLL error" },
     { "MHz · réel %s Hz", "MHz · actual %s Hz" },
     { "MHz · arrêté", "MHz · stopped" },

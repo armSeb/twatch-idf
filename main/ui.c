@@ -1075,6 +1075,9 @@ static void build_toast(void)
     lv_obj_set_style_bg_opa(m_toast, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(m_toast, 8, 0);
     lv_obj_set_style_radius(m_toast, 8, 0);
+    lv_obj_set_style_max_width(m_toast, BOARD_LCD_W - 24, 0);   /* texte long : retour à la ligne */
+    lv_label_set_long_mode(m_toast, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(m_toast, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(m_toast, LV_ALIGN_BOTTOM_MID, 0, -12);
     lv_obj_add_flag(m_toast, LV_OBJ_FLAG_HIDDEN);
     m_toast_t = lv_timer_create(toast_hide_cb, 1800, NULL);
