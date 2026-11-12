@@ -37,7 +37,9 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
 - **Apps** : lanceur avec *Chrono* (tours), *Minuteur* (bipe et vibre même écran éteint, puis
   se rouvre), *Lampe* (blanc/rouge), **analyseur Wi-Fi** (réseaux avec RSSI, canal, sécurité ;
   occupation des canaux 2,4 GHz et canal le plus libre ; fiche détaillée de chaque point
-  d'accès avec l'historique du signal), *Porteuse* (signal HF de test en carré, 5 à 125 MHz,
+  d'accès avec l'historique du signal), **SDR** (spectre et waterfall 2,4 GHz en direct à
+  partir des échantillons I/Q bruts de la radio de l'ESP32 : bande entière ou un canal
+  ±10 MHz, marqueur, maintien de crête), *Porteuse* (signal HF de test en carré, 5 à 125 MHz,
   issu de la PLL audio de l'ESP32) et *TV off* (éteint la plupart des téléviseurs par la LED
   infrarouge, codes Europe/USA). Une app ouverte garde la main : l'écran s'éteint dessus et
   le réveil y revient. Un petit cadre d'applications permet d'en ajouter en un seul fichier.
@@ -70,7 +72,7 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Wi-Fi, Porteuse, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Wi-Fi, SDR, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |
@@ -170,6 +172,9 @@ Composants tiers et leurs licences : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICE
   [composant ESP-IDF](https://github.com/pedrominatel/esp-components/tree/main/tv-b-gone) de
   Pedro Minatel.
 - Spécifications publiques d'Apple : *ANCS*, *AMS*, *Accessory Design Guidelines*.
+- Capture I/Q brute sur la radio de l'ESP32 : technique publiée par le projet
+  [ESP-SDR / ESPARGOS](https://github.com/ESPARGOS/esp-sdr) (2026) ; `sdr_rx.c` en est une
+  réalisation indépendante (aucun code repris).
 
 ## Marques et avertissement
 

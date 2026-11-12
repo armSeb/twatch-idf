@@ -34,7 +34,8 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 - **Apps**: launcher with *Stopwatch* (laps), *Timer* (beeps and vibrates even with the screen
   off, then reopens), *Torch* (white/red), **Wi-Fi analyzer** (networks with RSSI, channel,
   security; 2.4 GHz channel occupancy with the least busy channel; per-AP detail with signal
-  history), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and
+  history), **SDR** (live 2.4 GHz spectrum and waterfall from the raw I/Q samples of the
+  ESP32 radio: whole band or one channel ±10 MHz, marker, peak hold), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and
   *TV off* (switches off most TVs through the IR LED, Europe/USA code sets). An open app stays
   put: the screen turns off on it and wakes back to it. A small app framework lets you add
   one in a single file.
@@ -63,7 +64,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 |---|---|---|
 | Watch face | swipe ↑ | Notifications (close: ↓ or →) |
 | Watch face | swipe ↓ | Quick controls (close: ↑ or →) |
-| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Wi-Fi, Carrier, Battery, Settings |
+| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Wi-Fi, SDR, Carrier, Battery, Settings |
 | Watch face | long press | Choose the watch face |
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |
@@ -162,6 +163,9 @@ Third-party components and their licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_
   [ESP-IDF component](https://github.com/pedrominatel/esp-components/tree/main/tv-b-gone) by
   Pedro Minatel.
 - Apple's public *ANCS*, *AMS* and *Accessory Design Guidelines* specifications.
+- Raw I/Q capture on the ESP32 radio: technique published by the
+  [ESP-SDR / ESPARGOS](https://github.com/ESPARGOS/esp-sdr) project (2026); `sdr_rx.c` is an
+  independent implementation (no code copied).
 
 ## Trademarks and disclaimer
 

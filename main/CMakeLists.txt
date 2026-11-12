@@ -33,6 +33,9 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/app_tvoff.c
     ${CMAKE_CURRENT_SOURCE_DIR}/app_rfgen.c
     ${CMAKE_CURRENT_SOURCE_DIR}/app_wifi.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_sdr.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/sdr_rx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/sdr_mode.c
     ${CMAKE_CURRENT_SOURCE_DIR}/sound.c
     ${CMAKE_CURRENT_SOURCE_DIR}/crashlog.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gauge.c

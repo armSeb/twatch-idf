@@ -60,6 +60,18 @@ d'ESP-IDF 5.
   visible écran allumé (`esp_wifi_init` dans `on_show`, `esp_wifi_deinit` dans `on_hide`) ;
   chaque relève allume la radio, fait un balayage actif (~1,2 s) puis la coupe 4 s. Le BLE
   reste connecté (coexistence logicielle).
+- **SDR** (`app_sdr.c`, `sdr_rx.c`, `sdr_mode.c`) : le MAC Wi-Fi de l'ESP32 sait recopier
+  les échantillons bruts du convertisseur de réception (I/Q, 10 bits, ici 40 MS/s) dans deux
+  bancs de SRAM fixes (0x3FFE8000–0x3FFF8000). Ces 64 Ko sont réservés à l'édition de liens
+  et rendus au tas au démarrage en mode normal : rien n'est perdu. Ouvrir l'app redémarre la
+  montre en « mode SDR » (drapeau en RAM RTC, consommé au démarrage : un plantage ramène au
+  mode normal) : le Bluetooth ne démarre pas et la mémoire de son contrôleur est libérée, les
+  bancs restent à la radio, l'app s'ouvre d'office. Une tâche sur le cœur 0 accorde des
+  canaux normaux (1/4/7/10/13 pour la vue bande, un seul canal pour le zoom), capture 4096
+  échantillons, retire la composante continue, fait des FFT fenêtrées de Hann (16 × 256 ou
+  8 × 512 points, moyennées) et produit des lignes de 240 colonnes en dBFS ; l'interface les
+  dessine dans deux canevas RGB565 en PSRAM avec un plancher de bruit suivi automatiquement.
+  Quitter l'app redémarre en mode normal ; écran éteint, la radio est complètement arrêtée.
 - **Changer de langue** reconstruit tous les écrans sur place, sans redémarrer.
 - Les objets LVGL sont alloués sur le tas ; les allocations de plus de 4 Ko vont en PSRAM, la
   RAM interne est gardée pour les piles, les tampons DMA et la radio.

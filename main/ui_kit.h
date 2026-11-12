@@ -33,6 +33,7 @@
 #define SYM_TOWER     "\xEF\x94\x99"   /* U+F519 */
 #define SYM_WIFI      "\xEF\x87\xAB"   /* U+F1EB */
 #define SYM_LOCK      "\xEF\x80\xA3"   /* U+F023 */
+#define SYM_CHART     "\xEF\x87\xBE"   /* U+F1FE */
 
 #define UI_ANIM_MS 140
 

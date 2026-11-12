@@ -2,6 +2,18 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.20.0 — 2026-11-12
+
+- New **SDR** app: live 2.4 GHz spectrum and waterfall computed on the watch from the raw
+  I/Q samples of the ESP32 radio (MAC dump mode, 40 MS/s). Whole band 2401–2483 MHz (five
+  tunings per line) or one channel ±10 MHz (tap **+**, long-press on a frequency, swipe ← →
+  to change channel); marker with frequency and level (tap), decaying peak hold, gain AGC or
+  four manual levels with a clipping warning, auto-tracking noise floor, pause (tap the
+  title). The app runs in a dedicated "SDR mode": opening it restarts the watch without
+  Bluetooth, leaving it restarts in normal mode; the radio stops with the screen.
+- The 64 KB of SRAM used by the capture are reserved at link time but handed back to the heap
+  in normal mode.
+
 ## 0.19.1 — 2026-11-12
 
 - Wi-Fi analyzer: if the Wi-Fi driver cannot get enough internal RAM next to Bluetooth,

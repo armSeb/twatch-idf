@@ -55,6 +55,17 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   with the screen on (`esp_wifi_init` in `on_show`, `esp_wifi_deinit` in `on_hide`); each
   fetch starts the radio, runs an active scan (~1.2 s) and stops it again for 4 s. BLE stays
   connected (software coexistence).
+- **SDR** (`app_sdr.c`, `sdr_rx.c`, `sdr_mode.c`): the ESP32 Wi-Fi MAC can dump the raw
+  receive ADC samples (I/Q, 10 bits, 40 MS/s here) into two fixed SRAM banks
+  (0x3FFE8000–0x3FFF8000). Those 64 KB are reserved at link time and handed back to the heap
+  at boot in normal mode, so nothing is lost. Opening the app restarts the watch in "SDR mode"
+  (flag in RTC memory, consumed at boot: a crash comes back to normal mode): Bluetooth never
+  starts and its controller memory is released, the banks stay with the radio, the app opens
+  directly. A task on core 0 tunes standard channels (1/4/7/10/13 for the band view, one
+  channel for the zoom), captures 4096 samples, removes DC, runs Hann-windowed FFTs
+  (16 × 256 or 8 × 512 points, averaged) and builds 240-column rows in dBFS; the UI draws them
+  into two RGB565 canvases in PSRAM with an auto-tracking noise floor. Leaving the app restarts
+  in normal mode; with the screen off the radio is fully stopped.
 - **Language change** rebuilds every screen in place, without a restart.
 - LVGL objects are allocated from the heap; allocations above 4 KB go to PSRAM, the internal
   RAM is kept for stacks, DMA buffers and the radio.

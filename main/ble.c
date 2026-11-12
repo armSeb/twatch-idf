@@ -1,4 +1,5 @@
 #include "ble.h"
+#include "sdr_mode.h"
 #include "esp_heap_caps.h"
 #include "esp_attr.h"
 #include "esp_system.h"
@@ -609,6 +610,7 @@ static void host_task(void *param)
 esp_err_t ble_start(void)
 {
     if (s_running) return ESP_OK;
+    if (sdr_mode_active()) return ESP_ERR_INVALID_STATE;   /* radio prêtée au SDR */
     ble_diag("démarrage BLE (bloc %u Ko)", (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
     esp_err_t err = nimble_port_init();
     if (err != ESP_OK) {
