@@ -1096,7 +1096,7 @@ esp_err_t webrx_start(void)
     lock();
     memset(&s_info, 0, sizeof s_info);
     s_info.level_db = -200.0f;
-    s_info.volume = s_st.volume;
+    s_info.volume = 0;                       /* chaque écoute démarre au minimum */
     s_info.squelch = s_st.squelch;
     s_nbm = s_nprof = s_nmodes = s_ndigi = 0;
     s_pend = 0;
@@ -1203,7 +1203,7 @@ void webrx_info(wrx_info_t *out)
     if (!s_run) {
         if (!out->freq) out->freq = s_st.freq;
         if (!out->mod[0]) strlcpy(out->mod, s_st.mod, sizeof out->mod);
-        out->volume = s_st.volume;
+        out->volume = 0;
         out->squelch = s_st.squelch;
     }
     unlock();

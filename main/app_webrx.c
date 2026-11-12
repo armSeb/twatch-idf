@@ -53,7 +53,7 @@ static uint32_t m_mode_ver = ~0u;
 /* vue */
 static lv_obj_t *v_scr, *v_dot, *v_prof, *v_dig[NDIG], *v_dot_sep, *v_name, *v_mod, *v_mod_lbl, *v_meter, *v_meter_lbl;
 static lv_obj_t *v_wf, *v_over, *v_zoom, *v_status, *v_st1, *v_st2, *v_play, *v_play_lbl, *v_minus, *v_plus, *v_setup;
-static lv_obj_t *v_sheet, *v_sheet_title, *v_sheet_list;
+static lv_obj_t *v_sheet, *v_sheet_title, *v_sheet_list, *v_spk;
 static lv_obj_t *v_vol, *v_vol_lbl, *v_sq, *v_sq_lbl, *v_sq_sig;
 static uint16_t *v_wf_buf;
 static lv_timer_t *v_tick;
@@ -337,6 +337,9 @@ static void refresh(bool force)
     char mb[16] = "";
     if (live && lv > -199) snprintf(mb, sizeof mb, "%d dB", (int)lroundf(lv));
     set_text(v_meter_lbl, mb);
+    /* son coupé (démarrage) : icône du haut-parleur en orange, à toucher */
+    lv_obj_set_style_text_color(v_spk, m_i.volume ? C_FG : C_WARN, 0);
+    set_text(v_spk, m_i.volume ? LV_SYMBOL_VOLUME_MAX : LV_SYMBOL_VOLUME_MID);
     /* boutons */
     set_text(v_play_lbl, run ? LV_SYMBOL_STOP : LV_SYMBOL_PLAY);
     lv_obj_set_style_bg_color(v_play, run ? lv_color_hex(0xDC2626) : lv_color_hex(0x16A34A), 0);
@@ -783,7 +786,8 @@ static void create(lv_obj_t *scr)
     lv_obj_t *sb = flat_btn(scr, sound_cb);
     lv_obj_set_size(sb, 38, TOP_H);
     lv_obj_set_pos(sb, 202, 0);
-    lv_obj_center(ui_label(sb, &font_text_16, C_FG, LV_SYMBOL_VOLUME_MAX));
+    v_spk = ui_label(sb, &font_text_16, C_FG, LV_SYMBOL_VOLUME_MAX);
+    lv_obj_center(v_spk);
 
     /* fréquence */
     lv_obj_t *row = lv_obj_create(scr);
@@ -917,7 +921,7 @@ static void destroy(void)
     v_wf_buf = NULL;
     v_scr = v_dot = v_prof = v_dot_sep = v_name = v_mod = v_mod_lbl = v_meter = v_meter_lbl = NULL;
     v_wf = v_over = v_zoom = v_status = v_st1 = v_st2 = v_play = v_play_lbl = v_minus = v_plus = v_setup = NULL;
-    v_sheet = v_sheet_title = v_sheet_list = NULL;
+    v_sheet = v_sheet_title = v_sheet_list = v_spk = NULL;
     v_vol = v_vol_lbl = v_sq = v_sq_lbl = v_sq_sig = NULL;
     v_sheet_kind = SH_NONE;
     memset(v_dig, 0, sizeof v_dig);

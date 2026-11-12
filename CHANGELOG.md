@@ -2,6 +2,11 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.21.7 — 2026-11-13
+
+- WebRX: every listening session starts with the volume at the minimum (muted); the speaker
+  icon turns orange until the volume is raised in the sound sheet.
+
 ## 0.21.6 — 2026-11-12
 
 - WebRX: the server closed the connection immediately (0 byte received, TLS "closed by
