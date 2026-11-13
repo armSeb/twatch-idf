@@ -355,29 +355,29 @@ static const char WRX_HEAD[] =
     "button{font-size:17px;padding:12px 20px;border:0;border-radius:10px;background:#3b82f6;color:#fff;width:100%;margin-top:20px}"
     "button:disabled{background:#334}#m{margin-top:12px;min-height:1.4em}.ok{color:#4ade80}.ko{color:#f87171}"
     "#l{float:right;background:none;border:1px solid #445;color:#9aa;width:auto;padding:4px 10px;font-size:13px;margin:0}"
-    "a{color:#9aa}"
+    "a{color:#9aa}.h{font-size:13px;margin:0 0 4px}.sv{margin:0 0 12px}.sv input{margin:2px 0}"
     "</style></head><body><button id=l type=button onclick=sw()></button><h1 id=t></h1><p id=h></p><form id=f onsubmit='return go()'>";
 static const char WRX_TAIL[] =
     "<button id=b></button></form><div id=m></div><p><a id=o href=/update.html></a></p><script>"
     "var T={fr:{t:'WebRX · réglages',h:'Réseaux Wi-Fi que la montre peut utiliser (dans l’ordre de préférence) "
-    "et adresse de ton serveur OpenWebRX, par exemple <b>https://sdr.exemple.fr/</b>.',"
+    "et adresses de tes serveurs OpenWebRX (jusqu’à 4), par exemple <b>https://sdr.exemple.fr/</b>.',"
     "n:'Wi-Fi ',s:'Nom du réseau',p:'Mot de passe',k:'•••• enregistré (vide = inchangé)',"
-    "u:'Serveur OpenWebRX',b:'Enregistrer',w:'Enregistrement…',ok:'Enregistré : la montre redémarre sur WebRX.',"
+    "u:'Serveurs OpenWebRX',uh:'Nom et adresse ; le premier est écouté au départ, les autres se choisissent sur la montre.',nm:'Nom (facultatif)',srv:'indiquer au moins un serveur',b:'Enregistrer',w:'Enregistrement…',ok:'Enregistré : la montre redémarre sur WebRX.',"
     "ko:'Échec : ',lost:'Connexion perdue.',url:'l’adresse doit commencer par http:// ou https://',"
     "net:'indiquer au moins un réseau',size:'champ trop long',nvs:'écriture impossible',o:'Mise à jour du firmware →'},"
     "en:{t:'WebRX · settings',h:'Wi-Fi networks the watch may use (in order of preference) "
-    "and the address of your OpenWebRX server, for example <b>https://sdr.example.org/</b>.',"
+    "and the addresses of your OpenWebRX servers (up to 4), for example <b>https://sdr.example.org/</b>.',"
     "n:'Wi-Fi ',s:'Network name',p:'Password',k:'•••• saved (empty = unchanged)',"
-    "u:'OpenWebRX server',b:'Save',w:'Saving…',ok:'Saved: the watch restarts into WebRX.',"
+    "u:'OpenWebRX servers',uh:'Name and address; the first one is used at first, the others are picked on the watch.',nm:'Name (optional)',srv:'enter at least one server',b:'Save',w:'Saving…',ok:'Saved: the watch restarts into WebRX.',"
     "ko:'Failed: ',lost:'Connection lost.',url:'the address must start with http:// or https://',"
     "net:'enter at least one network',size:'field too long',nvs:'could not save',o:'Firmware update →'}};"
     "var L=(navigator.language||'en').slice(0,2)=='fr'?'fr':'en';"
     "function $(i){return document.getElementById(i);}"
     "function tr(k){return T[L][k]||k;}"
-    "function draw(){document.documentElement.lang=L;['t','b','u','o'].forEach(function(k){$(k).textContent=tr(k);});"
+    "function draw(){document.documentElement.lang=L;['t','b','u','uh','o'].forEach(function(k){$(k).textContent=tr(k);});"
     "$('h').innerHTML=tr('h');$('l').textContent=L=='fr'?'English':'Français';"
     "for(var i=0;i<3;i++){$('n'+i).textContent=tr('n')+(i+1);var s=$('s'+i),p=$('p'+i);s.placeholder=tr('s');"
-    "p.placeholder=p.dataset.k?tr('k'):tr('p');}}"
+    "p.placeholder=p.dataset.k?tr('k'):tr('p');}for(var j=0;j<4;j++)$('m'+j).placeholder=tr('nm');}"
     "function sw(){L=L=='fr'?'en':'fr';draw();}"
     "function go(){var f=$('f'),m=$('m'),b=$('b'),q=[];"
     "for(var i=0;i<f.elements.length;i++){var e=f.elements[i];if(e.name)q.push(e.name+'='+encodeURIComponent(e.value));}"
@@ -419,12 +419,12 @@ static esp_err_t webrx_get(httpd_req_t *r)
     if (!cp) return httpd_resp_send_500(r);
 #define c (*cp)
     wrx_cfg_load(&c);
-    const size_t cap = sizeof(WRX_HEAD) + sizeof(WRX_TAIL) + 4096;
+    const size_t cap = sizeof(WRX_HEAD) + sizeof(WRX_TAIL) + 8192;
     char *pg = heap_caps_malloc(cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!pg) pg = malloc(cap);
     if (!pg) return httpd_resp_send_500(r);
     size_t n = strlcpy(pg, WRX_HEAD, cap);
-    char e[3 * sizeof c.url];
+    char e[6 * sizeof c.srv[0].url];
     for (int i = 0; i < WRX_NETS; i++) {
         esc(e, sizeof e, c.ssid[i]);
         n += snprintf(pg + n, cap - n,
@@ -432,10 +432,15 @@ static esp_err_t webrx_get(httpd_req_t *r)
                       "autocomplete=off value='%s'><input id=p%d name=p%d type=password maxlength=64%s>",
                       i, i, i, e, i, i, c.pass[i][0] ? " data-k=1" : "");
     }
-    esc(e, sizeof e, c.url);
-    n += snprintf(pg + n, cap - n,
-                  "<h2 id=u></h2><input name=u type=url maxlength=190 autocapitalize=off "
-                  "placeholder='https://' value='%s'><datalist id=ss>", e);
+    n += snprintf(pg + n, cap - n, "<h2 id=u></h2><p id=uh class=h></p>");
+    for (int i = 0; i < WRX_SRV; i++) {
+        esc(e, sizeof e, c.srv[i].name);
+        n += snprintf(pg + n, cap - n, "<div class=sv><input id=m%d name=m%d maxlength=31 value='%s'>", i, i, e);
+        esc(e, sizeof e, c.srv[i].url);
+        n += snprintf(pg + n, cap - n, "<input name=u%d type=url maxlength=190 autocapitalize=off "
+                      "placeholder='https://' value='%s'></div>", i, e);
+    }
+    n += snprintf(pg + n, cap - n, "<datalist id=ss>");
     for (int i = 0; i < s_nscan && n < cap - 200; i++) {
         esc(e, sizeof e, s_scan[i]);
         n += snprintf(pg + n, cap - n, "<option value='%s'>", e);
@@ -494,7 +499,7 @@ static esp_err_t webrx_bad(httpd_req_t *r, const char *code)
 static esp_err_t webrx_post(httpd_req_t *r)
 {
     s_last_activity_us = esp_timer_get_time();
-    #define BODY_MAX 1536
+    #define BODY_MAX 4096
     static char *body;                     /* en PSRAM, gardé pour la session */
     if (!body) body = heap_caps_malloc(BODY_MAX, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!body) return webrx_bad(r, "nvs");
@@ -528,15 +533,27 @@ static esp_err_t webrx_post(httpd_req_t *r)
         if (!c.ssid[i][0]) c.pass[i][0] = 0;
         any |= c.ssid[i][0] != 0;
     }
-    if (form_get(body, "u", c.url, sizeof c.url) < 0) ok = false;
+    int nsrv = 0;
+    for (int i = 0; i < WRX_SRV; i++) {
+        char k[4] = { 'u', (char)('0' + i), 0 };
+        char url[sizeof c.srv[0].url], name[sizeof c.srv[0].name];
+        if (form_get(body, k, url, sizeof url) < 0) ok = false;
+        k[0] = 'm';
+        if (form_get(body, k, name, sizeof name) < 0) ok = false;
+        /* espaces autour de l'adresse (copier-coller) */
+        char *u = url;
+        while (*u == ' ') u++;
+        memmove(url, u, strlen(u) + 1);
+        for (size_t l = strlen(url); l && url[l - 1] == ' '; l--) url[l - 1] = 0;
+        if (!url[0]) continue;                       /* ligne vide : ignorée */
+        if (strncmp(url, "http://", 7) && strncmp(url, "https://", 8)) return webrx_bad(r, "url");
+        strlcpy(c.srv[nsrv].url, url, sizeof c.srv[0].url);
+        strlcpy(c.srv[nsrv].name, name, sizeof c.srv[0].name);
+        nsrv++;
+    }
     if (!ok) return webrx_bad(r, "size");
-    /* espaces autour de l'adresse (copier-coller) */
-    char *u = c.url;
-    while (*u == ' ') u++;
-    memmove(c.url, u, strlen(u) + 1);
-    for (size_t l = strlen(c.url); l && c.url[l - 1] == ' '; l--) c.url[l - 1] = 0;
-    if (strncmp(c.url, "http://", 7) && strncmp(c.url, "https://", 8)) return webrx_bad(r, "url");
     if (!any) return webrx_bad(r, "net");
+    if (!nsrv) return webrx_bad(r, "srv");
     /* réseaux tassés vers le haut (ordre de préférence conservé) */
     for (int i = 0, j = 0; i < WRX_NETS; i++) {
         if (!c.ssid[i][0]) continue;

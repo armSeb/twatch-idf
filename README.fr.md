@@ -11,6 +11,7 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
 
 ![cadrans](docs/img/faces-fr.png)
 ![écrans](docs/img/screens-fr.png)
+![apps radio](docs/img/radio-fr.png)
 
 *(rendus PC de l'interface réelle avec des données factices)*
 
@@ -39,9 +40,10 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   occupation des canaux 2,4 GHz et canal le plus libre ; fiche détaillée de chaque point
   d'accès avec l'historique du signal), **SDR** (spectre et waterfall 2,4 GHz en direct à
   partir des échantillons I/Q bruts de la radio de l'ESP32 : bande entière ou un canal
-  ±10 MHz, marqueur, maintien de crête), **WebRX** (écoute de ton récepteur OpenWebRX /
-  OpenWebRX+ par le Wi-Fi, `https` compris, sur le haut-parleur de la montre : profils,
-  signets, modes du serveur, squelch, S-mètre et mini-waterfall ; continue écran éteint),
+  ±10 MHz, marqueur, maintien de crête), **WebRX** (écoute de tes récepteurs OpenWebRX /
+  OpenWebRX+ par le Wi-Fi, `https` compris, sur le haut-parleur de la montre : jusqu'à 4
+  serveurs, profils, signets, modes du serveur, squelch, tonalité en 5 paliers, S-mètre et
+  mini-waterfall ; continue écran éteint — voir le [guide WebRX](docs/fr/webrx.md)),
   *Porteuse* (signal HF de test en carré, 5 à 125 MHz,
   issu de la PLL audio de l'ESP32) et *TV off* (éteint la plupart des téléviseurs par la LED
   infrarouge, codes Europe/USA). Une app ouverte garde la main : l'écran s'éteint dessus et
@@ -80,7 +82,7 @@ de 380 mAh en bon état.
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |
 | Bouton, écran éteint | appui court | Réveil |
-| Bouton, hors cadran | appui court | Retour au cadran |
+| Bouton, hors cadran | appui court | Retour au cadran (dans WebRX pendant l'écoute : écran éteint, l'écoute continue) |
 | Bouton, sur le cadran | appui court | Éteint l'écran |
 | Bouton | 4 s | Coupure matérielle (AXP202) |
 
@@ -144,6 +146,7 @@ Pour aller plus loin : [compiler, flasher, tester](docs/fr/building.md).
 | Compiler, flasher, tester | [docs/fr/building.md](docs/fr/building.md) | [docs/en/building.md](docs/en/building.md) |
 | Architecture, énergie, jauge | [docs/fr/architecture.md](docs/fr/architecture.md) | [docs/en/architecture.md](docs/en/architecture.md) |
 | Notes matérielles (broches, alimentations, pièges) | [docs/fr/hardware.md](docs/fr/hardware.md) | [docs/en/hardware.md](docs/en/hardware.md) |
+| WebRX (client OpenWebRX) : réglages et utilisation | [docs/fr/webrx.md](docs/fr/webrx.md) | [docs/en/webrx.md](docs/en/webrx.md) |
 | Écrire une app, traduire | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) |
 | Historique | | [CHANGELOG.md](CHANGELOG.md) |
 | Contribuer | [CONTRIBUTING.md](CONTRIBUTING.md) | |

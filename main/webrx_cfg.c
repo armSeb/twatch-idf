@@ -25,7 +25,13 @@ void wrx_cfg_load(wrx_cfg_t *c)
         k[0] = 'p';
         get_str(h, k, c->pass[i], sizeof c->pass[i]);
     }
-    get_str(h, "url", c->url, sizeof c->url);
+    for (int i = 0; i < WRX_SRV; i++) {
+        char k[4] = { 'u', (char)('0' + i), 0 };
+        get_str(h, k, c->srv[i].url, sizeof c->srv[i].url);
+        k[0] = 'n';
+        get_str(h, k, c->srv[i].name, sizeof c->srv[i].name);
+    }
+    if (!c->srv[0].url[0]) get_str(h, "url", c->srv[0].url, sizeof c->srv[0].url);   /* ≤ 0.22 */
     nvs_close(h);
 }
 
@@ -40,10 +46,37 @@ esp_err_t wrx_cfg_save(const wrx_cfg_t *c)
         k[0] = 'p';
         if (e == ESP_OK) e = nvs_set_str(h, k, c->pass[i]);
     }
-    if (e == ESP_OK) e = nvs_set_str(h, "url", c->url);
+    for (int i = 0; i < WRX_SRV && e == ESP_OK; i++) {
+        char k[4] = { 'u', (char)('0' + i), 0 };
+        e = nvs_set_str(h, k, c->srv[i].url);
+        k[0] = 'n';
+        if (e == ESP_OK) e = nvs_set_str(h, k, c->srv[i].name);
+    }
+    nvs_erase_key(h, "url");
     if (e == ESP_OK) e = nvs_commit(h);
     nvs_close(h);
     return e;
+}
+
+int wrx_cfg_servers(const wrx_cfg_t *c)
+{
+    int n = 0;
+    while (n < WRX_SRV && c->srv[n].url[0]) n++;
+    return n;
+}
+
+void wrx_srv_label(const wrx_cfg_t *c, int i, char *out, size_t cap)
+{
+    if (c->srv[i].name[0]) { strlcpy(out, c->srv[i].name, cap); return; }
+    const char *u = c->srv[i].url;
+    const char *p = strstr(u, "://");
+    p = p ? p + 3 : u;
+    const char *at = strchr(p, '@'), *sl = strchr(p, '/');
+    if (at && (!sl || at < sl)) p = at + 1;              /* identifiants masqués */
+    size_t l = strcspn(p, ":/?#");
+    if (l >= cap) l = cap - 1;
+    memcpy(out, p, l);
+    out[l] = 0;
 }
 
 bool wrx_cfg_ready(void)
@@ -53,30 +86,51 @@ bool wrx_cfg_ready(void)
     wrx_cfg_load(c);
     bool net = false;
     for (int i = 0; i < WRX_NETS; i++) net |= c->ssid[i][0] != 0;
-    bool ok = net && c->url[0];
+    bool ok = net && c->srv[0].url[0];
     free(c);
     return ok;
 }
 
-void wrx_state_load(wrx_state_t *s)
+/* clés par serveur : « prof0 », « freq2 »… ; le serveur 0 garde aussi les
+ * anciennes clés sans numéro (≤ 0.22) */
+static void key(char *k, const char *base, int srv) { snprintf(k, 12, "%s%d", base, srv); }
+
+void wrx_state_load_srv(wrx_state_t *s, int server)
 {
     memset(s, 0, sizeof *s);
-    s->volume = 60;
     s->squelch = -150;
-    s->filter = 1;
+    s->tone = WRX_TONE_DEF;
+    s->server = (uint8_t)(server >= 0 && server < WRX_SRV ? server : 0);
     nvs_handle_t h;
     if (nvs_open(NS, NVS_READONLY, &h) != ESP_OK) return;
-    get_str(h, "prof", s->profile, sizeof s->profile);
-    get_str(h, "mod", s->mod, sizeof s->mod);
-    int64_t f;
-    if (nvs_get_i64(h, "freq", &f) == ESP_OK) s->freq = f;
     uint8_t v;
-    if (nvs_get_u8(h, "vol", &v) == ESP_OK && v <= 100) s->volume = v;
+    if (nvs_get_u8(h, "tone", &v) == ESP_OK && v < WRX_TONES) s->tone = v;
+    char k[12];
+    int i = s->server;
+    key(k, "prof", i);
+    get_str(h, k, s->profile, sizeof s->profile);
+    if (!s->profile[0] && i == 0) get_str(h, "prof", s->profile, sizeof s->profile);
+    key(k, "mod", i);
+    get_str(h, k, s->mod, sizeof s->mod);
+    if (!s->mod[0] && i == 0) get_str(h, "mod", s->mod, sizeof s->mod);
+    int64_t f;
+    key(k, "freq", i);
+    if (nvs_get_i64(h, k, &f) == ESP_OK || (i == 0 && nvs_get_i64(h, "freq", &f) == ESP_OK)) s->freq = f;
     int16_t q;
-    if (nvs_get_i16(h, "sq", &q) == ESP_OK) s->squelch = q;
-    uint8_t fl;
-    if (nvs_get_u8(h, "flt", &fl) == ESP_OK) s->filter = fl ? 1 : 0;
+    key(k, "sq", i);
+    if (nvs_get_i16(h, k, &q) == ESP_OK || (i == 0 && nvs_get_i16(h, "sq", &q) == ESP_OK)) s->squelch = q;
     nvs_close(h);
+}
+
+void wrx_state_load(wrx_state_t *s)
+{
+    uint8_t srv = 0;
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READONLY, &h) == ESP_OK) {
+        nvs_get_u8(h, "srv", &srv);
+        nvs_close(h);
+    }
+    wrx_state_load_srv(s, srv);
 }
 
 void wrx_state_save(const wrx_state_t *s)
@@ -85,13 +139,21 @@ void wrx_state_save(const wrx_state_t *s)
     if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return;
     /* n'écrire que ce qui change : la flash n'aime pas les écritures inutiles */
     wrx_state_t old;
-    wrx_state_load(&old);
-    if (strcmp(old.profile, s->profile)) nvs_set_str(h, "prof", s->profile);
-    if (strcmp(old.mod, s->mod)) nvs_set_str(h, "mod", s->mod);
-    if (old.freq != s->freq) nvs_set_i64(h, "freq", s->freq);
-    if (old.volume != s->volume) nvs_set_u8(h, "vol", s->volume);
-    if (old.squelch != s->squelch) nvs_set_i16(h, "sq", s->squelch);
-    if (old.filter != s->filter) nvs_set_u8(h, "flt", s->filter);
+    wrx_state_load_srv(&old, s->server);
+    uint8_t cur = 0xFF;
+    nvs_get_u8(h, "srv", &cur);
+    if (cur != s->server) nvs_set_u8(h, "srv", s->server);
+    if (old.tone != s->tone) nvs_set_u8(h, "tone", s->tone);
+    char k[12];
+    int i = s->server;
+    key(k, "prof", i);
+    if (strcmp(old.profile, s->profile)) nvs_set_str(h, k, s->profile);
+    key(k, "mod", i);
+    if (strcmp(old.mod, s->mod)) nvs_set_str(h, k, s->mod);
+    key(k, "freq", i);
+    if (old.freq != s->freq) nvs_set_i64(h, k, s->freq);
+    key(k, "sq", i);
+    if (old.squelch != s->squelch) nvs_set_i16(h, k, s->squelch);
     nvs_commit(h);
     nvs_close(h);
 }

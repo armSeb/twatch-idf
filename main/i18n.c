@@ -282,8 +282,16 @@ static const tr_t EN[] = {
     { "fermée par le serveur", "closed by the server" },
     { "Connexion perdue", "Connection lost" },
     { "Refusé par le serveur", "Refused by the server" },
-    { "Filtre voix", "Voice filter" },
-    { "Filtre voix : moins de souffle et d'aigus, plus de corps aux voix.", "Voice filter: less hiss and treble, fuller voices." },
+    { "Récepteur", "Receiver" },
+    { "SERVEUR", "SERVER" },
+    { "PROFIL", "PROFILE" },
+    { "Tonalité", "Tone" },
+    { "Neutre", "Flat" },
+    { "Claire", "Bright" },
+    { "Voix", "Voice" },
+    { "Douce", "Soft" },
+    { "Sourde", "Muffled" },
+    { "Tonalité : vers la droite, moins d'aigus et de souffle, plus de corps aux voix.", "Tone: to the right, less treble and hiss, fuller voices." },
 };
 
 static int s_lang = LANG_FR;

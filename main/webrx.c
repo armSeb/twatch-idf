@@ -242,12 +242,13 @@ static void audio_bytes(const uint8_t *p, int n)
     }
 }
 
-/* Filtre « voix » pour le petit haut-parleur : passe-haut 180 Hz (le HP ne
- * les rend pas, autant garder la marge), bosse de +5 dB vers 700 Hz (corps
- * de la voix), passe-bas 2,6 kHz (souffle FM et aigus agressifs). Biquads
- * RBJ, forme directe II transposée, en flottant (FPU). */
+/* Tonalité pour le petit haut-parleur, par paliers : passe-haut (le HP ne
+ * rend pas le grave, autant garder la marge), bosse vers 600–800 Hz (corps
+ * de la voix), passe-bas de plus en plus bas et raide (souffle FM, aigus
+ * agressifs). Biquads RBJ, forme directe II transposée, en flottant (FPU). */
 typedef struct { float b0, b1, b2, a1, a2, z1, z2; } bq_t;
-static bq_t s_bq[3];
+static bq_t s_bq[5];
+static int s_nbq;
 
 static void bq_set(bq_t *q, float b0, float b1, float b2, float a0, float a1, float a2)
 {
@@ -255,27 +256,63 @@ static void bq_set(bq_t *q, float b0, float b1, float b2, float a0, float a1, fl
     q->z1 = q->z2 = 0;
 }
 
-static void filter_init(void)
+static void bq_hp(bq_t *q, float f, float Q)
 {
-    const float fs = WRX_RATE;
-    float w, c, sn, al;
-    /* passe-haut 180 Hz, Q 0,707 */
-    w = 2 * (float)M_PI * 180 / fs; c = cosf(w); sn = sinf(w); al = sn / (2 * 0.7071f);
-    bq_set(&s_bq[0], (1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + al, -2 * c, 1 - al);
-    /* cloche +5 dB à 700 Hz, Q 0,8 */
-    float A = powf(10, 5.0f / 40);
-    w = 2 * (float)M_PI * 700 / fs; c = cosf(w); sn = sinf(w); al = sn / (2 * 0.8f);
-    bq_set(&s_bq[1], 1 + al * A, -2 * c, 1 - al * A, 1 + al / A, -2 * c, 1 - al / A);
-    /* passe-bas 2,6 kHz, Q 0,707 */
-    w = 2 * (float)M_PI * 2600 / fs; c = cosf(w); sn = sinf(w); al = sn / (2 * 0.7071f);
-    bq_set(&s_bq[2], (1 - c) / 2, 1 - c, (1 - c) / 2, 1 + al, -2 * c, 1 - al);
+    float w = 2 * (float)M_PI * f / WRX_RATE, c = cosf(w), al = sinf(w) / (2 * Q);
+    bq_set(q, (1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + al, -2 * c, 1 - al);
+}
+
+static void bq_lp(bq_t *q, float f, float Q)
+{
+    float w = 2 * (float)M_PI * f / WRX_RATE, c = cosf(w), al = sinf(w) / (2 * Q);
+    bq_set(q, (1 - c) / 2, 1 - c, (1 - c) / 2, 1 + al, -2 * c, 1 - al);
+}
+
+static void bq_peak(bq_t *q, float f, float Q, float db)
+{
+    float A = powf(10, db / 40), w = 2 * (float)M_PI * f / WRX_RATE, c = cosf(w), al = sinf(w) / (2 * Q);
+    bq_set(q, 1 + al * A, -2 * c, 1 - al * A, 1 + al / A, -2 * c, 1 - al / A);
+}
+
+/* palier → filtres. Passe-bas d'ordre 4 (deux étages de Butterworth,
+ * Q 0,54 et 1,31) à partir du palier 3 */
+static void filter_init(int tone)
+{
+    s_nbq = 0;
+    switch (tone) {
+    case 1:                                       /* claire */
+        bq_hp(&s_bq[s_nbq++], 150, 0.7071f);
+        bq_peak(&s_bq[s_nbq++], 800, 0.8f, 3);
+        bq_lp(&s_bq[s_nbq++], 3200, 0.7071f);
+        break;
+    case 2:                                       /* voix (0.22.0) */
+        bq_hp(&s_bq[s_nbq++], 180, 0.7071f);
+        bq_peak(&s_bq[s_nbq++], 700, 0.8f, 5);
+        bq_lp(&s_bq[s_nbq++], 2600, 0.7071f);
+        break;
+    case 3:                                       /* douce */
+        bq_hp(&s_bq[s_nbq++], 180, 0.7071f);
+        bq_peak(&s_bq[s_nbq++], 650, 0.8f, 5);
+        bq_lp(&s_bq[s_nbq++], 2200, 0.5412f);
+        bq_lp(&s_bq[s_nbq++], 2200, 1.3066f);
+        break;
+    case 4:                                       /* sourde */
+        bq_hp(&s_bq[s_nbq++], 200, 0.7071f);
+        bq_peak(&s_bq[s_nbq++], 600, 0.8f, 6);
+        bq_lp(&s_bq[s_nbq++], 1700, 0.5412f);
+        bq_lp(&s_bq[s_nbq++], 1700, 1.3066f);
+        break;
+    default:                                      /* neutre */
+        break;
+    }
 }
 
 static void filter_run(int16_t *x, int n)
 {
+    if (!s_nbq) return;
     for (int i = 0; i < n; i++) {
         float v = x[i];
-        for (int k = 0; k < 3; k++) {
+        for (int k = 0; k < s_nbq; k++) {
             bq_t *q = &s_bq[k];
             float y = q->b0 * v + q->z1;
             q->z1 = q->b1 * v - q->a1 * y + q->z2;
@@ -292,7 +329,7 @@ static void play_task(void *arg)
 {
     int16_t buf[CHUNK + 1];                      /* pile de la tâche (≈ 0,5 Ko) */
     bool open = false, buffering = true;
-    filter_init();
+    int tone = -1;
     while (!s_quit) {
         if (!s_audio_on) {
             if (open) { sound_stream_close(); open = false; }
@@ -324,7 +361,8 @@ static void play_task(void *arg)
         else if (take == CHUNK + 1) {               /* deux échantillons en un */
             buf[CHUNK - 1] = (int16_t)(((int)buf[CHUNK - 1] + buf[CHUNK]) / 2);
         }
-        if (s_info.filter) filter_run(buf, CHUNK);
+        if (s_info.tone != tone) { tone = s_info.tone; filter_init(tone); }
+        filter_run(buf, CHUNK);
         int v = s_info.volume;
         int gain = v * v * 8192 / 10000;           /* courbe douce, ×2 à 100 % */
         sound_stream_write(buf, CHUNK, gain);
@@ -523,7 +561,7 @@ static bool ws_text(const char *s)
 static bool server_connect(void)
 {
     url_t u;
-    if (!url_parse(s_cfg.url, &u)) { set_state(WRX_FAIL, N_("Adresse du serveur invalide"), ""); return false; }
+    if (!url_parse(s_cfg.srv[s_st.server].url, &u)) { set_state(WRX_FAIL, N_("Adresse du serveur invalide"), ""); return false; }
     set_state(WRX_SERVER, N_("Connexion au serveur"), u.host);
     if (u.tls) {
         s_par = esp_transport_ssl_init();
@@ -941,6 +979,7 @@ static void handle_pending(void)
     if ((p & PEND_DSP) && s_have_cfg) send_dsp(false);
 }
 
+static volatile int s_switch = -1;          /* serveur demandé (webrx_server), -1 = aucun */
 static const char *s_lost;                   /* cause de la dernière coupure (N_) */
 static uint32_t s_frames, s_bytes;
 
@@ -963,6 +1002,7 @@ static bool session(void)
     unlock();
     while (!s_quit) {
         if (xEventGroupGetBits(s_evg) & BIT_DISC) { s_lost = N_("Wi-Fi perdu"); return false; }
+        if (s_switch >= 0) return false;            /* changement de serveur */
         handle_pending();
         if (!s_have_cfg && s_prof_wait_us && esp_timer_get_time() > s_prof_wait_us) {
             lock(); bool ok = s_info.center && s_info.samp_rate; unlock();
@@ -1023,6 +1063,43 @@ static bool session(void)
     return true;
 }
 
+/* changement de serveur : état du serveur quitté retenu, celui du nouveau
+ * chargé, listes vidées */
+static bool apply_switch(void)
+{
+    int to = s_switch;
+    if (to < 0) return false;
+    s_switch = -1;
+    lock();
+    if (s_info.freq) s_st.freq = s_info.freq;
+    if (s_info.mod[0]) strlcpy(s_st.mod, s_info.mod, sizeof s_st.mod);
+    s_st.squelch = s_info.squelch;
+    s_st.tone = s_info.tone;
+    unlock();
+    wrx_state_save(&s_st);
+    uint8_t tone = s_st.tone;
+    wrx_state_load_srv(&s_st, to);
+    s_st.tone = tone;
+    wrx_state_save(&s_st);                       /* mémorise le serveur choisi */
+    lock();
+    s_info.server = (uint8_t)to;
+    wrx_srv_label(&s_cfg, to, s_info.server_name, sizeof s_info.server_name);
+    s_info.center = 0;
+    s_info.samp_rate = 0;
+    s_info.freq = 0;
+    s_info.mod[0] = 0;
+    s_info.profile[0] = 0;
+    s_info.station[0] = 0;
+    s_info.squelch = s_st.squelch;
+    s_info.level_db = -200.0f;
+    s_nbm = s_nprof = s_nmodes = s_ndigi = 0;
+    s_info.bm_ver++;
+    s_info.prof_ver++;
+    s_info.mode_ver++;
+    unlock();
+    return true;
+}
+
 static void net_task(void *arg)
 {
     int fails = 0, drops = 0;
@@ -1034,6 +1111,7 @@ static void net_task(void *arg)
     esp_wifi_set_ps(WIFI_PS_NONE);
     if (esp_wifi_start() != ESP_OK) set_state(WRX_FAIL, N_("Erreur Wi-Fi"), "");
     else while (!s_quit) {
+        if (apply_switch()) { fails = drops = 0; }
         bool ok = false;
         if (!(xEventGroupGetBits(s_evg) & BIT_IP)) ok = wifi_connect();
         else ok = true;
@@ -1046,7 +1124,7 @@ static void net_task(void *arg)
             int64_t t0 = esp_timer_get_time();
             bool done = session();
             long dur = (long)((esp_timer_get_time() - t0) / 1000000);
-            if (!done) {
+            if (!done && s_switch < 0) {
                 /* lignes courtes : le journal garde 47 caractères par ligne */
                 wifi_ap_record_t ap = { 0 };
                 esp_wifi_sta_get_ap_info(&ap);
@@ -1059,6 +1137,7 @@ static void net_task(void *arg)
             server_close();
             if (done) break;
             if (s_quit) break;
+            if (s_switch >= 0) continue;           /* autre serveur : tout de suite */
             if (s_backoff) {                       /* refusé : on attend le bouton */
                 xEventGroupWaitBits(s_evg, BIT_RETRY | BIT_QUIT, pdTRUE, pdFALSE, portMAX_DELAY);
                 continue;
@@ -1145,7 +1224,11 @@ esp_err_t webrx_start(void)
     memset(&s_info, 0, sizeof s_info);
     s_info.level_db = -200.0f;
     s_info.volume = WRX_VOL_START;           /* chaque écoute démarre bas */
-    s_info.filter = s_st.filter;
+    s_info.tone = s_st.tone;
+    s_info.nservers = (uint8_t)wrx_cfg_servers(&s_cfg);
+    if (s_st.server >= s_info.nservers) s_st.server = 0;
+    s_info.server = s_st.server;
+    wrx_srv_label(&s_cfg, s_st.server, s_info.server_name, sizeof s_info.server_name);
     s_info.squelch = s_st.squelch;
     s_nbm = s_nprof = s_nmodes = s_ndigi = 0;
     s_pend = 0;
@@ -1213,16 +1296,16 @@ void webrx_stop(void)
         s_run = false;
         /* état durable */
         lock();
-        strlcpy(s_st.profile, s_info.profile, sizeof s_st.profile);
+        /* le profil n'est retenu que s'il a été choisi sur la montre : un
+         * serveur partagé n'est pas rebasculé sur un profil vu en passant */
         if (s_info.freq) s_st.freq = s_info.freq;
         if (s_info.mod[0]) strlcpy(s_st.mod, s_info.mod, sizeof s_st.mod);
-        s_st.volume = s_info.volume;
         s_st.squelch = s_info.squelch;
-        s_st.filter = s_info.filter;
+        s_st.tone = s_info.tone;
         s_info.state = WRX_OFF;
         s_info.msg = NULL;
         unlock();
-        if (s_have_cfg || s_st.volume != 0) wrx_state_save(&s_st);
+        wrx_state_save(&s_st);
     }
     if (s_wifi_inited) {
         esp_event_handler_instance_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, s_h_wifi);
@@ -1247,7 +1330,7 @@ void webrx_retry(void)
 
 void webrx_info(wrx_info_t *out)
 {
-    if (!s_mx) { memset(out, 0, sizeof *out); out->volume = WRX_VOL_START; out->squelch = -150; out->filter = 1; return; }
+    if (!s_mx) { memset(out, 0, sizeof *out); out->volume = WRX_VOL_START; out->squelch = -150; out->tone = WRX_TONE_DEF; return; }
     lock();
     *out = s_info;
     if (!s_run) {
@@ -1255,7 +1338,7 @@ void webrx_info(wrx_info_t *out)
         if (!out->mod[0]) strlcpy(out->mod, s_st.mod, sizeof out->mod);
         out->volume = WRX_VOL_START;
         out->squelch = s_st.squelch;
-        out->filter = s_st.filter;
+        out->tone = s_st.tone;
     }
     unlock();
 }
@@ -1348,16 +1431,15 @@ void webrx_volume(int pct)
     if (pct > 100) pct = 100;
     lock();
     s_info.volume = (uint8_t)pct;
-    s_st.volume = (uint8_t)pct;
     unlock();
 }
 
-void webrx_filter(bool on)
+void webrx_tone(int level)
 {
-    if (!s_mx) return;
+    if (!s_mx || level < 0 || level >= WRX_TONES) return;
     lock();
-    s_info.filter = on;
-    s_st.filter = on;
+    s_info.tone = (uint8_t)level;
+    s_st.tone = (uint8_t)level;
     unlock();
 }
 
@@ -1389,4 +1471,29 @@ bool webrx_fft_pop(wrx_row_t *out)
     }
     unlock();
     return ok;
+}
+
+void webrx_server(int idx)
+{
+    if (idx < 0 || idx >= WRX_SRV) return;
+    if (s_mx && s_run) {
+        if (idx == s_info.server || idx >= s_info.nservers) return;
+        s_switch = idx;
+        xEventGroupSetBits(s_evg, BIT_RETRY);     /* sort d'une attente */
+        return;
+    }
+    /* arrêté : retenu pour la prochaine écoute */
+    wrx_state_t cur, st;
+    wrx_state_load(&cur);
+    wrx_state_load_srv(&st, idx);
+    st.tone = cur.tone;
+    wrx_state_save(&st);
+    if (s_mx) {
+        lock();
+        s_info.server = (uint8_t)idx;
+        s_info.freq = 0;
+        s_info.mod[0] = 0;
+        unlock();
+        s_st = st;
+    }
 }

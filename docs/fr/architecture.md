@@ -72,8 +72,9 @@ d'ESP-IDF 5.
   8 × 512 points, moyennées) et produit des lignes de 240 colonnes en dBFS ; l'interface les
   dessine dans deux canevas RGB565 en PSRAM avec un plancher de bruit suivi automatiquement.
   Quitter l'app redémarre en mode normal ; écran éteint, la radio est complètement arrêtée.
-- **WebRX** (`app_webrx.c`, `webrx.c`, `webrx_cfg.c`) : client OpenWebRX / OpenWebRX+. Les
-  réseaux Wi-Fi (jusqu'à 3) et l'adresse du serveur se saisissent sur une page servie par la
+- **WebRX** (`app_webrx.c`, `webrx.c`, `webrx_cfg.c`) : client OpenWebRX / OpenWebRX+ (guide :
+  [webrx.md](webrx.md)). Les réseaux Wi-Fi (jusqu'à 3) et les serveurs (jusqu'à 4, nom et
+  adresse ; état d'écoute retenu par serveur) se saisissent sur une page servie par la
   montre (`/webrx`, même point d'accès et même serveur web que la mise à jour ; la session se
   termine par un redémarrage qui rouvre l'app). `webrx.c` fait tourner une tâche sur le cœur 0 :
   Wi-Fi station (réseaux connus par ordre de préférence, modem sleep), `wss://` par
@@ -85,7 +86,10 @@ d'ESP-IDF 5.
   sous-jacent. Les trames audio (IMA-ADPCM avec mots de synchronisation) sont décodées dans un
   tampon de 2,7 s en PSRAM ; une seconde tâche sur le cœur 1 garde ~0,4 s d'avance et
   alimente l'ampli I2S, en sautant ou doublant un échantillon par bloc de 20 ms pour suivre
-  l'horloge du serveur. Les trames FFT donnent la mini-waterfall, seulement écran allumé. Le
+  l'horloge du serveur ; un filtre de tonalité (passe-haut, bosse de présence, passe-bas
+  d'ordre 2 ou 4, 5 paliers) l'adapte au petit haut-parleur. Les trames texte sont construites
+  et envoyées en une seule écriture : le serveur OpenWebRX lâche un client dont l'en-tête et la
+  charge d'une trame arrivent dans des segments TCP séparés, ce que fait `esp_transport_ws`. Les trames FFT donnent la mini-waterfall, seulement écran allumé. Le
   CPU est plafonné à 160 MHz (80 MHz écran éteint) tant que la radio tourne, et le Bluetooth
   n'est suspendu que si le pilote Wi-Fi manque de RAM interne.
 - **Changer de langue** reconstruit tous les écrans sur place, sans redémarrer.

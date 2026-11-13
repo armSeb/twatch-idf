@@ -62,6 +62,7 @@ static int v_sheet_kind;
 enum { SH_NONE, SH_PROF, SH_BM, SH_MODE, SH_SOUND };
 
 static void sheet_close(void);
+static lv_obj_t *v_tone_lbl;
 static void refresh(bool force);
 
 /* ------------------------------------------------------------------ */
@@ -316,7 +317,7 @@ static void refresh(bool force)
         int n = pl ? webrx_profiles(pl, WRX_PROF_MAX) : 0;
         for (int i = 0; i < n; i++) if (!strcmp(pl[i].id, m_i.profile)) strlcpy(pname, pl[i].name, sizeof pname);
     }
-    set_text(v_prof, pname[0] ? pname : "WebRX");
+    set_text(v_prof, pname[0] ? pname : m_i.server_name[0] ? m_i.server_name : "WebRX");
     freq_draw();
     /* nom : station RDS, signet écouté, sinon invitation */
     const wrx_bm_t *bm = bm_at(m_i.freq);
@@ -436,6 +437,7 @@ static void setup_cb(lv_event_t *e)
 /* ------------------------------------------------------------------ */
 static void sheet_close(void)
 {
+    v_tone_lbl = NULL;
     v_sheet_kind = SH_NONE;
     v_vol = v_vol_lbl = v_sq = v_sq_lbl = v_sq_sig = NULL;
     if (v_sheet) lv_obj_add_flag(v_sheet, LV_OBJ_FLAG_HIDDEN);
@@ -466,7 +468,7 @@ static lv_obj_t *sheet_row(const char *txt, const char *sub, bool cur, lv_event_
     ui_bubble(b);
     lv_obj_t *l = ui_label(b, &font_text_16, cur ? C_ACC : C_FG, txt);
     lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(l, lv_pct(100));
+    lv_obj_set_size(l, lv_pct(100), 20);
     lv_obj_align(l, sub ? LV_ALIGN_TOP_LEFT : LV_ALIGN_LEFT_MID, 0, 0);
     if (sub) {
         lv_obj_t *s = ui_label(b, &font_small_11, C_DIM, sub);
@@ -505,9 +507,47 @@ static void prof_pick_cb(lv_event_t *e)
     refresh(true);
 }
 
+static void srv_pick_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    sheet_close();
+    if (i != m_i.server) {
+        webrx_server(i);
+        m_span = 0;
+        m_have_floor = false;
+        if (v_wf_buf) memset(v_wf_buf, 0, WRX_FFT_W * WF_H * sizeof(uint16_t));
+        lv_obj_invalidate(v_wf);
+    }
+    refresh(true);
+}
+
+static lv_obj_t *section(const char *t)
+{
+    lv_obj_t *l = ui_label(v_sheet_list, &font_small_11, C_DIM, t);
+    lv_obj_set_width(l, lv_pct(100));
+    lv_obj_set_style_pad_top(l, 4, 0);
+    return l;
+}
+
 static void prof_cb(lv_event_t *e)
 {
-    sheet_open(SH_PROF, _("Profils"));
+    sheet_open(SH_PROF, _("Récepteur"));
+    /* serveurs (s'il y en a plusieurs) */
+    wrx_cfg_t *c = heap_caps_malloc(sizeof *c, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (c) {
+        wrx_cfg_load(c);
+        int ns = wrx_cfg_servers(c);
+        if (ns > 1) {
+            section(_("SERVEUR"));
+            for (int i = 0; i < ns; i++) {
+                char name[40];
+                wrx_srv_label(c, i, name, sizeof name);
+                sheet_row(name, NULL, i == m_i.server, srv_pick_cb, i);
+            }
+            section(_("PROFIL"));
+        }
+        free(c);
+    }
     if (!s_pl) s_pl = heap_caps_malloc(WRX_PROF_MAX * sizeof *s_pl, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     int n = s_pl ? webrx_profiles(s_pl, WRX_PROF_MAX) : 0;
     for (int i = 0; i < n; i++) sheet_row(s_pl[i].name, NULL, !strcmp(s_pl[i].id, m_i.profile), prof_pick_cb, i);
@@ -644,9 +684,13 @@ static lv_obj_t *kv(const char *k, lv_obj_t **val)
     return r;
 }
 
-static void filter_cb(lv_event_t *e)
+static const char *const TONE[WRX_TONES] = { N_("Neutre"), N_("Claire"), N_("Voix"), N_("Douce"), N_("Sourde") };
+
+static void tone_cb(lv_event_t *e)
 {
-    webrx_filter(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+    int v = lv_slider_get_value(lv_event_get_target(e));
+    if (v_tone_lbl) set_text(v_tone_lbl, _(TONE[v]));
+    webrx_tone(v);
 }
 
 static void sound_cb(lv_event_t *e)
@@ -662,20 +706,11 @@ static void sound_cb(lv_event_t *e)
     v_sq = mk_slider(-130, -20, sq, sq_cb);
     sq_text(sq);
     v_sq_sig = ui_label(v_sheet_list, &font_small_11, C_DIM, "");
-    lv_obj_t *fr = ui_container(v_sheet_list);
-    lv_obj_set_size(fr, lv_pct(100), 34);
-    ui_bubble(fr);
-    lv_obj_t *fl = ui_label(fr, &font_text_16, C_FG, _("Filtre voix"));
-    lv_obj_align(fl, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_t *sw = lv_switch_create(fr);
-    lv_obj_set_size(sw, 50, 26);
-    lv_obj_align(sw, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_set_style_bg_color(sw, C_ACC, LV_PART_INDICATOR | LV_STATE_CHECKED);
-    if (m_i.filter) lv_obj_add_state(sw, LV_STATE_CHECKED);
-    lv_obj_add_event_cb(sw, filter_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    ui_bubble(sw);
+    kv(_("Tonalité"), &v_tone_lbl);
+    mk_slider(0, WRX_TONES - 1, m_i.tone, tone_cb);
+    set_text(v_tone_lbl, _(TONE[m_i.tone < WRX_TONES ? m_i.tone : WRX_TONE_DEF]));
     lv_obj_t *fh = ui_label(v_sheet_list, &font_small_11, C_DIM,
-                            _("Filtre voix : moins de souffle et d'aigus, plus de corps aux voix."));
+                            _("Tonalité : vers la droite, moins d'aigus et de souffle, plus de corps aux voix."));
     lv_label_set_long_mode(fh, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(fh, lv_pct(100));
     lv_obj_t *h = ui_label(v_sheet_list, &font_small_11, C_DIM,
@@ -802,7 +837,7 @@ static void create(lv_obj_t *scr)
     lv_obj_align(v_dot, LV_ALIGN_LEFT_MID, 2, 0);
     v_prof = ui_label(pb, &font_text_16, C_FG, "WebRX");
     lv_label_set_long_mode(v_prof, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(v_prof, 150);
+    lv_obj_set_size(v_prof, 150, 20);
     lv_obj_align(v_prof, LV_ALIGN_LEFT_MID, 16, 0);
     lv_obj_t *sb = flat_btn(scr, sound_cb);
     lv_obj_set_size(sb, 38, TOP_H);
@@ -836,7 +871,7 @@ static void create(lv_obj_t *scr)
     lv_obj_set_pos(nb, 4, INFO_Y);
     v_name = ui_label(nb, &font_text_16, C_DIM, "");
     lv_label_set_long_mode(v_name, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(v_name, 142);
+    lv_obj_set_size(v_name, 142, 20);              /* hauteur fixe : « … » sur une ligne */
     lv_obj_align(v_name, LV_ALIGN_LEFT_MID, 4, 0);
     v_mod = lv_button_create(scr);
     lv_obj_set_size(v_mod, 82, 24);
@@ -850,7 +885,7 @@ static void create(lv_obj_t *scr)
     ui_bubble(v_mod);
     v_mod_lbl = ui_label(v_mod, &font_text_16, C_ACC, "FM");
     lv_label_set_long_mode(v_mod_lbl, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(v_mod_lbl, 78);
+    lv_obj_set_size(v_mod_lbl, 78, 20);
     lv_obj_set_style_text_align(v_mod_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(v_mod_lbl);
 

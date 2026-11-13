@@ -10,6 +10,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 
 ![watch faces](docs/img/faces-en.png)
 ![screens](docs/img/screens-en.png)
+![radio apps](docs/img/radio-en.png)
 
 *(PC renders of the real UI with sample data)*
 
@@ -36,9 +37,10 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   security; 2.4 GHz channel occupancy with the least busy channel; per-AP detail with signal
   history), **SDR** (live 2.4 GHz spectrum and waterfall from the raw I/Q samples of the
   ESP32 radio: whole band or one channel ±10 MHz, marker, peak hold), **WebRX** (listen to
-  your OpenWebRX / OpenWebRX+ receiver over Wi-Fi, `https` included, on the watch speaker:
-  profiles, bookmarks, the server's own modes, squelch, S-meter and mini waterfall; keeps
-  playing with the screen off), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and
+  your OpenWebRX / OpenWebRX+ receivers over Wi-Fi, `https` included, on the watch speaker:
+  up to 4 servers, profiles, bookmarks, the server's own modes, squelch, 5-step tone,
+  S-meter and mini waterfall; keeps playing with the screen off — see the
+  [WebRX guide](docs/en/webrx.md)), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and
   *TV off* (switches off most TVs through the IR LED, Europe/USA code sets). An open app stays
   put: the screen turns off on it and wakes back to it. A small app framework lets you add
   one in a single file.
@@ -72,7 +74,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |
 | Button, screen off | short press | Wake up |
-| Button, not on the face | short press | Back to the watch face |
+| Button, not on the face | short press | Back to the watch face (in WebRX while listening: screen off, listening continues) |
 | Button, on the face | short press | Screen off |
 | Button | hold 4 s | Hardware power-off (AXP202) |
 
@@ -135,6 +137,7 @@ More: [building, flashing and tests](docs/en/building.md).
 | Building, flashing, tests | [docs/en/building.md](docs/en/building.md) | [docs/fr/building.md](docs/fr/building.md) |
 | Architecture, power, battery gauge | [docs/en/architecture.md](docs/en/architecture.md) | [docs/fr/architecture.md](docs/fr/architecture.md) |
 | Hardware notes (pins, power rails, pitfalls) | [docs/en/hardware.md](docs/en/hardware.md) | [docs/fr/hardware.md](docs/fr/hardware.md) |
+| WebRX (OpenWebRX client): setup and use | [docs/en/webrx.md](docs/en/webrx.md) | [docs/fr/webrx.md](docs/fr/webrx.md) |
 | Writing apps, translating | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) |
 | Changes | [CHANGELOG.md](CHANGELOG.md) | |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) | |

@@ -2,6 +2,20 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.23.0 — 2026-11-13
+
+- WebRX: **several servers** (up to 4, optional name + address) entered on the settings page;
+  the server is picked on the watch in the new **Receiver** sheet (tap the profile name),
+  next to the profiles. Frequency, mode, squelch and chosen profile are kept per server; a
+  profile is re-selected at connection only if it was chosen on the watch (shared servers
+  are not switched over to a profile merely seen there).
+- WebRX: **tone in 5 steps** (Flat, Bright, Voice, Soft, Muffled; default Soft) replacing the
+  on/off voice filter: high-pass, presence bump and a low-pass going lower and steeper
+  (4th order from *Soft*), less treble and hiss.
+- WebRX: long names no longer wrap onto two lines (bookmark, profile, mode, list rows).
+- Documentation: WebRX user guide (FR/EN), new screenshots of the radio apps and of the
+  settings page, updated UI screenshots.
+
 ## 0.22.0 — 2026-11-13
 
 - WebRX: the side button now turns the screen off while listening instead of going back to
