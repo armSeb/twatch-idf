@@ -923,11 +923,13 @@ static bool apply_switch(void)
     if (s_info.mod[0]) strlcpy(s_st.mod, s_info.mod, sizeof s_st.mod);
     s_st.squelch = s_info.squelch;
     s_st.tone = s_info.tone;
+    s_st.volume = s_info.volume;
     unlock();
     wrx_state_save(&s_st);
-    uint8_t tone = s_st.tone;
+    uint8_t tone = s_st.tone, vol = s_st.volume;
     wrx_state_load_srv(&s_st, to);
     s_st.tone = tone;
+    s_st.volume = vol;
     wrx_state_save(&s_st);                       /* mémorise le serveur choisi */
     lock();
     s_info.server = (uint8_t)to;
@@ -1068,7 +1070,7 @@ esp_err_t webrx_start(void)
     lock();
     memset(&s_info, 0, sizeof s_info);
     s_info.level_db = -200.0f;
-    s_info.volume = WRX_VOL_START;           /* chaque écoute démarre bas */
+    s_info.volume = s_st.volume;             /* dernier volume retenu */
     s_info.tone = s_st.tone;
     s_info.nservers = (uint8_t)wrx_cfg_servers(&s_cfg);
     if (s_st.server >= s_info.nservers) s_st.server = 0;
@@ -1122,6 +1124,7 @@ void webrx_stop(void)
         if (s_info.mod[0]) strlcpy(s_st.mod, s_info.mod, sizeof s_st.mod);
         s_st.squelch = s_info.squelch;
         s_st.tone = s_info.tone;
+        s_st.volume = s_info.volume;             /* 0 : non retenu (VOL_DEF au départ) */
         s_info.state = WRX_OFF;
         s_info.msg = NULL;
         unlock();
@@ -1141,13 +1144,21 @@ void webrx_retry(void)
 
 void webrx_info(wrx_info_t *out)
 {
-    if (!s_mx) { memset(out, 0, sizeof *out); out->volume = WRX_VOL_START; out->squelch = -150; out->tone = WRX_TONE_DEF; return; }
+    if (!s_mx) {
+        wrx_state_t st;
+        wrx_state_load(&st);
+        memset(out, 0, sizeof *out);
+        out->volume = st.volume;
+        out->squelch = st.squelch;
+        out->tone = st.tone;
+        return;
+    }
     lock();
     *out = s_info;
     if (!s_run) {
         if (!out->freq) out->freq = s_st.freq;
         if (!out->mod[0]) strlcpy(out->mod, s_st.mod, sizeof out->mod);
-        out->volume = WRX_VOL_START;
+        out->volume = s_st.volume;
         out->squelch = s_st.squelch;
         out->tone = s_st.tone;
     }
@@ -1298,6 +1309,7 @@ void webrx_server(int idx)
     wrx_state_load(&cur);
     wrx_state_load_srv(&st, idx);
     st.tone = cur.tone;
+    st.volume = cur.volume;
     wrx_state_save(&st);
     if (s_mx) {
         lock();

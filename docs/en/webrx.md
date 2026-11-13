@@ -41,7 +41,7 @@ authorities (Let's Encrypt and so on); self-signed certificates are refused.
 | Side button | screen off, **listening continues**; press again to come back |
 | Swipe → or ‹ | leave the app: listening stops, Bluetooth comes back |
 
-- Each listening session starts at **10 % volume**.
+- Listening resumes at the **last volume used** (15 % the first time, or if it was left at 0).
 - **Squelch**: mutes the audio while the signal stays below the threshold (applied by the
   server). Far left: off. The current signal level is shown under the slider.
 - **Tone** (5 steps, kept): *Flat*, *Bright*, *Voice*, *Soft* (default), *Muffled*. To the right:

@@ -36,7 +36,7 @@ supported.
 | Side button | screen off, **playback continues**; press again to come back |
 | Swipe → or ‹ | leave the app: playback stops, Bluetooth comes back |
 
-- Every session starts at **10 % volume**.
+- Playback resumes at the **last volume used** (15 % the first time, or if it was left at 0).
 - **Tone** (5 steps, remembered): *Flat*, *Bright* (default), *Voice*, *Soft*, *Muffled* —
   to the right, less treble and fuller voices on the small speaker.
 - The watch remembers the last station played.

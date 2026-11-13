@@ -15,7 +15,6 @@
 #include "esp_err.h"
 #include "webrx_cfg.h"
 
-#define WRX_VOL_START 10           /* % : volume au début de chaque écoute */
 #define WRX_RATE   12000            /* Hz : audio demandé au serveur (tous modes) */
 #define WRX_FFT_W  240              /* colonnes d'une ligne de waterfall */
 #define WRX_BM_MAX 64

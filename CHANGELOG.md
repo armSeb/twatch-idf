@@ -2,6 +2,11 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.26.1 — 2026-11-13
+
+- Radio and WebRX resume at the last volume used (remembered separately for each app; 15 %
+  the first time, or when it was left at 0) instead of always starting at 10 %.
+
 ## 0.26.0 — 2026-11-13
 
 - **SDR without restarting**: opening the app now stops Bluetooth and borrows the radio on

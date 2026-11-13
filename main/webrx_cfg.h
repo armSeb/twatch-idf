@@ -30,6 +30,7 @@ typedef struct {
 typedef struct {
     uint8_t server;              /* index dans srv[] */
     uint8_t tone;                /* 0..WRX_TONES-1 */
+    uint8_t volume;              /* % (commun aux serveurs), 1..100 */
     char    profile[WRX_ID_LEN];         /* « sdr|profil » choisi, "" = celui du serveur */
     int64_t freq;                /* Hz, 0 = fréquence de départ du profil */
     char    mod[16];             /* "" = mode de départ du profil */
@@ -48,6 +49,7 @@ void      wrx_state_save(const wrx_state_t *s);
 
 /* ---------------- webradios (app Radio), espace NVS « radio » ---------------- */
 #define RAD_MAX 12
+#define VOL_DEF 15                       /* % : première écoute, ou si le dernier était 0 */
 
 typedef struct {
     char name[32];
@@ -57,6 +59,7 @@ typedef struct {
 typedef struct {
     uint8_t station;                     /* dernière écoutée */
     uint8_t tone;                        /* 0..WRX_TONES-1 */
+    uint8_t volume;                      /* %, 1..100 */
 } rad_state_t;
 
 int       rad_cfg_load(rad_station_t st[RAD_MAX]);        /* nombre de stations (tassées en tête) */

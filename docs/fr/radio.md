@@ -36,7 +36,7 @@ pris en charge.
 | Bouton latéral | écran éteint, **l'écoute continue** ; un nouvel appui y revient |
 | Glisser → ou ‹ | quitter l'app : l'écoute s'arrête, le Bluetooth revient |
 
-- Chaque écoute démarre à **10 % de volume**.
+- L'écoute reprend au **dernier volume utilisé** (15 % la première fois, ou s'il était resté à 0).
 - **Tonalité** (5 paliers, retenue) : *Neutre*, *Claire* (par défaut), *Voix*, *Douce*,
   *Sourde* — vers la droite, moins d'aigus, plus de corps aux voix sur le petit haut-parleur.
 - La montre retient la dernière station écoutée.

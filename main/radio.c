@@ -652,7 +652,7 @@ esp_err_t radio_start(void)
     if (!s_nst) return ESP_ERR_NOT_FOUND;
     lock();
     memset(&s_info, 0, sizeof s_info);
-    s_info.volume = RAD_VOL_START;
+    s_info.volume = s_state.volume;          /* dernier volume retenu */
     s_info.tone = s_state.tone;
     s_info.station = s_state.station;
     s_info.nstations = (uint8_t)s_nst;
@@ -691,6 +691,7 @@ void radio_stop(void)
         s_run = false;
         lock();
         s_state.tone = s_info.tone;
+        s_state.volume = s_info.volume;          /* 0 : non retenu (VOL_DEF au départ) */
         s_info.state = RAD_OFF;
         s_info.msg = NULL;
         unlock();
@@ -709,9 +710,9 @@ void radio_info(rad_info_t *out)
 {
     if (!s_mx) {
         memset(out, 0, sizeof *out);
-        out->volume = RAD_VOL_START;
         rad_state_t st;
         rad_state_load(&st);
+        out->volume = st.volume;
         out->tone = st.tone;
         out->station = st.station;
         return;

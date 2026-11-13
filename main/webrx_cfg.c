@@ -100,11 +100,13 @@ void wrx_state_load_srv(wrx_state_t *s, int server)
     memset(s, 0, sizeof *s);
     s->squelch = -150;
     s->tone = WRX_TONE_DEF;
+    s->volume = VOL_DEF;
     s->server = (uint8_t)(server >= 0 && server < WRX_SRV ? server : 0);
     nvs_handle_t h;
     if (nvs_open(NS, NVS_READONLY, &h) != ESP_OK) return;
     uint8_t v;
     if (nvs_get_u8(h, "tone", &v) == ESP_OK && v < WRX_TONES) s->tone = v;
+    if (nvs_get_u8(h, "vol", &v) == ESP_OK && v >= 1 && v <= 100) s->volume = v;
     char k[12];
     int i = s->server;
     key(k, "prof", i);
@@ -144,6 +146,7 @@ void wrx_state_save(const wrx_state_t *s)
     nvs_get_u8(h, "srv", &cur);
     if (cur != s->server) nvs_set_u8(h, "srv", s->server);
     if (old.tone != s->tone) nvs_set_u8(h, "tone", s->tone);
+    if (s->volume >= 1 && s->volume <= 100 && old.volume != s->volume) nvs_set_u8(h, "vol", s->volume);
     char k[12];
     int i = s->server;
     key(k, "prof", i);
@@ -201,11 +204,13 @@ void rad_state_load(rad_state_t *s)
 {
     s->station = 0;
     s->tone = 1;                                      /* musique : « claire » */
+    s->volume = VOL_DEF;
     nvs_handle_t h;
     if (nvs_open(RNS, NVS_READONLY, &h) != ESP_OK) return;
     uint8_t v;
     if (nvs_get_u8(h, "st", &v) == ESP_OK && v < RAD_MAX) s->station = v;
     if (nvs_get_u8(h, "tone", &v) == ESP_OK && v < WRX_TONES) s->tone = v;
+    if (nvs_get_u8(h, "vol", &v) == ESP_OK && v >= 1 && v <= 100) s->volume = v;
     nvs_close(h);
 }
 
@@ -213,11 +218,13 @@ void rad_state_save(const rad_state_t *s)
 {
     rad_state_t old;
     rad_state_load(&old);
-    if (old.station == s->station && old.tone == s->tone) return;
+    bool vol = s->volume >= 1 && s->volume <= 100 && s->volume != old.volume;
+    if (old.station == s->station && old.tone == s->tone && !vol) return;
     nvs_handle_t h;
     if (nvs_open(RNS, NVS_READWRITE, &h) != ESP_OK) return;
     nvs_set_u8(h, "st", s->station);
     nvs_set_u8(h, "tone", s->tone);
+    if (vol) nvs_set_u8(h, "vol", s->volume);
     nvs_commit(h);
     nvs_close(h);
 }

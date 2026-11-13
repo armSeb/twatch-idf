@@ -16,7 +16,6 @@
 #include "esp_err.h"
 #include "webrx_cfg.h"
 
-#define RAD_VOL_START 10              /* % au début de chaque écoute */
 
 enum {
     RAD_OFF = 0,
