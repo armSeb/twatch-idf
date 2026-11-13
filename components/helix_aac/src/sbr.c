@@ -51,7 +51,6 @@
 #endif
 
 #include "sbr.h"
-#include "helix_alloc.h"	/* T-Watch : allocateur de l'application */
 
 /**************************************************************************************
     Function:    InitSBRState
@@ -106,7 +105,7 @@ int InitSBR(AACDecInfo *aacDecInfo) {
     }
 
     /* allocate SBR state structure */
-    psi = (PSInfoSBR *)helix_malloc(sizeof(PSInfoSBR));
+    psi = (PSInfoSBR *)malloc(sizeof(PSInfoSBR));
     if (!psi) {
         printf("OOM in SBR, can't allocate %d bytes\n", sizeof(PSInfoSBR));
         return ERR_AAC_SBR_INIT;
@@ -155,7 +154,7 @@ int InitSBRPre(AACDecInfo *aacDecInfo, void **ptr, int *sz) {
  **************************************************************************************/
 void FreeSBR(AACDecInfo *aacDecInfo) {
     if (aacDecInfo && aacDecInfo->psInfoSBR) {
-        helix_free(aacDecInfo->psInfoSBR);
+        free(aacDecInfo->psInfoSBR);
     }
 
     return;

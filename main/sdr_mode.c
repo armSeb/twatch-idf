@@ -4,122 +4,51 @@
 #include "esp_attr.h"
 #include "esp_system.h"
 #include "esp_log.h"
-#include "esp_wifi.h"
-#include "heap_memory_layout.h"
-#include "multi_heap.h"
-#include "freertos/FreeRTOS.h"
-#include "ble.h"
-#include "settings.h"
-#include "i18n.h"
-#include "display.h"
 #include "esp_heap_caps.h"
+#include "esp_heap_caps_init.h"
+#include "heap_memory_layout.h"
+#include "esp_ota_ops.h"
 
 static const char *TAG = "sdr_mode";
 
 /* bancs 7 et 8 de la SRAM1 (la table mémoire d'ESP-IDF les signale comme
- * utilisables pour le « MAC dump ») : hors du tas général */
+ * utilisables pour le « MAC dump ») */
 SOC_RESERVE_MEMORY_REGION(SDR_DUMP_START, SDR_DUMP_END, twatch_rf_dump);
 
-static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
-static multi_heap_handle_t s_heap;         /* NULL pendant le SDR */
-static size_t s_empty;                     /* libre quand rien n'est alloué */
-static bool s_active, s_ble_was;
-static const char *s_err;
+#define SDR_MAGIC 0x5D2B007Au
+static RTC_NOINIT_ATTR uint32_t s_req;
+static bool s_active;
 
 /* app à rouvrir au prochain démarrage (après les réglages WebRX…) */
 #define APP_MAGIC 0xA9900000u
 static RTC_NOINIT_ATTR uint32_t s_app_req;
 static int s_app = -1;
 
-static void bank_register(void)
-{
-    multi_heap_handle_t h = multi_heap_register((void *)SDR_DUMP_START, SDR_DUMP_END - SDR_DUMP_START);
-    portENTER_CRITICAL(&s_mux);
-    s_heap = h;
-    s_empty = h ? multi_heap_free_size(h) : 0;
-    portEXIT_CRITICAL(&s_mux);
-    if (!h) ESP_LOGE(TAG, "tas des bancs non créé");
-}
-
 void sdr_mode_boot(void)
 {
+    s_active = s_req == SDR_MAGIC && esp_reset_reason() == ESP_RST_SW;
+    s_req = 0;                                   /* un plantage ramène au mode normal */
     if ((s_app_req & 0xFFFFFF00u) == APP_MAGIC && esp_reset_reason() == ESP_RST_SW) s_app = (int)(s_app_req & 0xFF);
     s_app_req = 0;
-    bank_register();
+    if (!s_active) {
+        esp_err_t e = heap_caps_add_region(SDR_DUMP_START, SDR_DUMP_END);
+        if (e != ESP_OK) ESP_LOGE(TAG, "bancs SDR non rendus au tas : %s", esp_err_to_name(e));
+    } else {
+        ESP_LOGW(TAG, "mode SDR : Bluetooth coupé, bancs 0x%08x-0x%08x réservés à la radio",
+                 (unsigned)SDR_DUMP_START, (unsigned)SDR_DUMP_END);
+    }
 }
 
 bool sdr_mode_active(void) { return s_active; }
-const char *sdr_mode_error(void) { return s_err; }
 
-esp_err_t sdr_mode_enter(void)
+void sdr_mode_reboot(bool sdr)
 {
-    if (s_active) return ESP_OK;
-    s_err = NULL;
-    wifi_mode_t m;
-    if (esp_wifi_get_mode(&m) != ESP_ERR_WIFI_NOT_INIT) {
-        s_err = N_("Wi-Fi occupé par une autre app");
-        return ESP_ERR_INVALID_STATE;
-    }
-    portENTER_CRITICAL(&s_mux);
-    bool busy = s_heap && multi_heap_free_size(s_heap) != s_empty;
-    if (!busy) s_heap = NULL;              /* plus d'allocation dans les bancs */
-    portEXIT_CRITICAL(&s_mux);
-    if (busy) {
-        s_err = N_("Mémoire radio occupée (Radio en cours ?)");
-        return ESP_ERR_INVALID_STATE;
-    }
-    s_ble_was = ble_running();
-    if (s_ble_was) ble_stop();
-    if (ble_running()) {
-        bank_register();
-        s_err = N_("Bluetooth impossible à arrêter");
-        return ESP_ERR_INVALID_STATE;
-    }
-    s_active = true;
-    display_low_mem(true);                 /* ~38 Ko de RAM interne pour le Wi-Fi */
-    ESP_LOGI(TAG, "radio prêtée au SDR (Bluetooth %s), interne libre %u, bloc %u",
-             s_ble_was ? "arrêté" : "déjà coupé",
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-    return ESP_OK;
-}
-
-void sdr_mode_leave(void)
-{
-    if (!s_active) return;
-    s_active = false;
-    display_low_mem(false);
-    bank_register();                       /* tas neuf : le MAC a tout écrasé */
-    if (s_ble_was && settings_get()->ble_enabled) ble_start();
-    s_ble_was = false;
-    ESP_LOGI(TAG, "radio rendue");
-}
-
-void *rfbank_malloc(size_t n)
-{
-    void *p = NULL;
-    portENTER_CRITICAL(&s_mux);
-    if (s_heap) p = multi_heap_malloc(s_heap, n);
-    portEXIT_CRITICAL(&s_mux);
-    return p;
-}
-
-bool rfbank_free(void *p)
-{
-    if ((uintptr_t)p < SDR_DUMP_START || (uintptr_t)p >= SDR_DUMP_END) return false;
-    portENTER_CRITICAL(&s_mux);
-    if (s_heap) multi_heap_free(s_heap, p);   /* sinon : tas déjà abandonné */
-    portEXIT_CRITICAL(&s_mux);
-    return true;
-}
-
-size_t rfbank_free_size(void)
-{
-    portENTER_CRITICAL(&s_mux);
-    size_t n = s_heap ? multi_heap_free_size(s_heap) : 0;
-    portEXIT_CRITICAL(&s_mux);
-    return n;
+    /* une mise à jour encore « à l'essai » serait annulée par ce redémarrage
+     * volontaire : l'utilisateur s'en sert, on la valide */
+    esp_ota_mark_app_valid_cancel_rollback();
+    s_req = sdr ? SDR_MAGIC : 0;
+    esp_restart();
 }
 
 void sdr_mode_set_boot_app(int idx) { s_app_req = idx >= 0 ? (APP_MAGIC | (uint32_t)(idx & 0xFF)) : 0; }
-int  sdr_mode_boot_app(void) { return s_app; }
+int  sdr_mode_boot_app(void) { return s_active ? -1 : s_app; }

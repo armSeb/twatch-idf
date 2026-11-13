@@ -11,8 +11,6 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_vendor.h"
 #include "lvgl.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "app_events.h"
 
 static const char *TAG = "display";
@@ -31,11 +29,6 @@ static bool s_turbo;     /* verrou CPU_FREQ_MAX tenu */
 #define TURBO_IDLE_MS 1500
 
 #define BUF_LINES 60   /* 2 × 28,8 Ko DMA : moins de découpage pendant les animations */
-#define BUF_LINES_LOW 20   /* 2 × 9,6 Ko : pendant le SDR, la RAM interne va au Wi-Fi */
-
-static void *s_buf[2];
-static size_t s_bsz;
-static volatile bool s_flushing;
 
 /* ------------------------------------------------------------------ */
 static uint32_t tick_cb(void)
@@ -45,7 +38,6 @@ static uint32_t tick_cb(void)
 
 static bool on_trans_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *ev, void *ctx)
 {
-    s_flushing = false;
     lv_display_flush_ready((lv_display_t *)ctx);
     return false;
 }
@@ -53,7 +45,6 @@ static bool on_trans_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_d
 static void flush_cb(lv_display_t *d, const lv_area_t *a, uint8_t *px)
 {
     lv_draw_sw_rgb565_swap(px, lv_area_get_size(a));
-    s_flushing = true;
     esp_lcd_panel_draw_bitmap(s_panel, a->x1, a->y1, a->x2 + 1, a->y2 + 1, px);
 }
 
@@ -229,7 +220,6 @@ esp_err_t display_init(void)
     void *b1 = heap_caps_malloc(bsz, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     void *b2 = heap_caps_malloc(bsz, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     assert(b1 && b2);
-    s_buf[0] = b1; s_buf[1] = b2; s_bsz = bsz;
     lv_display_set_buffers(s_disp, b1, b2, bsz, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(s_disp, flush_cb);
     lv_display_set_color_format(s_disp, LV_COLOR_FORMAT_RGB565);
@@ -317,27 +307,4 @@ void display_perf_tick(void)
 void display_set_brightness(uint8_t level)
 {
     if (s_on) power_backlight(level);
-}
-
-/* tampons de rendu réduits (true) ou normaux : à appeler depuis la tâche LVGL,
- * hors rendu. Si les grands tampons ne peuvent être réalloués, on garde les
- * petits (l'affichage marche, un peu plus découpé). */
-void display_low_mem(bool low)
-{
-    size_t bsz = BOARD_LCD_W * (low ? BUF_LINES_LOW : BUF_LINES) * 2;
-    if (bsz == s_bsz) return;
-    void *b1 = heap_caps_malloc(bsz, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    void *b2 = b1 ? heap_caps_malloc(bsz, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL) : NULL;
-    if (!b1 || !b2) {
-        heap_caps_free(b1);
-        ESP_LOGW(TAG, "tampons d'affichage %u o : pas de place, inchangés", (unsigned)bsz);
-        return;
-    }
-    for (int i = 0; i < 200 && s_flushing; i++) vTaskDelay(1);   /* dernier envoi DMA */
-    lv_display_set_buffers(s_disp, b1, b2, bsz, LV_DISPLAY_RENDER_MODE_PARTIAL);
-    heap_caps_free(s_buf[0]);
-    heap_caps_free(s_buf[1]);
-    s_buf[0] = b1; s_buf[1] = b2; s_bsz = bsz;
-    lv_obj_invalidate(lv_screen_active());
-    ESP_LOGI(TAG, "tampons d'affichage : 2 × %u o", (unsigned)bsz);
 }

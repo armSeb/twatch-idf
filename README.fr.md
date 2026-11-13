@@ -40,8 +40,7 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   occupation des canaux 2,4 GHz et canal le plus libre ; fiche détaillée de chaque point
   d'accès avec l'historique du signal), **SDR** (spectre et waterfall 2,4 GHz en direct à
   partir des échantillons I/Q bruts de la radio de l'ESP32 : bande entière ou un canal
-  ±10 MHz, marqueur, maintien de crête ; Bluetooth en pause tant qu'elle est ouverte, sans
-  redémarrage), **WebRX** (écoute de tes récepteurs OpenWebRX /
+  ±10 MHz, marqueur, maintien de crête), **WebRX** (écoute de tes récepteurs OpenWebRX /
   OpenWebRX+ par le Wi-Fi, `https` compris, sur le haut-parleur de la montre : jusqu'à 4
   serveurs, profils, signets, modes du serveur, squelch, tonalité en 5 paliers, S-mètre et
   mini-waterfall ; continue écran éteint — voir le [guide WebRX](docs/fr/webrx.md)), **Tone** (tonalité

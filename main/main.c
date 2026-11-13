@@ -272,7 +272,7 @@ static void app_task_diag(void *arg)
 
 void app_main(void)
 {
-    sdr_mode_boot();                    /* tas privé des bancs radio */
+    sdr_mode_boot();                    /* avant toute allocation notable */
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -305,7 +305,13 @@ void app_main(void)
     ESP_LOGW(TAG, "DIAGNOSTIC : BLE seul, écran non initialisé");
 #endif
 
-    if (settings_get()->ble_enabled) {
+    if (sdr_mode_active()) {
+        /* mode SDR : la radio est à l'app ; la mémoire du contrôleur BT est
+         * rendue au tas (on revient au mode normal par un redémarrage) */
+        esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
+        extern const app_t app_sdr;
+        app_open(&app_sdr);
+    } else if (settings_get()->ble_enabled) {
         ble_start();
     } else {
         ESP_LOGW(TAG, "mode avion : BLE non démarré");

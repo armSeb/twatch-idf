@@ -2,6 +2,16 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.26.3 — 2026-11-13
+
+- Back to the 0.25 behaviour for SDR: opening the app restarts the watch in "SDR mode"
+  (Bluetooth never started, capture banks kept for the radio), leaving it restarts normally.
+  Borrowing the radio without restarting (0.26.0, 0.26.2) left too little internal RAM and
+  made the firmware less stable (no sound in Radio). The capture banks join the general heap
+  again in normal mode, the Helix decoders allocate their state as before, display buffers
+  and Wi-Fi TX buffers are back to their 0.25 sizes.
+- Kept from 0.26.1: Radio and WebRX resume at the last volume used (15 % by default).
+
 ## 0.26.2 — 2026-11-13
 
 - SDR: fixed "Radio error (wifi)" when opening the app: the Wi-Fi driver lacked internal RAM

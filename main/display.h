@@ -16,7 +16,6 @@ void      display_set_on(bool on);      /* séquence complète veille/réveil */
 bool      display_is_on(void);
 void      display_set_brightness(uint8_t level);
 void      display_perf_tick(void);
-void      display_low_mem(bool low);    /* tampons de rendu réduits (SDR) */
 /* réveil par double tap (écran éteint) */
 bool      display_tap_begin(void);      /* sur EV_TOUCH_INT : démarre l'analyse */
 int       display_tap_poll(void);       /* 1 = double tap, 0 = continuer, -1 = abandon */

@@ -17,7 +17,6 @@
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
-#include "sdr_mode.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_pm.h"
@@ -77,22 +76,6 @@ static void *ps_malloc(size_t n)
     return p ? p : malloc(n);
 }
 
-/* état des décodeurs et tampons de travail : d'abord dans les bancs radio
- * (64 Ko de RAM interne rapide, inutilisés hors SDR), sinon en PSRAM */
-static void *fast_malloc(size_t n)
-{
-    void *p = rfbank_malloc(n);
-    return p ? p : ps_malloc(n);
-}
-
-static void fast_free(void *p)
-{
-    if (p && !rfbank_free(p)) heap_caps_free(p);
-}
-
-void *helix_malloc(size_t n) { return fast_malloc(n); }
-void  helix_free(void *p)    { fast_free(p); }
-
 static void set_state(int st, const char *msg, const char *detail)
 {
     lock();
@@ -118,8 +101,10 @@ static void boost(bool on)
 
 static void play_task(void *arg)
 {
-    uint8_t *in = fast_malloc(INBUF);
-    int16_t *pcm = fast_malloc(PCM_MAX * sizeof(int16_t));
+    uint8_t *in = heap_caps_malloc(INBUF, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    int16_t *pcm = heap_caps_malloc(PCM_MAX * sizeof(int16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!in) in = ps_malloc(INBUF);
+    if (!pcm) pcm = ps_malloc(PCM_MAX * sizeof(int16_t));
     HMP3Decoder mp3 = NULL;
     HAACDecoder aac = NULL;
     int codec = C_NONE, in_len = 0, rate = 0, tone = -1, errors = 0;
@@ -275,8 +260,8 @@ static void play_task(void *arg)
     boost(false);
     if (mp3) MP3FreeDecoder(mp3);
     if (aac) AACFreeDecoder(aac);
-    fast_free(in);
-    fast_free(pcm);
+    free(in);
+    free(pcm);
     xEventGroupSetBits(s_evg, BIT_PLAYEND);
     vTaskDelete(NULL);
 }

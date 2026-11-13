@@ -36,8 +36,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   off, then reopens), *Torch* (white/red), **Wi-Fi analyzer** (networks with RSSI, channel,
   security; 2.4 GHz channel occupancy with the least busy channel; per-AP detail with signal
   history), **SDR** (live 2.4 GHz spectrum and waterfall from the raw I/Q samples of the
-  ESP32 radio: whole band or one channel ±10 MHz, marker, peak hold; Bluetooth pauses while
-  it is open, no restart), **WebRX** (listen to
+  ESP32 radio: whole band or one channel ±10 MHz, marker, peak hold), **WebRX** (listen to
   your OpenWebRX / OpenWebRX+ receivers over Wi-Fi, `https` included, on the watch speaker:
   up to 4 servers, profiles, bookmarks, the server's own modes, squelch, 5-step tone,
   S-meter and mini waterfall; keeps playing with the screen off — see the
