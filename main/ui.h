@@ -14,6 +14,7 @@
 void     ui_init(void);
 void     ui_go_home(void);                 /* cadran, sans animation si écran éteint */
 void     ui_go_home_or_app(void);              /* extinction par délai : cadran, sauf app active */
+bool     ui_button_sleeps(void);               /* bouton : extinction sans quitter l'app (écoute WebRX…) */
 bool     ui_is_home(void);
 uint32_t ui_timeout_ms(void);              /* délai d'inactivité de l'écran courant */
 

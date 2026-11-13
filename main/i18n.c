@@ -282,6 +282,8 @@ static const tr_t EN[] = {
     { "fermée par le serveur", "closed by the server" },
     { "Connexion perdue", "Connection lost" },
     { "Refusé par le serveur", "Refused by the server" },
+    { "Filtre voix", "Voice filter" },
+    { "Filtre voix : moins de souffle et d'aigus, plus de corps aux voix.", "Voice filter: less hiss and treble, fuller voices." },
 };
 
 static int s_lang = LANG_FR;

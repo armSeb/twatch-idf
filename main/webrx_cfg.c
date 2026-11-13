@@ -63,6 +63,7 @@ void wrx_state_load(wrx_state_t *s)
     memset(s, 0, sizeof *s);
     s->volume = 60;
     s->squelch = -150;
+    s->filter = 1;
     nvs_handle_t h;
     if (nvs_open(NS, NVS_READONLY, &h) != ESP_OK) return;
     get_str(h, "prof", s->profile, sizeof s->profile);
@@ -73,6 +74,8 @@ void wrx_state_load(wrx_state_t *s)
     if (nvs_get_u8(h, "vol", &v) == ESP_OK && v <= 100) s->volume = v;
     int16_t q;
     if (nvs_get_i16(h, "sq", &q) == ESP_OK) s->squelch = q;
+    uint8_t fl;
+    if (nvs_get_u8(h, "flt", &fl) == ESP_OK) s->filter = fl ? 1 : 0;
     nvs_close(h);
 }
 
@@ -88,6 +91,7 @@ void wrx_state_save(const wrx_state_t *s)
     if (old.freq != s->freq) nvs_set_i64(h, "freq", s->freq);
     if (old.volume != s->volume) nvs_set_u8(h, "vol", s->volume);
     if (old.squelch != s->squelch) nvs_set_i16(h, "sq", s->squelch);
+    if (old.filter != s->filter) nvs_set_u8(h, "flt", s->filter);
     nvs_commit(h);
     nvs_close(h);
 }

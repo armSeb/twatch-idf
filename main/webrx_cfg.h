@@ -22,6 +22,7 @@ typedef struct {
     char    mod[16];             /* "" = mode de départ du profil */
     uint8_t volume;              /* 0..100 */
     int16_t squelch;             /* dB ; -150 = coupé */
+    uint8_t filter;              /* filtre « voix » (1 par défaut) */
 } wrx_state_t;
 
 void      wrx_cfg_load(wrx_cfg_t *c);

@@ -337,9 +337,9 @@ static void refresh(bool force)
     char mb[16] = "";
     if (live && lv > -199) snprintf(mb, sizeof mb, "%d dB", (int)lroundf(lv));
     set_text(v_meter_lbl, mb);
-    /* son coupé (démarrage) : icône du haut-parleur en orange, à toucher */
+    /* volume bas : icône du haut-parleur « petit volume », à toucher */
+    set_text(v_spk, m_i.volume > 30 ? LV_SYMBOL_VOLUME_MAX : LV_SYMBOL_VOLUME_MID);
     lv_obj_set_style_text_color(v_spk, m_i.volume ? C_FG : C_WARN, 0);
-    set_text(v_spk, m_i.volume ? LV_SYMBOL_VOLUME_MAX : LV_SYMBOL_VOLUME_MID);
     /* boutons */
     set_text(v_play_lbl, run ? LV_SYMBOL_STOP : LV_SYMBOL_PLAY);
     lv_obj_set_style_bg_color(v_play, run ? lv_color_hex(0xDC2626) : lv_color_hex(0x16A34A), 0);
@@ -644,6 +644,11 @@ static lv_obj_t *kv(const char *k, lv_obj_t **val)
     return r;
 }
 
+static void filter_cb(lv_event_t *e)
+{
+    webrx_filter(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+}
+
 static void sound_cb(lv_event_t *e)
 {
     sheet_open(SH_SOUND, _("Son"));
@@ -657,6 +662,22 @@ static void sound_cb(lv_event_t *e)
     v_sq = mk_slider(-130, -20, sq, sq_cb);
     sq_text(sq);
     v_sq_sig = ui_label(v_sheet_list, &font_small_11, C_DIM, "");
+    lv_obj_t *fr = ui_container(v_sheet_list);
+    lv_obj_set_size(fr, lv_pct(100), 34);
+    ui_bubble(fr);
+    lv_obj_t *fl = ui_label(fr, &font_text_16, C_FG, _("Filtre voix"));
+    lv_obj_align(fl, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_t *sw = lv_switch_create(fr);
+    lv_obj_set_size(sw, 50, 26);
+    lv_obj_align(sw, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_style_bg_color(sw, C_ACC, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    if (m_i.filter) lv_obj_add_state(sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(sw, filter_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    ui_bubble(sw);
+    lv_obj_t *fh = ui_label(v_sheet_list, &font_small_11, C_DIM,
+                            _("Filtre voix : moins de souffle et d'aigus, plus de corps aux voix."));
+    lv_label_set_long_mode(fh, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(fh, lv_pct(100));
     lv_obj_t *h = ui_label(v_sheet_list, &font_small_11, C_DIM,
                            _("Squelch : coupe le son tant que le signal reste sous le seuil. Tout à gauche : coupé."));
     lv_label_set_long_mode(h, LV_LABEL_LONG_WRAP);

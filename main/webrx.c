@@ -242,10 +242,57 @@ static void audio_bytes(const uint8_t *p, int n)
     }
 }
 
+/* Filtre « voix » pour le petit haut-parleur : passe-haut 180 Hz (le HP ne
+ * les rend pas, autant garder la marge), bosse de +5 dB vers 700 Hz (corps
+ * de la voix), passe-bas 2,6 kHz (souffle FM et aigus agressifs). Biquads
+ * RBJ, forme directe II transposée, en flottant (FPU). */
+typedef struct { float b0, b1, b2, a1, a2, z1, z2; } bq_t;
+static bq_t s_bq[3];
+
+static void bq_set(bq_t *q, float b0, float b1, float b2, float a0, float a1, float a2)
+{
+    q->b0 = b0 / a0; q->b1 = b1 / a0; q->b2 = b2 / a0; q->a1 = a1 / a0; q->a2 = a2 / a0;
+    q->z1 = q->z2 = 0;
+}
+
+static void filter_init(void)
+{
+    const float fs = WRX_RATE;
+    float w, c, sn, al;
+    /* passe-haut 180 Hz, Q 0,707 */
+    w = 2 * (float)M_PI * 180 / fs; c = cosf(w); sn = sinf(w); al = sn / (2 * 0.7071f);
+    bq_set(&s_bq[0], (1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + al, -2 * c, 1 - al);
+    /* cloche +5 dB à 700 Hz, Q 0,8 */
+    float A = powf(10, 5.0f / 40);
+    w = 2 * (float)M_PI * 700 / fs; c = cosf(w); sn = sinf(w); al = sn / (2 * 0.8f);
+    bq_set(&s_bq[1], 1 + al * A, -2 * c, 1 - al * A, 1 + al / A, -2 * c, 1 - al / A);
+    /* passe-bas 2,6 kHz, Q 0,707 */
+    w = 2 * (float)M_PI * 2600 / fs; c = cosf(w); sn = sinf(w); al = sn / (2 * 0.7071f);
+    bq_set(&s_bq[2], (1 - c) / 2, 1 - c, (1 - c) / 2, 1 + al, -2 * c, 1 - al);
+}
+
+static void filter_run(int16_t *x, int n)
+{
+    for (int i = 0; i < n; i++) {
+        float v = x[i];
+        for (int k = 0; k < 3; k++) {
+            bq_t *q = &s_bq[k];
+            float y = q->b0 * v + q->z1;
+            q->z1 = q->b1 * v - q->a1 * y + q->z2;
+            q->z2 = q->b2 * v - q->a2 * y;
+            v = y;
+        }
+        if (v > 32767) v = 32767;
+        if (v < -32768) v = -32768;
+        x[i] = (int16_t)v;
+    }
+}
+
 static void play_task(void *arg)
 {
     int16_t buf[CHUNK + 1];                      /* pile de la tâche (≈ 0,5 Ko) */
     bool open = false, buffering = true;
+    filter_init();
     while (!s_quit) {
         if (!s_audio_on) {
             if (open) { sound_stream_close(); open = false; }
@@ -277,6 +324,7 @@ static void play_task(void *arg)
         else if (take == CHUNK + 1) {               /* deux échantillons en un */
             buf[CHUNK - 1] = (int16_t)(((int)buf[CHUNK - 1] + buf[CHUNK]) / 2);
         }
+        if (s_info.filter) filter_run(buf, CHUNK);
         int v = s_info.volume;
         int gain = v * v * 8192 / 10000;           /* courbe douce, ×2 à 100 % */
         sound_stream_write(buf, CHUNK, gain);
@@ -1096,7 +1144,8 @@ esp_err_t webrx_start(void)
     lock();
     memset(&s_info, 0, sizeof s_info);
     s_info.level_db = -200.0f;
-    s_info.volume = 0;                       /* chaque écoute démarre au minimum */
+    s_info.volume = WRX_VOL_START;           /* chaque écoute démarre bas */
+    s_info.filter = s_st.filter;
     s_info.squelch = s_st.squelch;
     s_nbm = s_nprof = s_nmodes = s_ndigi = 0;
     s_pend = 0;
@@ -1169,6 +1218,7 @@ void webrx_stop(void)
         if (s_info.mod[0]) strlcpy(s_st.mod, s_info.mod, sizeof s_st.mod);
         s_st.volume = s_info.volume;
         s_st.squelch = s_info.squelch;
+        s_st.filter = s_info.filter;
         s_info.state = WRX_OFF;
         s_info.msg = NULL;
         unlock();
@@ -1197,14 +1247,15 @@ void webrx_retry(void)
 
 void webrx_info(wrx_info_t *out)
 {
-    if (!s_mx) { memset(out, 0, sizeof *out); out->volume = 60; out->squelch = -150; return; }
+    if (!s_mx) { memset(out, 0, sizeof *out); out->volume = WRX_VOL_START; out->squelch = -150; out->filter = 1; return; }
     lock();
     *out = s_info;
     if (!s_run) {
         if (!out->freq) out->freq = s_st.freq;
         if (!out->mod[0]) strlcpy(out->mod, s_st.mod, sizeof out->mod);
-        out->volume = 0;
+        out->volume = WRX_VOL_START;
         out->squelch = s_st.squelch;
+        out->filter = s_st.filter;
     }
     unlock();
 }
@@ -1298,6 +1349,15 @@ void webrx_volume(int pct)
     lock();
     s_info.volume = (uint8_t)pct;
     s_st.volume = (uint8_t)pct;
+    unlock();
+}
+
+void webrx_filter(bool on)
+{
+    if (!s_mx) return;
+    lock();
+    s_info.filter = on;
+    s_st.filter = on;
     unlock();
 }
 

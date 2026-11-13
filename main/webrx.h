@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include "esp_err.h"
 
+#define WRX_VOL_START 10           /* % : volume au début de chaque écoute */
 #define WRX_RATE   12000            /* Hz : audio demandé au serveur (tous modes) */
 #define WRX_FFT_W  240              /* colonnes d'une ligne de waterfall */
 #define WRX_BM_MAX 64
@@ -40,6 +41,7 @@ typedef struct {
     float    level_db;              /* S-mètre (dB), -200 = inconnu */
     int16_t  squelch;               /* dB, -150 = coupé */
     uint8_t  volume;                /* 0..100 */
+    uint8_t  filter;                /* 1 = filtre « voix » (aigus et souffle atténués) */
     char     profile[72];           /* « sdr|profil » actif */
     char     station[48];           /* nom RDS (WFM) ou du signet écouté */
     uint32_t bm_ver, prof_ver, mode_ver;   /* changent quand les listes changent */
@@ -76,7 +78,8 @@ void      webrx_set_mod(const char *mod);
 void      webrx_select(const wrx_bm_t *bm);          /* fréquence + mode d'un signet */
 void      webrx_profile(const char *id);
 void      webrx_volume(int pct);
-void      webrx_squelch(int db);    /* -150 = coupé */
+void      webrx_squelch(int db);
+void      webrx_filter(bool on);    /* filtre « voix » */    /* -150 = coupé */
 
 /* waterfall : produit seulement si visible ; zoom 1, 4 ou 16 (centré sur la
  * fréquence écoutée) */

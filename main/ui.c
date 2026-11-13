@@ -2237,6 +2237,13 @@ void app_open_settings_portal(const app_t *a)
     ota_btn_cb(NULL);
 }
 
+/* bouton : sur une app qui garde l'écran allumé (écoute WebRX…), il éteint
+ * l'écran au lieu de revenir au cadran, et l'app continue */
+bool ui_button_sleeps(void)
+{
+    return s_cur == SCR_APP && s_app_cur && s_app_cur->keep_screen_on && s_app_cur->keep_screen_on();
+}
+
 bool app_leaving_for_good(void)
 {
     if (!display_is_on()) return false;

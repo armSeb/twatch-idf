@@ -84,7 +84,7 @@ static void handle_axp(void)
     if (m & AXP_IRQ_PEK_SHORT) {
         if (!display_is_on()) {
             wake_to_pending_or_home();
-        } else if (!ui_is_home()) {
+        } else if (!ui_is_home() && !ui_button_sleeps()) {
             ui_go_home();
             lv_display_trigger_activity(NULL);
         } else {

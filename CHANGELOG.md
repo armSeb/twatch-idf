@@ -2,6 +2,16 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.22.0 — 2026-11-13
+
+- WebRX: the side button now turns the screen off while listening instead of going back to
+  the watch face (which stopped the app); listening continues and the button brings the app
+  back. Applies to any app that keeps the screen on.
+- WebRX: each listening session starts at 10 % volume.
+- WebRX: "Voice filter" (on by default, in the sound sheet, remembered): 180 Hz high-pass,
+  +5 dB around 700 Hz and 2.6 kHz low-pass — less FM hiss and harsh treble, fuller voices
+  on the small speaker.
+
 ## 0.21.7 — 2026-11-13
 
 - WebRX: every listening session starts with the volume at the minimum (muted); the speaker
