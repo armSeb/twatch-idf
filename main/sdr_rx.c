@@ -37,6 +37,7 @@
 #include "soc/dport_access.h"
 #include "sdr_mode.h"
 #include "power.h"
+#include "ble.h"
 
 static const char *TAG = "sdr";
 
@@ -379,7 +380,29 @@ esp_err_t sdr_rx_start(void)
     s_err = NULL;
     if (!sdr_mode_active()) { s_err = "mode"; return ESP_ERR_INVALID_STATE; }
 
-    /* tampons de calcul en RAM interne (FFT), le reste où il y a de la place */
+    /* la radio Wi-Fi d'abord (c'est elle qui a besoin de RAM interne) ;
+     * en mode moniteur, rien n'est émis ni enregistré */
+    esp_err_t e = esp_event_loop_create_default();
+    if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) { s_err = "evt"; return e; }
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    cfg.nvs_enable = 0;
+    if ((e = esp_wifi_init(&cfg)) != ESP_OK) {
+        ble_diag("SDR wifi %s, int %u Ko bloc %u Ko", esp_err_to_name(e),
+                 (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                 (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+        s_err = "wifi";
+        return e;
+    }
+    esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    esp_wifi_set_mode(WIFI_MODE_NULL);
+    if ((e = esp_wifi_start()) != ESP_OK) {
+        ble_diag("SDR wifi start %s", esp_err_to_name(e));
+        esp_wifi_deinit(); s_err = "wifi"; return e;
+    }
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+    /* tampons de calcul : RAM interne si le Wi-Fi en a laissé, sinon PSRAM */
     s_re = alloc_f(NFFT_MAX, true);
     s_im = alloc_f(NFFT_MAX, true);
     s_cos = alloc_f(NFFT_MAX / 2, true);
@@ -390,6 +413,7 @@ esp_err_t sdr_rx_start(void)
     s_ring = heap_caps_calloc(RING, sizeof(sdr_row_t), MALLOC_CAP_8BIT);
     if (!s_re || !s_im || !s_cos || !s_sin || !s_win_band || !s_win_zoom || !s_acc || !s_ring) {
         free_all();
+        esp_wifi_set_promiscuous(false); esp_wifi_stop(); esp_wifi_deinit();
         s_err = "mem";
         return ESP_ERR_NO_MEM;
     }
@@ -404,18 +428,6 @@ esp_err_t sdr_rx_start(void)
     s_norm_zoom = 1.0f / ((511.0f * sz) * (511.0f * sz));
     s_head = s_tail = 0;
 
-    /* la radio Wi-Fi en mode moniteur, rien n'est émis ni enregistré */
-    esp_err_t e = esp_event_loop_create_default();
-    if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) { free_all(); s_err = "evt"; return e; }
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    cfg.nvs_enable = 0;
-    if ((e = esp_wifi_init(&cfg)) != ESP_OK) { free_all(); s_err = "wifi"; return e; }
-    esp_wifi_set_storage(WIFI_STORAGE_RAM);
-    esp_wifi_set_mode(WIFI_MODE_NULL);
-    if ((e = esp_wifi_start()) != ESP_OK) { esp_wifi_deinit(); free_all(); s_err = "wifi"; return e; }
-    esp_wifi_set_ps(WIFI_PS_NONE);
-    esp_wifi_set_promiscuous(true);
-    esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
     s_tuned = 1;
     tune(1, 0);
     s_gain_max = (REG_READ(RX_GAIN) >> 8) & 127;

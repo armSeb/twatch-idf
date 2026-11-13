@@ -66,7 +66,8 @@ d'ESP-IDF 5.
   et n'entrent jamais dans le tas général : ils forment un tas privé (`multi_heap`, « rfbank »)
   où l'app Radio met l'état de ses décodeurs et ses tampons de travail (RAM interne rapide au
   lieu de la PSRAM). Ouvrir l'app SDR emprunte la radio sans redémarrage : Wi-Fi libre et tas
-  privé vide vérifiés, Bluetooth arrêté, tas privé abandonné au MAC ; quitter l'app recrée le
+  privé vide vérifiés, Bluetooth arrêté, tampons de rendu de l'écran réduits (2 × 28,8 →
+  2 × 9,6 Ko) pour laisser sa RAM interne au pilote Wi-Fi, tas privé abandonné au MAC ; quitter l'app recrée le
   tas privé et relance le Bluetooth. Une tâche sur le cœur 0 accorde des
   canaux normaux (1/4/7/10/13 pour la vue bande, un seul canal pour le zoom), capture 4096
   échantillons, retire la composante continue, fait des FFT fenêtrées de Hann (16 × 256 ou

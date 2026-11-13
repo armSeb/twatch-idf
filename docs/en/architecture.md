@@ -61,7 +61,8 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   heap: they form a private heap (`multi_heap`, "rfbank") that the Radio app uses for its
   decoder state and work buffers (fast internal RAM instead of PSRAM). Opening the SDR app
   borrows the radio without restarting: it checks that Wi-Fi is free and the private heap is
-  empty, stops Bluetooth, and abandons the private heap to the MAC; leaving the app recreates
+  empty, stops Bluetooth, shrinks the display render buffers (2 × 28.8 → 2 × 9.6 KB) so the
+  Wi-Fi driver gets its internal RAM, and abandons the private heap to the MAC; leaving the app recreates
   the private heap and restarts Bluetooth. A task on core 0 tunes standard channels (1/4/7/10/13 for the band view, one
   channel for the zoom), captures 4096 samples, removes DC, runs Hann-windowed FFTs
   (16 × 256 or 8 × 512 points, averaged) and builds 240-column rows in dBFS; the UI draws them

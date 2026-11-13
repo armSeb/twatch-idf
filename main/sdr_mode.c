@@ -11,6 +11,8 @@
 #include "ble.h"
 #include "settings.h"
 #include "i18n.h"
+#include "display.h"
+#include "esp_heap_caps.h"
 
 static const char *TAG = "sdr_mode";
 
@@ -74,7 +76,11 @@ esp_err_t sdr_mode_enter(void)
         return ESP_ERR_INVALID_STATE;
     }
     s_active = true;
-    ESP_LOGI(TAG, "radio prêtée au SDR (Bluetooth %s)", s_ble_was ? "arrêté" : "déjà coupé");
+    display_low_mem(true);                 /* ~38 Ko de RAM interne pour le Wi-Fi */
+    ESP_LOGI(TAG, "radio prêtée au SDR (Bluetooth %s), interne libre %u, bloc %u",
+             s_ble_was ? "arrêté" : "déjà coupé",
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     return ESP_OK;
 }
 
@@ -82,6 +88,7 @@ void sdr_mode_leave(void)
 {
     if (!s_active) return;
     s_active = false;
+    display_low_mem(false);
     bank_register();                       /* tas neuf : le MAC a tout écrasé */
     if (s_ble_was && settings_get()->ble_enabled) ble_start();
     s_ble_was = false;

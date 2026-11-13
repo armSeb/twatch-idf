@@ -2,6 +2,15 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.26.2 — 2026-11-13
+
+- SDR: fixed "Radio error (wifi)" when opening the app: the Wi-Fi driver lacked internal RAM
+  now that the capture banks no longer join the general heap. While the SDR app is open the
+  display render buffers shrink (2 × 28.8 KB → 2 × 9.6 KB), the Wi-Fi driver starts before
+  the FFT buffers, and a failure is logged with its cause and free RAM.
+- Wi-Fi: 6 static TX buffers instead of 16 (16 KB of internal RAM back for WebRX, Radio, OTA
+  and SDR; the watch mostly receives).
+
 ## 0.26.1 — 2026-11-13
 
 - Radio and WebRX resume at the last volume used (remembered separately for each app; 15 %
