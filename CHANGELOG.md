@@ -2,6 +2,14 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.24.0 — 2026-11-13
+
+- New **Tone** app: repeater access tone on the speaker, 1750 Hz by default (presets 1750,
+  2135, 1000 Hz; any frequency from 100 to 4000 Hz with the digit editor, remembered). Hold
+  the button to transmit; a short tap still sends a 1 s burst. Clean sine at 16 kHz with
+  5 ms fade in/out (no click), loud but below clipping.
+- Documentation: Tone in the READMEs and in the radio apps screenshots.
+
 ## 0.23.1 — 2026-11-13
 
 - WebRX: some profiles could not be selected. OpenWebRX+ identifies SDRs and profiles by

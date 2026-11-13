@@ -43,7 +43,9 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   ±10 MHz, marqueur, maintien de crête), **WebRX** (écoute de tes récepteurs OpenWebRX /
   OpenWebRX+ par le Wi-Fi, `https` compris, sur le haut-parleur de la montre : jusqu'à 4
   serveurs, profils, signets, modes du serveur, squelch, tonalité en 5 paliers, S-mètre et
-  mini-waterfall ; continue écran éteint — voir le [guide WebRX](docs/fr/webrx.md)),
+  mini-waterfall ; continue écran éteint — voir le [guide WebRX](docs/fr/webrx.md)), **Tone** (tonalité
+  d'ouverture de relais sur le haut-parleur, 1750 Hz par défaut, réglable de 100 à 4000 Hz avec
+  préréglages : maintenir pour émettre, 1 s au moins),
   *Porteuse* (signal HF de test en carré, 5 à 125 MHz,
   issu de la PLL audio de l'ESP32) et *TV off* (éteint la plupart des téléviseurs par la LED
   infrarouge, codes Europe/USA). Une app ouverte garde la main : l'écran s'éteint dessus et
@@ -77,7 +79,7 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Wi-Fi, SDR, WebRX, Porteuse, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |

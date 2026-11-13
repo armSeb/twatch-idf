@@ -6,7 +6,7 @@ WebRX relie la montre à l'un de tes récepteurs **OpenWebRX** ou **OpenWebRX+**
 (`https://` ou `http://`), joue l'audio démodulé sur le haut-parleur de la montre et affiche la
 fréquence, un S-mètre et une petite waterfall.
 
-![WebRX et les autres apps radio](../img/radio-fr.png)
+![WebRX et les autres apps radio (Wi-Fi, SDR, Porteuse, Tone)](../img/radio-fr.png)
 
 ## Réglages (une fois, depuis le téléphone)
 

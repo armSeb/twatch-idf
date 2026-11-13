@@ -40,7 +40,8 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   your OpenWebRX / OpenWebRX+ receivers over Wi-Fi, `https` included, on the watch speaker:
   up to 4 servers, profiles, bookmarks, the server's own modes, squelch, 5-step tone,
   S-meter and mini waterfall; keeps playing with the screen off — see the
-  [WebRX guide](docs/en/webrx.md)), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and
+  [WebRX guide](docs/en/webrx.md)), **Tone** (repeater access tone on the speaker, 1750 Hz by
+  default, adjustable 100–4000 Hz with presets: hold to transmit, at least 1 s), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and
   *TV off* (switches off most TVs through the IR LED, Europe/USA code sets). An open app stays
   put: the screen turns off on it and wakes back to it. A small app framework lets you add
   one in a single file.
@@ -69,7 +70,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 |---|---|---|
 | Watch face | swipe ↑ | Notifications (close: ↓ or →) |
 | Watch face | swipe ↓ | Quick controls (close: ↑ or →) |
-| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Wi-Fi, SDR, WebRX, Carrier, Battery, Settings |
+| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Carrier, Battery, Settings |
 | Watch face | long press | Choose the watch face |
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |

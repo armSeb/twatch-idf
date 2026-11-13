@@ -6,7 +6,7 @@ WebRX connects the watch to one of your **OpenWebRX** or **OpenWebRX+** receiver
 (`https://` or `http://`), plays the demodulated audio on the watch speaker and shows the
 frequency, an S-meter and a small waterfall.
 
-![WebRX and the other radio apps](../img/radio-en.png)
+![WebRX and the other radio apps (Wi-Fi, SDR, Carrier, Tone)](../img/radio-en.png)
 
 ## Setting up (once, from the phone)
 

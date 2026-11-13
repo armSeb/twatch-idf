@@ -292,6 +292,7 @@ static const tr_t EN[] = {
     { "Douce", "Soft" },
     { "Sourde", "Muffled" },
     { "Tonalité : vers la droite, moins d'aigus et de souffle, plus de corps aux voix.", "Tone: to the right, less treble and hiss, fuller voices." },
+    { "Maintenir pour émettre · 1 s au moins", "Hold to transmit · at least 1 s" },
 };
 
 static int s_lang = LANG_FR;
