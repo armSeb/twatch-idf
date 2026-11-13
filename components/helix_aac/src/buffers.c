@@ -66,6 +66,7 @@
     Notes:       slow, platform-independent equivalent to memset(buf, 0, nBytes)
  **************************************************************************************/
 #include <string.h>
+#include "helix_alloc.h"	/* T-Watch : allocateur de l'application */
 void ClearBuffer(void *buf, int nBytes) {
     /*	 int i;
     	unsigned char *cbuf = (unsigned char *)buf;
@@ -96,13 +97,13 @@ void ClearBuffer(void *buf, int nBytes) {
 AACDecInfo *AllocateBuffers(void) {
     AACDecInfo *aacDecInfo;
 
-    aacDecInfo = (AACDecInfo *)malloc(sizeof(AACDecInfo));
+    aacDecInfo = (AACDecInfo *)helix_malloc(sizeof(AACDecInfo));
     if (!aacDecInfo) {
         return 0;
     }
     ClearBuffer(aacDecInfo, sizeof(AACDecInfo));
 
-    aacDecInfo->psInfoBase = malloc(sizeof(PSInfoBase));
+    aacDecInfo->psInfoBase = helix_malloc(sizeof(PSInfoBase));
     if (!aacDecInfo->psInfoBase) {
         FreeBuffers(aacDecInfo);
         return 0;
@@ -138,7 +139,7 @@ AACDecInfo *AllocateBuffersPre(void **ptr, int *sz) {
 }
 
 #ifndef SAFE_FREE
-#define SAFE_FREE(x)	{if (x)	free(x);	(x) = 0;}	/* helper macro */
+#define SAFE_FREE(x)	{if (x)	helix_free(x);	(x) = 0;}	/* helper macro */
 #endif
 
 /**************************************************************************************

@@ -2,6 +2,17 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.26.0 — 2026-11-13
+
+- **SDR without restarting**: opening the app now stops Bluetooth and borrows the radio on
+  the spot; leaving it gives everything back and Bluetooth reconnects. No more "SDR mode"
+  reboot.
+- The 64 KB of SRAM used by the SDR capture now form a private heap: the Radio app keeps its
+  MP3 / AAC decoder state and work buffers there (fast internal RAM instead of PSRAM, less CPU
+  at 80 MHz). The general heap no longer includes them.
+- Helix decoders: state allocated through an application hook (`helix_alloc.h`, noted in the
+  components' `NOTICE.md`).
+
 ## 0.25.0 — 2026-11-13
 
 - New **Radio** app: web radio player on the watch speaker. MP3 and AAC / HE-AAC (Helix

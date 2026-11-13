@@ -57,15 +57,16 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   connected (software coexistence).
 - **SDR** (`app_sdr.c`, `sdr_rx.c`, `sdr_mode.c`): the ESP32 Wi-Fi MAC can dump the raw
   receive ADC samples (I/Q, 10 bits, 40 MS/s here) into two fixed SRAM banks
-  (0x3FFE8000–0x3FFF8000). Those 64 KB are reserved at link time and handed back to the heap
-  at boot in normal mode, so nothing is lost. Opening the app restarts the watch in "SDR mode"
-  (flag in RTC memory, consumed at boot: a crash comes back to normal mode): Bluetooth never
-  starts and its controller memory is released, the banks stay with the radio, the app opens
-  directly. A task on core 0 tunes standard channels (1/4/7/10/13 for the band view, one
+  (0x3FFE8000–0x3FFF8000). Those 64 KB are reserved at link time and never join the general
+  heap: they form a private heap (`multi_heap`, "rfbank") that the Radio app uses for its
+  decoder state and work buffers (fast internal RAM instead of PSRAM). Opening the SDR app
+  borrows the radio without restarting: it checks that Wi-Fi is free and the private heap is
+  empty, stops Bluetooth, and abandons the private heap to the MAC; leaving the app recreates
+  the private heap and restarts Bluetooth. A task on core 0 tunes standard channels (1/4/7/10/13 for the band view, one
   channel for the zoom), captures 4096 samples, removes DC, runs Hann-windowed FFTs
   (16 × 256 or 8 × 512 points, averaged) and builds 240-column rows in dBFS; the UI draws them
-  into two RGB565 canvases in PSRAM with an auto-tracking noise floor. Leaving the app restarts
-  in normal mode; with the screen off the radio is fully stopped.
+  into two RGB565 canvases in PSRAM with an auto-tracking noise floor. With the screen off the
+  capture stops but the radio stays borrowed until the app is left.
 - **WebRX** (`app_webrx.c`, `webrx.c`, `webrx_cfg.c`): OpenWebRX / OpenWebRX+ client (user
   guide: [webrx.md](webrx.md)). The Wi-Fi networks (up to 3) and the servers (up to 4, name
   and URL; listening state kept per server) are entered on a page served by the watch

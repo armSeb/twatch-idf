@@ -2,8 +2,9 @@
  * app_sdr.c — « SDR » : analyseur de spectre et waterfall 2,4 GHz à partir
  * des échantillons I/Q bruts de la radio Wi-Fi de l'ESP32 (voir sdr_rx.c).
  *
- * L'app vit en « mode SDR » (sdr_mode.h) : l'ouvrir redémarre la montre sans
- * Bluetooth ni Wi-Fi client, la quitter redémarre en mode normal.
+ * L'app emprunte la radio (sdr_mode.h) : à l'ouverture, le Bluetooth est
+ * arrêté et les bancs de capture pris ; en la quittant, tout est rendu (pas de
+ * redémarrage). Écran éteint, la capture s'arrête mais la radio reste prêtée.
  *
  *   ┌‹ titre / marqueur ───────── [+] [G]┐  32 px
  *   │ spectre (trace + maintien de crête) │  56 px
@@ -44,7 +45,6 @@ static float m_floor = -90.0f;       /* bruit de fond estimé (dBFS) */
 EXT_RAM_BSS_ATTR static float m_last[SDR_W];
 EXT_RAM_BSS_ATTR static float m_peak[SDR_W];
 static bool  m_have, m_sat;
-static esp_timer_handle_t m_boot_t;
 
 /* vue */
 static lv_obj_t *v_mline, *v_title, *v_sat, *v_minfo, *v_zoom, *v_gain, *v_spec, *v_wf, *v_touch, *v_axis[5], *v_msg;
@@ -243,7 +243,7 @@ static void tick_cb(lv_timer_t *t)
     }
     title_refresh();
     if (v_msg) {
-        if (sdr_rx_error() && !strcmp(sdr_rx_error(), "capture")) lv_obj_remove_flag(v_msg, LV_OBJ_FLAG_HIDDEN);
+        if (!sdr_mode_active() || (sdr_rx_error() && !strcmp(sdr_rx_error(), "capture"))) lv_obj_remove_flag(v_msg, LV_OBJ_FLAG_HIDDEN);
         else lv_obj_add_flag(v_msg, LV_OBJ_FLAG_HIDDEN);
     }
 }
@@ -357,32 +357,8 @@ static lv_obj_t *mk_canvas(lv_obj_t *scr, uint16_t **buf, int h, int y)
     return c;
 }
 
-static void boot_cb(void *arg) { sdr_mode_reboot(true); }
-
-static void create_splash(lv_obj_t *scr)
-{
-    lv_obj_t *ic = ui_label(scr, &font_title_20, lv_color_hex(0xA855F7), SYM_CHART);
-    lv_obj_align(ic, LV_ALIGN_CENTER, 0, -54);
-    lv_obj_t *t = ui_label(scr, &font_title_20, C_FG, _("Mode SDR"));
-    lv_obj_align(t, LV_ALIGN_CENTER, 0, -22);
-    lv_obj_t *m = ui_label(scr, &font_text_16, C_DIM,
-                           _("Redémarrage sans Bluetooth pour libérer la radio…"));
-    lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(m, 210);
-    lv_obj_set_style_text_align(m, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(m, LV_ALIGN_CENTER, 0, 22);
-    lv_obj_t *sp = lv_spinner_create(scr);
-    lv_obj_set_size(sp, 28, 28);
-    lv_obj_set_style_arc_width(sp, 3, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(sp, 3, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_color(sp, C_OFF, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(sp, lv_color_hex(0xA855F7), LV_PART_INDICATOR);
-    lv_obj_align(sp, LV_ALIGN_CENTER, 0, 72);
-}
-
 static void create(lv_obj_t *scr)
 {
-    if (!sdr_mode_active()) { create_splash(scr); return; }
     palette_init();
 
     lv_obj_t *back = lv_button_create(scr);
@@ -456,6 +432,8 @@ static void create(lv_obj_t *scr)
     lv_obj_set_style_bg_opa(v_msg, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(v_msg, 8, 0);
     lv_obj_set_style_radius(v_msg, 10, 0);
+    lv_label_set_long_mode(v_msg, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(v_msg, 210);
     lv_obj_center(v_msg);
     lv_obj_add_flag(v_msg, LV_OBJ_FLAG_HIDDEN);
 
@@ -480,15 +458,19 @@ static void destroy(void)
 
 static void on_show(void)
 {
-    if (!sdr_mode_active()) {
-        /* mode normal : courte annonce, puis redémarrage en mode SDR */
-        if (!m_boot_t) {
-            const esp_timer_create_args_t a = { .callback = boot_cb, .name = "sdr_boot" };
-            esp_timer_create(&a, &m_boot_t);
+    if (!sdr_mode_active() && sdr_mode_enter() != ESP_OK) {
+        /* radio pas disponible : on le dit, rien d'autre ne démarre */
+        if (v_msg) {
+            const char *em = sdr_mode_error();
+            if (!em) em = N_("Radio indisponible");
+            char t[128];
+            snprintf(t, sizeof t, "%s\n%s", _(em), _("Quitter puis rouvrir l'app."));
+            lv_label_set_text(v_msg, t);
+            lv_obj_remove_flag(v_msg, LV_OBJ_FLAG_HIDDEN);
         }
-        if (m_boot_t) esp_timer_start_once(m_boot_t, 900 * 1000);
         return;
     }
+    if (v_msg) lv_label_set_text(v_msg, _("La radio ne répond pas.\nQuitter puis rouvrir l'app."));
     if (!m_started) {
         m_started = sdr_rx_start() == ESP_OK;
         sdr_rx_config(m_view, m_ch, m_gain);
@@ -500,16 +482,10 @@ static void on_show(void)
 
 static void on_hide(void)
 {
-    if (!sdr_mode_active()) {
-        if (m_boot_t) esp_timer_stop(m_boot_t);  /* parti avant le redémarrage */
-        return;
-    }
     if (v_tick) lv_timer_pause(v_tick);
-    if (m_started) { sdr_rx_stop(); m_started = false; }   /* écran éteint : radio coupée */
-    if (display_is_on()) {
-        /* l'utilisateur quitte l'app : retour au mode normal (Bluetooth) */
-        sdr_mode_reboot(false);
-    }
+    if (m_started) { sdr_rx_stop(); m_started = false; }   /* écran éteint : capture coupée */
+    /* l'utilisateur quitte l'app : radio rendue, Bluetooth relancé */
+    if (app_leaving_for_good()) sdr_mode_leave();
 }
 
 const app_t app_sdr = {

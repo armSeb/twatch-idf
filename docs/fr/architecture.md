@@ -63,15 +63,16 @@ d'ESP-IDF 5.
 - **SDR** (`app_sdr.c`, `sdr_rx.c`, `sdr_mode.c`) : le MAC Wi-Fi de l'ESP32 sait recopier
   les échantillons bruts du convertisseur de réception (I/Q, 10 bits, ici 40 MS/s) dans deux
   bancs de SRAM fixes (0x3FFE8000–0x3FFF8000). Ces 64 Ko sont réservés à l'édition de liens
-  et rendus au tas au démarrage en mode normal : rien n'est perdu. Ouvrir l'app redémarre la
-  montre en « mode SDR » (drapeau en RAM RTC, consommé au démarrage : un plantage ramène au
-  mode normal) : le Bluetooth ne démarre pas et la mémoire de son contrôleur est libérée, les
-  bancs restent à la radio, l'app s'ouvre d'office. Une tâche sur le cœur 0 accorde des
+  et n'entrent jamais dans le tas général : ils forment un tas privé (`multi_heap`, « rfbank »)
+  où l'app Radio met l'état de ses décodeurs et ses tampons de travail (RAM interne rapide au
+  lieu de la PSRAM). Ouvrir l'app SDR emprunte la radio sans redémarrage : Wi-Fi libre et tas
+  privé vide vérifiés, Bluetooth arrêté, tas privé abandonné au MAC ; quitter l'app recrée le
+  tas privé et relance le Bluetooth. Une tâche sur le cœur 0 accorde des
   canaux normaux (1/4/7/10/13 pour la vue bande, un seul canal pour le zoom), capture 4096
   échantillons, retire la composante continue, fait des FFT fenêtrées de Hann (16 × 256 ou
   8 × 512 points, moyennées) et produit des lignes de 240 colonnes en dBFS ; l'interface les
   dessine dans deux canevas RGB565 en PSRAM avec un plancher de bruit suivi automatiquement.
-  Quitter l'app redémarre en mode normal ; écran éteint, la radio est complètement arrêtée.
+  Écran éteint, la capture s'arrête mais la radio reste empruntée jusqu'à la sortie de l'app.
 - **WebRX** (`app_webrx.c`, `webrx.c`, `webrx_cfg.c`) : client OpenWebRX / OpenWebRX+ (guide :
   [webrx.md](webrx.md)). Les réseaux Wi-Fi (jusqu'à 3) et les serveurs (jusqu'à 4, nom et
   adresse ; état d'écoute retenu par serveur) se saisissent sur une page servie par la

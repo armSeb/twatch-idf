@@ -9,3 +9,7 @@ Taken from the ESP8266Audio library (Earle F. Philhower III,
 https://github.com/earlephilhower/ESP8266Audio), `src/libhelix-mp3`, which adapted the code
 to Arduino/ESP (tables in flash). This project only adds `compat/` (empty Arduino stand-ins), accepts `ESP_PLATFORM` where `ARDUINO` was tested,
 and the ESP-IDF build file; the decoder sources are otherwise unchanged.
+
+T-Watch change (2026-11): `src/buffers.c` allocates and frees the decoder state through
+`helix_malloc()` / `helix_free()` (`compat/helix_alloc.h`), provided by the application, so
+the state can live in fast internal RAM.
