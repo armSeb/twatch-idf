@@ -41,7 +41,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   up to 4 servers, profiles, bookmarks, the server's own modes, squelch, 5-step tone,
   S-meter and mini waterfall; keeps playing with the screen off — see the
   [WebRX guide](docs/en/webrx.md)), **Tone** (repeater access tone on the speaker, 1750 Hz by
-  default, adjustable 100–4000 Hz with presets: hold to transmit, at least 1 s), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and
+  default, adjustable 100–4000 Hz with presets: hold to transmit, at least 1 s), **Radio** (web radios over Wi-Fi on the speaker: MP3 and AAC/HE-AAC, `https`, .m3u/.pls playlists, song titles, up to 12 stations, volume and 5-step tone; keeps playing with the screen off at 80 MHz and reduced Wi-Fi power — see the [Radio guide](docs/en/radio.md)), *Carrier* (square-wave RF test signal, 5–125 MHz, from the ESP32 audio PLL) and
   *TV off* (switches off most TVs through the IR LED, Europe/USA code sets). An open app stays
   put: the screen turns off on it and wakes back to it. A small app framework lets you add
   one in a single file.
@@ -70,7 +70,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 |---|---|---|
 | Watch face | swipe ↑ | Notifications (close: ↓ or →) |
 | Watch face | swipe ↓ | Quick controls (close: ↑ or →) |
-| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Carrier, Battery, Settings |
+| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Carrier, Battery, Settings |
 | Watch face | long press | Choose the watch face |
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |
@@ -139,6 +139,7 @@ More: [building, flashing and tests](docs/en/building.md).
 | Architecture, power, battery gauge | [docs/en/architecture.md](docs/en/architecture.md) | [docs/fr/architecture.md](docs/fr/architecture.md) |
 | Hardware notes (pins, power rails, pitfalls) | [docs/en/hardware.md](docs/en/hardware.md) | [docs/fr/hardware.md](docs/fr/hardware.md) |
 | WebRX (OpenWebRX client): setup and use | [docs/en/webrx.md](docs/en/webrx.md) | [docs/fr/webrx.md](docs/fr/webrx.md) |
+| Radio (web radios): setup and use | [docs/en/radio.md](docs/en/radio.md) | [docs/fr/radio.md](docs/fr/radio.md) |
 | Writing apps, translating | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) |
 | Changes | [CHANGELOG.md](CHANGELOG.md) | |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) | |
@@ -153,6 +154,11 @@ Exception: [`components/tvbgone/`](components/tvbgone/) (infrared power-code dat
 transmitter, used by the *TV off* app) stays under **CC BY-SA 4.0**, as licensed by its
 authors. Firmware binaries that include it therefore contain CC BY-SA 4.0 material; build
 with `TW_NO_TVOFF=1` to leave it out entirely.
+
+The Helix MP3 and AAC decoders in [`components/helix_mp3/`](components/helix_mp3/) and
+[`components/helix_aac/`](components/helix_aac/) (used by the *Radio* app) stay under the
+RealNetworks **RPSL** / **RCSL**, as licensed by RealNetworks; their sources ship unchanged
+in this repository.
 
 Third-party components and their licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
@@ -169,6 +175,8 @@ Third-party components and their licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_
 - TV-B-Gone® power codes by Mitch Altman and Limor Fried, Arduino port by Ken Shirriff,
   [ESP-IDF component](https://github.com/pedrominatel/esp-components/tree/main/tv-b-gone) by
   Pedro Minatel.
+- Helix MP3 and AAC fixed-point decoders (RealNetworks, Helix DNA project), as packaged by
+  [ESP8266Audio](https://github.com/earlephilhower/ESP8266Audio) (Earle F. Philhower III).
 - Apple's public *ANCS*, *AMS* and *Accessory Design Guidelines* specifications.
 - Raw I/Q capture on the ESP32 radio: technique published by the
   [ESP-SDR / ESPARGOS](https://github.com/ESPARGOS/esp-sdr) project (2026); `sdr_rx.c` is an

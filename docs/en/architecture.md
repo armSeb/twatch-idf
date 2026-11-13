@@ -84,6 +84,24 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   in separate TCP segments, which is what `esp_transport_ws` does. FFT frames become the mini waterfall
   only while the screen is on. CPU is capped at 160 MHz (80 MHz screen off) while the radio
   runs, and Bluetooth is paused only if the Wi-Fi driver cannot get its internal RAM.
+  The Wi-Fi station part (scan, known networks, reasons, BLE fallback) lives in `wifi_sta.c`,
+  the 5-step tone filter in `audio_fx.c`; both are shared with Radio.
+- **Radio** (`app_radio.c`, `radio.c`; stations in `webrx_cfg.c`, user guide:
+  [radio.md](radio.md)): web radio player. Up to 12 stations (name, URL) are entered on the
+  same `/webrx` page. Task `rad` (core 0) connects Wi-Fi, opens the stream with
+  `esp_http_client` (TLS with the root bundle, redirects followed by hand, `Icy-MetaData: 1`),
+  follows `.m3u`/`.pls` playlists, picks the codec from `Content-Type` or by sniffing the first
+  bytes, strips ICY metadata blocks (`StreamTitle`, Latin-1 converted to UTF-8) and fills a
+  128 KB compressed ring in PSRAM; playback starts after ≈2 s of audio (from `icy-br`). Task
+  `radplay` (core 1) decodes with the Helix fixed-point decoders (`components/helix_mp3`,
+  `components/helix_aac`: MP3, AAC-LC, HE-AAC/SBR), downmixes to mono, applies the tone filter
+  and the volume, and feeds the I2S amplifier through `sound_stream_*`. It measures the share
+  of time spent decoding: above 60 % it takes a `CPU_FREQ_MAX` lock (160 MHz), below 25 % it
+  releases it, so the screen-off cap of 80 MHz holds whenever the stream allows. Every 2 s,
+  with the screen off and RSSI above −65 dBm, the Wi-Fi TX power is lowered to 11 dBm
+  (19.5 dBm otherwise). Failures retry after 5, 10, 20, 30 then 60 s; a dropped stream
+  resumes after 2 s. Tested on the host with the real decoders and a fake HTTP server
+  (redirect, `.pls`, ICY titles).
 - **Language change** rebuilds every screen in place, without a restart.
 - LVGL objects are allocated from the heap; allocations above 4 KB go to PSRAM, the internal
   RAM is kept for stacks, DMA buffers and the radio.

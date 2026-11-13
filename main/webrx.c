@@ -45,6 +45,8 @@
 #include "power.h"
 #include "sound.h"
 #include "webrx_cfg.h"
+#include "wifi_sta.h"
+#include "audio_fx.h"
 
 static const char *TAG = "webrx";
 
@@ -59,8 +61,6 @@ static const char *TAG = "webrx";
 #define NROWS     4
 #define CONNECT_MS 20000                      /* TLS + mise à niveau WebSocket (serveur lent) */
 
-#define BIT_IP    BIT0
-#define BIT_DISC  BIT1
 #define BIT_QUIT  BIT2
 #define BIT_NETEND BIT3
 #define BIT_PLAYEND BIT4
@@ -72,9 +72,6 @@ static const char *TAG = "webrx";
 static SemaphoreHandle_t s_mx;
 static EventGroupHandle_t s_evg;
 static volatile bool s_run, s_quit;
-static bool s_wifi_inited, s_ble_paused;
-static esp_event_handler_instance_t s_h_wifi, s_h_ip;
-static volatile int s_disc_reason;
 
 static wrx_info_t s_info;
 static wrx_bm_t *s_bm;   static int s_nbm;
@@ -242,88 +239,7 @@ static void audio_bytes(const uint8_t *p, int n)
     }
 }
 
-/* Tonalité pour le petit haut-parleur, par paliers : passe-haut (le HP ne
- * rend pas le grave, autant garder la marge), bosse vers 600–800 Hz (corps
- * de la voix), passe-bas de plus en plus bas et raide (souffle FM, aigus
- * agressifs). Biquads RBJ, forme directe II transposée, en flottant (FPU). */
-typedef struct { float b0, b1, b2, a1, a2, z1, z2; } bq_t;
-static bq_t s_bq[5];
-static int s_nbq;
-
-static void bq_set(bq_t *q, float b0, float b1, float b2, float a0, float a1, float a2)
-{
-    q->b0 = b0 / a0; q->b1 = b1 / a0; q->b2 = b2 / a0; q->a1 = a1 / a0; q->a2 = a2 / a0;
-    q->z1 = q->z2 = 0;
-}
-
-static void bq_hp(bq_t *q, float f, float Q)
-{
-    float w = 2 * (float)M_PI * f / WRX_RATE, c = cosf(w), al = sinf(w) / (2 * Q);
-    bq_set(q, (1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + al, -2 * c, 1 - al);
-}
-
-static void bq_lp(bq_t *q, float f, float Q)
-{
-    float w = 2 * (float)M_PI * f / WRX_RATE, c = cosf(w), al = sinf(w) / (2 * Q);
-    bq_set(q, (1 - c) / 2, 1 - c, (1 - c) / 2, 1 + al, -2 * c, 1 - al);
-}
-
-static void bq_peak(bq_t *q, float f, float Q, float db)
-{
-    float A = powf(10, db / 40), w = 2 * (float)M_PI * f / WRX_RATE, c = cosf(w), al = sinf(w) / (2 * Q);
-    bq_set(q, 1 + al * A, -2 * c, 1 - al * A, 1 + al / A, -2 * c, 1 - al / A);
-}
-
-/* palier → filtres. Passe-bas d'ordre 4 (deux étages de Butterworth,
- * Q 0,54 et 1,31) à partir du palier 3 */
-static void filter_init(int tone)
-{
-    s_nbq = 0;
-    switch (tone) {
-    case 1:                                       /* claire */
-        bq_hp(&s_bq[s_nbq++], 150, 0.7071f);
-        bq_peak(&s_bq[s_nbq++], 800, 0.8f, 3);
-        bq_lp(&s_bq[s_nbq++], 3200, 0.7071f);
-        break;
-    case 2:                                       /* voix (0.22.0) */
-        bq_hp(&s_bq[s_nbq++], 180, 0.7071f);
-        bq_peak(&s_bq[s_nbq++], 700, 0.8f, 5);
-        bq_lp(&s_bq[s_nbq++], 2600, 0.7071f);
-        break;
-    case 3:                                       /* douce */
-        bq_hp(&s_bq[s_nbq++], 180, 0.7071f);
-        bq_peak(&s_bq[s_nbq++], 650, 0.8f, 5);
-        bq_lp(&s_bq[s_nbq++], 2200, 0.5412f);
-        bq_lp(&s_bq[s_nbq++], 2200, 1.3066f);
-        break;
-    case 4:                                       /* sourde */
-        bq_hp(&s_bq[s_nbq++], 200, 0.7071f);
-        bq_peak(&s_bq[s_nbq++], 600, 0.8f, 6);
-        bq_lp(&s_bq[s_nbq++], 1700, 0.5412f);
-        bq_lp(&s_bq[s_nbq++], 1700, 1.3066f);
-        break;
-    default:                                      /* neutre */
-        break;
-    }
-}
-
-static void filter_run(int16_t *x, int n)
-{
-    if (!s_nbq) return;
-    for (int i = 0; i < n; i++) {
-        float v = x[i];
-        for (int k = 0; k < s_nbq; k++) {
-            bq_t *q = &s_bq[k];
-            float y = q->b0 * v + q->z1;
-            q->z1 = q->b1 * v - q->a1 * y + q->z2;
-            q->z2 = q->b2 * v - q->a2 * y;
-            v = y;
-        }
-        if (v > 32767) v = 32767;
-        if (v < -32768) v = -32768;
-        x[i] = (int16_t)v;
-    }
-}
+static tone_fx_t s_fx;
 
 static void play_task(void *arg)
 {
@@ -361,8 +277,8 @@ static void play_task(void *arg)
         else if (take == CHUNK + 1) {               /* deux échantillons en un */
             buf[CHUNK - 1] = (int16_t)(((int)buf[CHUNK - 1] + buf[CHUNK]) / 2);
         }
-        if (s_info.tone != tone) { tone = s_info.tone; filter_init(tone); }
-        filter_run(buf, CHUNK);
+        if (s_info.tone != tone) { tone = s_info.tone; tone_fx_init(&s_fx, tone, WRX_RATE); }
+        tone_fx_run(&s_fx, buf, CHUNK);
         int v = s_info.volume;
         int gain = v * v * 8192 / 10000;           /* courbe douce, ×2 à 100 % */
         sound_stream_write(buf, CHUNK, gain);
@@ -379,86 +295,18 @@ static void play_task(void *arg)
 /* ------------------------------------------------------------------ */
 /* Wi-Fi                                                                */
 /* ------------------------------------------------------------------ */
-static void on_net_event(void *arg, esp_event_base_t base, int32_t id, void *data)
+static void wifi_status(bool fail, const char *msg, const char *detail)
 {
-    if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
-        s_disc_reason = ((wifi_event_sta_disconnected_t *)data)->reason;
-        xEventGroupClearBits(s_evg, BIT_IP);
-        xEventGroupSetBits(s_evg, BIT_DISC);
-    } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
-        xEventGroupSetBits(s_evg, BIT_IP);
-    }
+    set_state(fail ? WRX_FAIL : WRX_WIFI, msg, detail);
 }
 
 static bool wifi_connect(void)
 {
-    set_state(WRX_WIFI, N_("Recherche du Wi-Fi…"), "");
-    bool seen[WRX_NETS] = { 0 };
-    int nseen = 0;
-    wifi_scan_config_t sc = { .show_hidden = true };
-    sc.scan_time.active.min = 40;
-    sc.scan_time.active.max = 100;
-    if (esp_wifi_scan_start(&sc, true) == ESP_OK) {
-        uint16_t n = 24;
-        wifi_ap_record_t *rec = ps_malloc(n * sizeof *rec);
-        if (rec && esp_wifi_scan_get_ap_records(&n, rec) == ESP_OK) {
-            for (int i = 0; i < n; i++)
-                for (int k = 0; k < WRX_NETS; k++)
-                    if (s_cfg.ssid[k][0] && !strcmp((const char *)rec[i].ssid, s_cfg.ssid[k]) && !seen[k]) {
-                        seen[k] = true;
-                        nseen++;
-                    }
-        } else {
-            esp_wifi_clear_ap_list();
-        }
-        free(rec);
-    }
-    if (s_quit) return false;
-    /* réseaux vus, dans l'ordre de préférence ; aucun vu : tous (réseau masqué) */
-    int order[WRX_NETS], no = 0;
-    for (int k = 0; k < WRX_NETS; k++) if (s_cfg.ssid[k][0] && (seen[k] || !nseen)) order[no++] = k;
-    bool bad_pass = false;
-    int last_reason = 0;
-    for (int j = 0; j < no && !s_quit; j++) {
-        int k = order[j];
-        set_state(WRX_WIFI, N_("Connexion au Wi-Fi"), s_cfg.ssid[k]);
-        wifi_config_t wc = { 0 };
-        strlcpy((char *)wc.sta.ssid, s_cfg.ssid[k], sizeof wc.sta.ssid);
-        strlcpy((char *)wc.sta.password, s_cfg.pass[k], sizeof wc.sta.password);
-        wc.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
-        wc.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
-        wc.sta.listen_interval = 3;              /* modem sleep : réveil toutes les 3 balises */
-        esp_wifi_set_config(WIFI_IF_STA, &wc);
-        xEventGroupClearBits(s_evg, BIT_IP | BIT_DISC);
-        s_disc_reason = 0;
-        esp_wifi_connect();
-        EventBits_t b = xEventGroupWaitBits(s_evg, BIT_IP | BIT_DISC | BIT_QUIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(15000));
-        if (b & BIT_IP) {
-            wifi_ap_record_t ap;
-            if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) { lock(); s_info.rssi = ap.rssi; unlock(); }
-            ESP_LOGI(TAG, "Wi-Fi « %s » connecté", s_cfg.ssid[k]);
-            return true;
-        }
-        int r = s_disc_reason;
-        last_reason = r;
-        if (r == WIFI_REASON_AUTH_FAIL || r == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT ||
-            r == WIFI_REASON_HANDSHAKE_TIMEOUT || r == WIFI_REASON_MIC_FAILURE) bad_pass = true;
-        ESP_LOGW(TAG, "Wi-Fi « %s » : échec (raison %d)", s_cfg.ssid[k], r);
-        ble_diag("WRX wifi %.16s r%d int %u Ko", s_cfg.ssid[k], r,
-                 (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
-        esp_wifi_disconnect();
-        xEventGroupWaitBits(s_evg, BIT_DISC | BIT_QUIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(500));
-    }
-    if (s_quit) return false;
-    if (bad_pass) set_state(WRX_FAIL, N_("Mot de passe Wi-Fi refusé"), "");
-    else if (!nseen) set_state(WRX_FAIL, N_("Aucun réseau connu à portée"), "");
-    else {
-        char d[32];
-        if (last_reason) snprintf(d, sizeof d, _("raison %d"), last_reason);
-        else snprintf(d, sizeof d, "%s", _("pas de réponse du réseau"));
-        set_state(WRX_FAIL, N_("Connexion Wi-Fi impossible"), d);
-    }
-    return false;
+    if (!wsta_connect(&s_cfg, &s_quit, wifi_status)) return false;
+    lock();
+    s_info.rssi = wsta_rssi();
+    unlock();
+    return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1001,7 +849,7 @@ static bool session(void)
     s_info.samp_rate = 0;
     unlock();
     while (!s_quit) {
-        if (xEventGroupGetBits(s_evg) & BIT_DISC) { s_lost = N_("Wi-Fi perdu"); return false; }
+        if (wsta_lost()) { s_lost = N_("Wi-Fi perdu"); return false; }
         if (s_switch >= 0) return false;            /* changement de serveur */
         handle_pending();
         if (!s_have_cfg && s_prof_wait_us && esp_timer_get_time() > s_prof_wait_us) {
@@ -1104,16 +952,14 @@ static void net_task(void *arg)
 {
     int fails = 0, drops = 0;
     power_set_cpu_max(160);
-    esp_wifi_set_mode(WIFI_MODE_STA);
     /* pas d'économie d'énergie du modem : le serveur envoie en continu
      * (audio + FFT) et, s'il ne peut plus écrire pendant 10 s parce que la
      * montre ne reçoit pas assez vite, il coupe la connexion */
-    esp_wifi_set_ps(WIFI_PS_NONE);
-    if (esp_wifi_start() != ESP_OK) set_state(WRX_FAIL, N_("Erreur Wi-Fi"), "");
+    if (!wsta_start(WIFI_PS_NONE)) set_state(WRX_FAIL, N_("Erreur Wi-Fi"), "");
     else while (!s_quit) {
         if (apply_switch()) { fails = drops = 0; }
         bool ok = false;
-        if (!(xEventGroupGetBits(s_evg) & BIT_IP)) ok = wifi_connect();
+        if (!wsta_up()) ok = wifi_connect();
         else ok = true;
         if (ok && !s_quit && server_connect()) {
             fails = 0;
@@ -1181,8 +1027,7 @@ static void net_task(void *arg)
     }
     s_audio_on = false;
     server_close();
-    esp_wifi_disconnect();
-    esp_wifi_stop();
+    wsta_stop();
     xEventGroupSetBits(s_evg, BIT_NETEND);
     vTaskDelete(NULL);
 }
@@ -1238,33 +1083,8 @@ esp_err_t webrx_start(void)
     s_quit = false;
     xEventGroupClearBits(s_evg, 0xFF);
 
-    if (net_base_init() != ESP_OK || !net_sta_netif()) return ESP_FAIL;
-    wifi_init_config_t wc = WIFI_INIT_CONFIG_DEFAULT();
-    wc.nvs_enable = 0;
-    esp_err_t e = esp_wifi_init(&wc);
-    if (e != ESP_OK && ble_running()) {
-        /* pas assez de RAM interne à côté du Bluetooth : suspendu le temps
-         * de l'écoute */
-        ESP_LOGW(TAG, "esp_wifi_init: %s, Bluetooth suspendu", esp_err_to_name(e));
-        ble_diag("WebRX : Bluetooth suspendu (RAM)");
-        ble_stop();
-        if (!ble_running()) {
-            s_ble_paused = true;
-            esp_wifi_deinit();
-            e = esp_wifi_init(&wc);
-        }
-    }
-    if (e != ESP_OK) {
-        ESP_LOGW(TAG, "esp_wifi_init: %s (interne libre %u, bloc %u)", esp_err_to_name(e),
-                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-        if (s_ble_paused) { s_ble_paused = false; ble_start(); }
-        return e;
-    }
-    s_wifi_inited = true;
-    esp_wifi_set_storage(WIFI_STORAGE_RAM);
-    esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, on_net_event, NULL, &s_h_wifi);
-    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_net_event, NULL, &s_h_ip);
+    esp_err_t e = wsta_init("WRX");
+    if (e != ESP_OK) return e;
     s_run = true;
     set_state(WRX_WIFI, N_("Recherche du Wi-Fi…"), "");
     /* pile assez grande pour la poignée de main TLS (mbedTLS en PSRAM) */
@@ -1307,21 +1127,12 @@ void webrx_stop(void)
         unlock();
         wrx_state_save(&s_st);
     }
-    if (s_wifi_inited) {
-        esp_event_handler_instance_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, s_h_wifi);
-        esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, s_h_ip);
-        esp_wifi_deinit();
-        s_wifi_inited = false;
-    }
+    wsta_deinit();
     power_set_cpu_max(0);
-    if (s_ble_paused) {
-        s_ble_paused = false;
-        ble_start();
-    }
 }
 
 bool webrx_running(void) { return s_run; }
-bool webrx_ble_paused(void) { return s_ble_paused; }
+bool webrx_ble_paused(void) { return wsta_ble_paused(); }
 
 void webrx_retry(void)
 {

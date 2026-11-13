@@ -45,7 +45,10 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   serveurs, profils, signets, modes du serveur, squelch, tonalité en 5 paliers, S-mètre et
   mini-waterfall ; continue écran éteint — voir le [guide WebRX](docs/fr/webrx.md)), **Tone** (tonalité
   d'ouverture de relais sur le haut-parleur, 1750 Hz par défaut, réglable de 100 à 4000 Hz avec
-  préréglages : maintenir pour émettre, 1 s au moins),
+  préréglages : maintenir pour émettre, 1 s au moins), **Radio** (webradios par le Wi-Fi sur le
+  haut-parleur : MP3 et AAC/HE-AAC, `https`, listes .m3u/.pls, titres en cours, jusqu'à 12
+  stations, volume et tonalité en 5 paliers ; continue écran éteint à 80 MHz et puissance Wi-Fi
+  réduite — voir le [guide Radio](docs/fr/radio.md)),
   *Porteuse* (signal HF de test en carré, 5 à 125 MHz,
   issu de la PLL audio de l'ESP32) et *TV off* (éteint la plupart des téléviseurs par la LED
   infrarouge, codes Europe/USA). Une app ouverte garde la main : l'écran s'éteint dessus et
@@ -79,7 +82,7 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Porteuse, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |
@@ -149,6 +152,7 @@ Pour aller plus loin : [compiler, flasher, tester](docs/fr/building.md).
 | Architecture, énergie, jauge | [docs/fr/architecture.md](docs/fr/architecture.md) | [docs/en/architecture.md](docs/en/architecture.md) |
 | Notes matérielles (broches, alimentations, pièges) | [docs/fr/hardware.md](docs/fr/hardware.md) | [docs/en/hardware.md](docs/en/hardware.md) |
 | WebRX (client OpenWebRX) : réglages et utilisation | [docs/fr/webrx.md](docs/fr/webrx.md) | [docs/en/webrx.md](docs/en/webrx.md) |
+| Radio (webradios) : réglages et utilisation | [docs/fr/radio.md](docs/fr/radio.md) | [docs/en/radio.md](docs/en/radio.md) |
 | Écrire une app, traduire | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) |
 | Historique | | [CHANGELOG.md](CHANGELOG.md) |
 | Contribuer | [CONTRIBUTING.md](CONTRIBUTING.md) | |
@@ -163,6 +167,11 @@ Exception : [`components/tvbgone/`](components/tvbgone/) (base de codes infrarou
 émetteur, utilisés par l'app *TV off*) reste sous **CC BY-SA 4.0**, la licence de ses
 auteurs. Les binaires qui l'incluent contiennent donc du contenu CC BY-SA 4.0 ; compiler avec
 `TW_NO_TVOFF=1` pour l'exclure complètement.
+
+Les décodeurs MP3 et AAC Helix de [`components/helix_mp3/`](components/helix_mp3/) et
+[`components/helix_aac/`](components/helix_aac/) (utilisés par l'app *Radio*) restent sous
+licence RealNetworks **RPSL** / **RCSL** ; leurs sources sont fournies telles quelles dans ce
+dépôt.
 
 Composants tiers et leurs licences : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
@@ -179,6 +188,8 @@ Composants tiers et leurs licences : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICE
 - Codes TV-B-Gone® de Mitch Altman et Limor Fried, port Arduino de Ken Shirriff,
   [composant ESP-IDF](https://github.com/pedrominatel/esp-components/tree/main/tv-b-gone) de
   Pedro Minatel.
+- Décodeurs MP3 et AAC en virgule fixe Helix (RealNetworks, projet Helix DNA), dans la
+  version de [ESP8266Audio](https://github.com/earlephilhower/ESP8266Audio) (Earle F. Philhower III).
 - Spécifications publiques d'Apple : *ANCS*, *AMS*, *Accessory Design Guidelines*.
 - Capture I/Q brute sur la radio de l'ESP32 : technique publiée par le projet
   [ESP-SDR / ESPARGOS](https://github.com/ESPARGOS/esp-sdr) (2026) ; `sdr_rx.c` en est une

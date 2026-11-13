@@ -157,3 +157,81 @@ void wrx_state_save(const wrx_state_t *s)
     nvs_commit(h);
     nvs_close(h);
 }
+
+/* ---------------- webradios ---------------- */
+#define RNS "radio"
+
+int rad_cfg_load(rad_station_t st[RAD_MAX])
+{
+    memset(st, 0, RAD_MAX * sizeof *st);
+    nvs_handle_t h;
+    if (nvs_open(RNS, NVS_READONLY, &h) != ESP_OK) return 0;
+    int n = 0;
+    for (int i = 0; i < RAD_MAX; i++) {
+        char k[8];
+        snprintf(k, sizeof k, "u%d", i);
+        get_str(h, k, st[n].url, sizeof st[n].url);
+        snprintf(k, sizeof k, "n%d", i);
+        get_str(h, k, st[n].name, sizeof st[n].name);
+        if (st[n].url[0]) n++;
+        else st[n].name[0] = 0;
+    }
+    nvs_close(h);
+    return n;
+}
+
+esp_err_t rad_cfg_save(const rad_station_t st[RAD_MAX])
+{
+    nvs_handle_t h;
+    esp_err_t e = nvs_open(RNS, NVS_READWRITE, &h);
+    if (e != ESP_OK) return e;
+    for (int i = 0; i < RAD_MAX && e == ESP_OK; i++) {
+        char k[8];
+        snprintf(k, sizeof k, "u%d", i);
+        e = nvs_set_str(h, k, st[i].url);
+        snprintf(k, sizeof k, "n%d", i);
+        if (e == ESP_OK) e = nvs_set_str(h, k, st[i].name);
+    }
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    return e;
+}
+
+void rad_state_load(rad_state_t *s)
+{
+    s->station = 0;
+    s->tone = 1;                                      /* musique : « claire » */
+    nvs_handle_t h;
+    if (nvs_open(RNS, NVS_READONLY, &h) != ESP_OK) return;
+    uint8_t v;
+    if (nvs_get_u8(h, "st", &v) == ESP_OK && v < RAD_MAX) s->station = v;
+    if (nvs_get_u8(h, "tone", &v) == ESP_OK && v < WRX_TONES) s->tone = v;
+    nvs_close(h);
+}
+
+void rad_state_save(const rad_state_t *s)
+{
+    rad_state_t old;
+    rad_state_load(&old);
+    if (old.station == s->station && old.tone == s->tone) return;
+    nvs_handle_t h;
+    if (nvs_open(RNS, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_set_u8(h, "st", s->station);
+    nvs_set_u8(h, "tone", s->tone);
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+void rad_label(const rad_station_t *st, char *out, size_t cap)
+{
+    if (st->name[0]) { strlcpy(out, st->name, cap); return; }
+    const char *u = st->url;
+    const char *p = strstr(u, "://");
+    p = p ? p + 3 : u;
+    const char *at = strchr(p, '@'), *sl = strchr(p, '/');
+    if (at && (!sl || at < sl)) p = at + 1;
+    size_t l = strcspn(p, ":/?#");
+    if (l >= cap) l = cap - 1;
+    memcpy(out, p, l);
+    out[l] = 0;
+}

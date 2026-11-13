@@ -1338,7 +1338,7 @@ static void ota_reboot_cb(lv_timer_t *t) { ota_reboot_now(); }
 
 static void ota_title(void)
 {
-    if (o_title) lv_label_set_text(o_title, o_app >= 0 ? _("Réglages WebRX") : _("Mise à jour"));
+    if (o_title) lv_label_set_text(o_title, o_app >= 0 ? _("Wi-Fi et radios") : _("Mise à jour"));
 }
 
 static void ota_ui_running(void)
@@ -2241,7 +2241,9 @@ void app_open_settings_portal(const app_t *a)
  * l'écran au lieu de revenir au cadran, et l'app continue */
 bool ui_button_sleeps(void)
 {
-    return s_cur == SCR_APP && s_app_cur && s_app_cur->keep_screen_on && s_app_cur->keep_screen_on();
+    if (s_cur != SCR_APP || !s_app_cur) return false;
+    if (s_app_cur->background && s_app_cur->background()) return true;
+    return s_app_cur->keep_screen_on && s_app_cur->keep_screen_on();
 }
 
 bool app_leaving_for_good(void)

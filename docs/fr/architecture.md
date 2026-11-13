@@ -91,7 +91,25 @@ d'ESP-IDF 5.
   et envoyées en une seule écriture : le serveur OpenWebRX lâche un client dont l'en-tête et la
   charge d'une trame arrivent dans des segments TCP séparés, ce que fait `esp_transport_ws`. Les trames FFT donnent la mini-waterfall, seulement écran allumé. Le
   CPU est plafonné à 160 MHz (80 MHz écran éteint) tant que la radio tourne, et le Bluetooth
-  n'est suspendu que si le pilote Wi-Fi manque de RAM interne.
+  n'est suspendu que si le pilote Wi-Fi manque de RAM interne. La partie station Wi-Fi
+  (recherche, réseaux connus, raisons d'échec, repli Bluetooth) est dans `wifi_sta.c`, le filtre
+  de tonalité à 5 paliers dans `audio_fx.c` ; les deux servent aussi à Radio.
+- **Radio** (`app_radio.c`, `radio.c` ; stations dans `webrx_cfg.c`, guide :
+  [radio.md](radio.md)) : lecteur de webradios. Jusqu'à 12 stations (nom, adresse) se saisissent
+  sur la même page `/webrx`. La tâche `rad` (cœur 0) connecte le Wi-Fi, ouvre le flux avec
+  `esp_http_client` (TLS avec le paquet de racines, redirections suivies à la main,
+  `Icy-MetaData: 1`), suit les listes `.m3u`/`.pls`, choisit le codec d'après `Content-Type` ou
+  les premiers octets, retire les blocs de métadonnées ICY (`StreamTitle`, Latin-1 converti en
+  UTF-8) et remplit un tampon compressé de 128 Ko en PSRAM ; la lecture démarre après ≈ 2 s
+  d'audio (d'après `icy-br`). La tâche `radplay` (cœur 1) décode avec les décodeurs Helix en
+  virgule fixe (`components/helix_mp3`, `components/helix_aac` : MP3, AAC-LC, HE-AAC/SBR),
+  passe en mono, applique tonalité et volume et alimente l'ampli I2S par `sound_stream_*`. Elle
+  mesure la part du temps passée à décoder : au-dessus de 60 % elle prend un verrou
+  `CPU_FREQ_MAX` (160 MHz), sous 25 % elle le rend, si bien que le plafond de 80 MHz écran éteint
+  tient dès que le flux le permet. Toutes les 2 s, écran éteint et RSSI au-dessus de −65 dBm, la
+  puissance d'émission Wi-Fi descend à 11 dBm (19,5 dBm sinon). Les échecs sont réessayés après
+  5, 10, 20, 30 puis 60 s ; un flux coupé reprend après 2 s. Testé sur PC avec les vrais
+  décodeurs et un faux serveur HTTP (redirection, `.pls`, titres ICY).
 - **Changer de langue** reconstruit tous les écrans sur place, sans redémarrer.
 - Les objets LVGL sont alloués sur le tas ; les allocations de plus de 4 Ko vont en PSRAM, la
   RAM interne est gardée pour les piles, les tampons DMA et la radio.

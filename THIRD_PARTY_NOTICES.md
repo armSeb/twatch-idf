@@ -20,6 +20,8 @@ tiers suivants, chacun sous sa propre licence.*
 | [LVGL](https://github.com/lvgl/lvgl) 9.2.2 | linked | LVGL Kft | MIT |
 | [Montserrat](https://github.com/JulietaUla/Montserrat) (Medium), converted to bitmaps in `main/fonts/` | embedded | Julieta Ulanovsky and contributors | SIL Open Font License 1.1 |
 | [Font Awesome Free](https://fontawesome.com) 5 icons, converted to bitmaps in `main/fonts/` | embedded | Fonticons, Inc. | Icons: CC BY 4.0 — font files: SIL OFL 1.1 |
+| Helix MP3 decoder, in [`components/helix_mp3/`](components/helix_mp3/) (see its `NOTICE.md`), from [ESP8266Audio](https://github.com/earlephilhower/ESP8266Audio) | linked (Radio app) | RealNetworks, Inc.; ESP adaptation Earle F. Philhower III | **RPSL 1.0** or RCSL 1.0 |
+| Helix AAC / HE-AAC decoder, in [`components/helix_aac/`](components/helix_aac/) (see its `NOTICE.md`), from ESP8266Audio | linked (Radio app) | RealNetworks, Inc.; ESP adaptation Earle F. Philhower III | **RPSL 1.0** or RCSL 1.0 |
 | TV-B-Gone® WORLDcodes power-code database and RMT transmitter, adapted in [`components/tvbgone/`](components/tvbgone/) (see its `NOTICE.md`) | embedded unless built with `TW_NO_TVOFF=1` | Mitch Altman, Limor Fried; Arduino port Ken Shirriff; ESP-IDF component Pedro Minatel | **CC BY-SA 4.0** |
 
 Tools used to build, not shipped in the firmware: [lv_font_conv](https://github.com/lvgl/lv_font_conv)
@@ -37,7 +39,10 @@ When you redistribute a firmware binary, keep this file, [LICENSE](LICENSE) and 
 texts of the components above available with it (the Apache-2.0 text is in ESP-IDF, the
 CC BY-SA 4.0 notice in `components/tvbgone/LICENSE`). A binary that includes *TV off*
 contains CC BY-SA 4.0 material: its source, with modifications, is in
-`components/tvbgone/`, under the same license.
+`components/tvbgone/`, under the same license. The Helix decoders are covered by the
+RealNetworks Public Source License: their source (texts in `components/helix_mp3/RPSL.txt`,
+`components/helix_aac/RPSL.txt`) must stay available with the binary, which this repository
+does; the only changes are listed in each component's `NOTICE.md`.
 
 *Pour redistribuer un binaire, joindre ce fichier, [LICENSE](LICENSE) et les textes de
 licence des composants ci-dessus. Un binaire qui inclut *TV off* contient du contenu CC BY-SA

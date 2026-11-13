@@ -35,6 +35,7 @@
 #define SYM_LOCK      "\xEF\x80\xA3"   /* U+F023 */
 #define SYM_CHART     "\xEF\x87\xBE"   /* U+F1FE */
 #define SYM_HEADPHONES "\xEF\x80\xA5"  /* U+F025 */
+#define SYM_PODCAST   "\xEF\x8B\x8E"   /* U+F2CE */
 
 #define UI_ANIM_MS 140
 

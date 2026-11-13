@@ -35,6 +35,9 @@ typedef struct app_s {
     /* optionnel : true = écran gardé allumé tant que l'app est affichée
      * (le bouton l'éteint quand même) */
     bool (*keep_screen_on)(void);
+    /* optionnel : true = l'app travaille en fond (écoute…) ; le bouton
+     * éteint alors l'écran au lieu de revenir au cadran */
+    bool (*background)(void);
 } app_t;
 
 /* registre (apps.c) */

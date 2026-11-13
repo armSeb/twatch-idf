@@ -45,3 +45,22 @@ void      wrx_srv_label(const wrx_cfg_t *c, int i, char *out, size_t cap);  /* n
 void      wrx_state_load(wrx_state_t *s);           /* serveur courant */
 void      wrx_state_load_srv(wrx_state_t *s, int server);
 void      wrx_state_save(const wrx_state_t *s);
+
+/* ---------------- webradios (app Radio), espace NVS « radio » ---------------- */
+#define RAD_MAX 12
+
+typedef struct {
+    char name[32];
+    char url[192];                       /* flux MP3/AAC, ou liste .m3u / .pls */
+} rad_station_t;
+
+typedef struct {
+    uint8_t station;                     /* dernière écoutée */
+    uint8_t tone;                        /* 0..WRX_TONES-1 */
+} rad_state_t;
+
+int       rad_cfg_load(rad_station_t st[RAD_MAX]);        /* nombre de stations (tassées en tête) */
+esp_err_t rad_cfg_save(const rad_station_t st[RAD_MAX]);
+void      rad_state_load(rad_state_t *s);
+void      rad_state_save(const rad_state_t *s);
+void      rad_label(const rad_station_t *st, char *out, size_t cap);   /* nom, sinon hôte */

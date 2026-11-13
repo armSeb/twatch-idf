@@ -2,6 +2,24 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.25.0 — 2026-11-13
+
+- New **Radio** app: web radio player on the watch speaker. MP3 and AAC / HE-AAC (Helix
+  fixed-point decoders), `http` and `https`, redirects, `.m3u` / `.pls` playlists, ICY song
+  titles (Latin-1 or UTF-8), up to 12 stations with previous / next and a stations list,
+  volume (starts at 10 %) and the 5-step tone filter (default *Bright*), last station
+  remembered. 128 KB compressed buffer in PSRAM, automatic resume and retries.
+- Radio power saving: Wi-Fi modem sleep; CPU capped at 160 MHz and 80 MHz with the screen off,
+  raised again only while decoding cannot keep up; screen off with a good signal, Wi-Fi
+  transmit power lowered from 19.5 to 11 dBm. The side button turns the screen off and
+  playback goes on.
+- Setup page (`Wi-Fi, WebRX and radios`): new web radios section; empty rows stay hidden
+  behind *+ Add a radio*.
+- Wi-Fi station and tone filter code shared between WebRX and Radio (`wifi_sta.c`,
+  `audio_fx.c`).
+- Documentation: Radio guide (FR/EN), READMEs, architecture, third-party notices (Helix,
+  RPSL/RCSL), new screenshots.
+
 ## 0.24.0 — 2026-11-13
 
 - New **Tone** app: repeater access tone on the speaker, 1750 Hz by default (presets 1750,
