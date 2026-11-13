@@ -13,6 +13,8 @@
 #define WRX_SRV  4                       /* serveurs OpenWebRX mémorisés */
 #define WRX_TONES 5                      /* tonalité : 0 neutre … 4 sourde */
 #define WRX_TONE_DEF 3
+/* « sdr|profil » : OpenWebRX+ utilise des UUID (36 + 1 + 36 caractères) */
+#define WRX_ID_LEN 96
 
 typedef struct {
     char ssid[WRX_NETS][33];
@@ -28,7 +30,7 @@ typedef struct {
 typedef struct {
     uint8_t server;              /* index dans srv[] */
     uint8_t tone;                /* 0..WRX_TONES-1 */
-    char    profile[72];         /* « sdr|profil » choisi, "" = celui du serveur */
+    char    profile[WRX_ID_LEN];         /* « sdr|profil » choisi, "" = celui du serveur */
     int64_t freq;                /* Hz, 0 = fréquence de départ du profil */
     char    mod[16];             /* "" = mode de départ du profil */
     int16_t squelch;             /* dB ; -150 = coupé */

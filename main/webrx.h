@@ -19,7 +19,7 @@
 #define WRX_RATE   12000            /* Hz : audio demandé au serveur (tous modes) */
 #define WRX_FFT_W  240              /* colonnes d'une ligne de waterfall */
 #define WRX_BM_MAX 64
-#define WRX_PROF_MAX 24
+#define WRX_PROF_MAX 64           /* profils de tous les SDR du serveur */
 #define WRX_MODE_MAX 24
 
 enum {
@@ -45,7 +45,7 @@ typedef struct {
     uint8_t  tone;                  /* tonalité 0..WRX_TONES-1 (aigus et souffle atténués) */
     uint8_t  server, nservers;      /* serveur écouté / serveurs configurés */
     char     server_name[32];
-    char     profile[72];           /* « sdr|profil » actif */
+    char     profile[WRX_ID_LEN];   /* « sdr|profil » actif */
     char     station[48];           /* nom RDS (WFM) ou du signet écouté */
     uint32_t bm_ver, prof_ver, mode_ver;   /* changent quand les listes changent */
     int      buf_ms;                /* audio d'avance */
@@ -54,7 +54,7 @@ typedef struct {
 } wrx_info_t;
 
 typedef struct { char name[40]; int64_t freq; char mod[16]; } wrx_bm_t;
-typedef struct { char id[72]; char name[48]; } wrx_prof_t;
+typedef struct { char id[WRX_ID_LEN]; char name[48]; } wrx_prof_t;
 /* mode d'écoute proposé par le serveur (liste « modes », modes ajoutés par
  * l'administrateur compris) ; bande passante en Hz autour de la fréquence */
 typedef struct { char mod[16]; char name[24]; int lo, hi; bool bp; } wrx_mode_t;

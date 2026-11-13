@@ -89,7 +89,7 @@ static wrx_cfg_t *s_cfg_p;                   /* PSRAM */
 
 enum { PEND_DSP = 1, PEND_PROFILE = 2, PEND_START = 4 };
 static uint32_t s_pend;
-static char s_pend_prof[72];
+static char s_pend_prof[WRX_ID_LEN];
 
 /* audio */
 static int16_t *s_ring;
@@ -755,7 +755,7 @@ static void on_config(cJSON *v)
         /* profil mémorisé différent de l'actuel : on le redemande une fois
          * (le serveur renvoie alors une config) */
         if (other && !s_prof_tried) {
-            char b[160];
+            char b[WRX_ID_LEN + 80];
             snprintf(b, sizeof b, "{\"type\":\"selectprofile\",\"params\":{\"profile\":\"%s\"}}", s_st.profile);
             s_prof_tried = true;
             s_prof_wait_us = esp_timer_get_time() + 10000000;
@@ -968,11 +968,11 @@ static void handle_pending(void)
     lock();
     uint32_t p = s_pend;
     s_pend = 0;
-    char prof[72];
+    char prof[WRX_ID_LEN];
     strlcpy(prof, s_pend_prof, sizeof prof);
     unlock();
     if (p & PEND_PROFILE) {
-        char b[160];
+        char b[WRX_ID_LEN + 80];
         snprintf(b, sizeof b, "{\"type\":\"selectprofile\",\"params\":{\"profile\":\"%s\"}}", prof);
         ws_text(b);
     }

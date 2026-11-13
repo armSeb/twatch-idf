@@ -310,9 +310,12 @@ static void refresh(bool force)
     static wrx_prof_t *pl;                               /* PSRAM */
     if (!pl) pl = heap_caps_malloc(WRX_PROF_MAX * sizeof *pl, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     static uint32_t pver = ~0u;
-    static char pname[48];
-    if (pver != m_i.prof_ver || force) {
+    static char pname[48], pid[WRX_ID_LEN];
+    /* nom recalculé quand la liste change ou quand le profil actif change
+     * (la config du serveur arrive après le choix) */
+    if (pver != m_i.prof_ver || strcmp(pid, m_i.profile) || force) {
         pver = m_i.prof_ver;
+        strlcpy(pid, m_i.profile, sizeof pid);
         pname[0] = 0;
         int n = pl ? webrx_profiles(pl, WRX_PROF_MAX) : 0;
         for (int i = 0; i < n; i++) if (!strcmp(pl[i].id, m_i.profile)) strlcpy(pname, pl[i].name, sizeof pname);

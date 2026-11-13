@@ -2,6 +2,15 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.23.1 — 2026-11-13
+
+- WebRX: some profiles could not be selected. OpenWebRX+ identifies SDRs and profiles by
+  UUIDs (« sdr|profile » = 73 characters) and the watch cut identifiers at 71: the server
+  ignored the truncated request. Identifiers now hold 95 characters, and up to 64 profiles
+  (all SDRs of a server) are listed instead of 24.
+- WebRX: the profile name at the top is updated when the active profile changes (it only
+  followed changes of the list).
+
 ## 0.23.0 — 2026-11-13
 
 - WebRX: **several servers** (up to 4, optional name + address) entered on the settings page;
