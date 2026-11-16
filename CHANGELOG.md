@@ -2,6 +2,13 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.28.3 — 2026-11-16
+
+- *About*: AXP202 ADC and TS pin registers (0x82–0x84) with the TS current source decoded
+  (current, when it is on, battery-temperature or external-ADC function). On the V1 the TS pin
+  goes to ground through 0 Ω (no thermistor); this shows whether a constant current is wasted
+  there before changing anything.
+
 ## 0.28.2 — 2026-11-16
 
 - Unused GPIOs of the V1 board (0, 2, 14, 15, 34 and 36 — 36 is the BMA423 INT2 line, whose

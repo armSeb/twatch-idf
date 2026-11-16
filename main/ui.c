@@ -1833,6 +1833,17 @@ static void about_refresh(void)
                       axp_reg(0x12), axp_reg(0x28), axp_reg(0x29), sound_last_error(),
                       motion_ok() ? "actif" : "veille", (unsigned long)g_wake_cnt[EV_MOTION]);
     }
+    if (n > 0 && n < (int)sizeof(s)) {
+        /* broche TS de l'AXP (à la masse par 0 Ω sur la V1, pas de thermistance) :
+         * 0x84 bits 5:4 courant 20/40/60/80 µA, bit 2 fonction (0 = température
+         * batterie), bits 1:0 sortie du courant (0 coupé, 1 en charge, 2 mesures,
+         * 3 toujours) ; 0x82/0x83 ADC activés */
+        uint8_t r84 = axp_reg(0x84);
+        static const char *const TSM[] = { "coupé", "charge", "mesure", "toujours" };
+        n += snprintf(s + n, sizeof(s) - n, "\nAXP 82=%02X 83=%02X 84=%02X\nTS %u µA %s, %s",
+                      axp_reg(0x82), axp_reg(0x83), r84, 20u * (((r84 >> 4) & 3) + 1), TSM[r84 & 3],
+                      (r84 & 0x04) ? "ADC ext." : "temp. batt.");
+    }
     if (n > 0 && n < (int)sizeof(s) && crashlog_text()[0]) {
         n += snprintf(s + n, sizeof(s) - n, "\n\n%s", crashlog_text());
     }
