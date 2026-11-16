@@ -297,6 +297,8 @@ void app_main(void)
     s_app_q = xQueueCreate(24, sizeof(app_event_t));
     assert(s_app_q);
 
+    ble_diag_boot();                    /* journal BLE gardé après un plantage ; avant power_init
+                                         * pour garder un échec du BMA423 au démarrage */
 #if TW_DIAG_BARE
     ESP_LOGW(TAG, "DIAGNOSTIC NU : aucun I2C/AXP/GPIO, BLE seul");
 #else
@@ -304,7 +306,6 @@ void app_main(void)
     ESP_ERROR_CHECK(power_init());
     if (wclock_init() != ESP_OK) ESP_LOGE(TAG, "RTC indisponible");
 #endif
-    ble_diag_boot();                    /* journal BLE gardé après un plantage */
     crashlog_init();
     ancs_module_init();
 #if !TW_DIAG_BLE_ONLY

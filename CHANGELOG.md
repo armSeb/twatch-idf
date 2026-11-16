@@ -2,6 +2,11 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.27.2 — 2026-11-16
+
+- BLE log prepared before the sensors start, so a BMA423 upload failure at boot stays visible
+  in *About* (it was wiped by the log reset on a cold start).
+
 ## 0.27.1 — 2026-11-16
 
 - Motion: fixed "Motion sensor unavailable" when turning on raise to wake or the step
