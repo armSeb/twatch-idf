@@ -155,11 +155,10 @@ static void IRAM_ATTR bma_isr(void *arg)
 
 static void suspend(void)
 {
-    /* INT1 va directement sur GPIO39 (entrée seule, sans tirage possible ;
-     * aucune résistance sur la carte) : après un reset, la sortie INT1 du
-     * capteur est désactivée et la ligne flotte, l'étage d'entrée de l'ESP32
-     * peut alors consommer. On la garde en sortie push-pull active haute,
-     * sans interruption routée : niveau bas franc. Registre conservé en suspend. */
+    /* INT1 → GPIO39, qui a un tirage de 10 kΩ vers la masse sur la carte
+     * (R10) : la ligne ne flotte pas. On garde quand même INT1 en sortie
+     * push-pull active haute, sans interruption routée : niveau bas imposé,
+     * aucun courant dans R10. Registre conservé en suspend. */
     i2c_reg_write8(s_i2c, 0x58, 0x00);         /* INT_MAP_DATA : rien sur INT1/INT2 */
     i2c_reg_write8(s_i2c, 0x56, 0x00);         /* INT1_MAP : aucune fonction */
     i2c_reg_write8(s_i2c, 0x53, 0x0A);         /* INT1_IO_CTRL : sortie, push-pull, active haute */

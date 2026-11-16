@@ -2,13 +2,20 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.28.2 — 2026-11-16
+
+- Unused GPIOs of the V1 board (0, 2, 14, 15, 34 and 36 — 36 is the BMA423 INT2 line, whose
+  resistors are not fitted) now have both input and output disabled instead of being left as
+  floating inputs: an active CMOS input on a floating line can settle mid-rail and draw
+  current. GPIO34/36 cannot have internal pulls. The Carrier app returns GPIO0 to the same
+  state when it stops.
+- Correction to 0.28.1: GPIO39 has a 10 kΩ pull-down on the board (R10), so it never floated.
+  Keeping the BMA423 INT1 output driven low is harmless and stays, but it was not a leak.
+
 ## 0.28.1 — 2026-11-16
 
-- Standby current: with the motion sensor suspended (both motion features off, the default),
-  its INT1 output was disabled and GPIO39 — wired straight to it, input-only, no pull
-  resistor on the board — was left floating, which can make the ESP32 input stage draw
-  current. INT1 is now kept as a push-pull output with nothing mapped, so the line sits firmly
-  low in every mode (the old firmware never configured it either).
+- BMA423 INT1 kept as a push-pull output, active high, with nothing mapped, even while the
+  sensor is suspended (line held low in every mode).
 
 ## 0.28.0 — 2026-11-16
 

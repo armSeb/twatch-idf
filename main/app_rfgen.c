@@ -51,7 +51,11 @@ static void off_cb(void *arg) { app_post_event(&app_rfgen, EV_AUTO_OFF); }
 static void restore_pin(gpio_num_t g)
 {
     if (g == GPIO_NUM_1) gpio_iomux_output(GPIO_NUM_1, FUNC_U0TXD_U0TXD);   /* console UART */
-    else gpio_reset_pin(g);                                                 /* entrée + pull-up (strap) */
+    else {                                                                  /* comme au démarrage (power.c) */
+        gpio_reset_pin(g);
+        gpio_set_pull_mode(g, GPIO_FLOATING);
+        gpio_set_direction(g, GPIO_MODE_DISABLE);
+    }
 }
 
 static void gen_stop(void)

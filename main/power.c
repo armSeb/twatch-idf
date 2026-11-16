@@ -354,12 +354,18 @@ static void unused_gpio_setup(void)
     gpio_set_level(GPIO_NUM_26, 0);
     gpio_set_level(GPIO_NUM_33, 0);
 
-    /* Broches non câblées / strapping : entrées sans pull-up ni pull-down */
-    const gpio_num_t floating[] = { GPIO_NUM_0, GPIO_NUM_2, GPIO_NUM_14, GPIO_NUM_15,
-                                    GPIO_NUM_34, GPIO_NUM_36 };
-    for (size_t i = 0; i < sizeof(floating) / sizeof(floating[0]); i++) {
-        gpio_set_direction(floating[i], GPIO_MODE_INPUT);
-        gpio_set_pull_mode(floating[i], GPIO_FLOATING);
+    /* Broches non câblées sur la V1 (schéma) : 2, 14, 15, 34, 36 (INT2 du
+     * BMA423 non reliée, R34 et R16 non montées) et GPIO0 (strap). Entrée ET
+     * sortie désactivées : une entrée CMOS laissée active sur une ligne qui
+     * flotte peut se stabiliser à mi-tension et conduire. GPIO34/36 n'ont
+     * pas de tirage interne possible ; on n'en met sur aucune (GPIO0 est
+     * tiré par le circuit de programmation). L'app Porteuse reprend GPIO0
+     * le temps de son émission. */
+    const gpio_num_t unused_in[] = { GPIO_NUM_0, GPIO_NUM_2, GPIO_NUM_14, GPIO_NUM_15,
+                                     GPIO_NUM_34, GPIO_NUM_36 };
+    for (size_t i = 0; i < sizeof(unused_in) / sizeof(unused_in[0]); i++) {
+        gpio_set_pull_mode(unused_in[i], GPIO_FLOATING);
+        gpio_set_direction(unused_in[i], GPIO_MODE_DISABLE);
     }
 }
 
