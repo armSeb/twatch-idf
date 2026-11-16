@@ -11,6 +11,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 ![watch faces](docs/img/faces-en.png)
 ![screens](docs/img/screens-en.png)
 ![radio apps](docs/img/radio-en.png)
+![motion](docs/img/motion-en.png)
 
 *(PC renders of the real UI with sample data)*
 
@@ -45,6 +46,11 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   *TV off* (switches off most TVs through the IR LED, Europe/USA code sets). An open app stays
   put: the screen turns off on it and wakes back to it. A small app framework lets you add
   one in a single file.
+- **Raise to wake** and **step counter** (BMA423 accelerometer), each optional in *Settings ›
+  Motion*: both run inside the sensor's own feature engine (Bosch firmware loaded at boot), so
+  the ESP32 does nothing while you walk; a few µA when on, sensor suspended when both are off.
+  Today's steps show on every watch face; the *Steps* app shows today, distance and the last
+  7 days (kept across restarts, new day at local midnight).
 - **Notifications never pull you out of an app or menu**: they slide in as a banner on top
   (tap to read, swipe up to dismiss); on the watch face they open full screen as before.
 - **Quick controls**: Bluetooth, **Do not disturb**, torch, now playing, brightness.
@@ -70,10 +76,11 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 |---|---|---|
 | Watch face | swipe ↑ | Notifications (close: ↓ or →) |
 | Watch face | swipe ↓ | Quick controls (close: ↑ or →) |
-| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Carrier, Battery, Settings |
+| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Steps, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Carrier, Battery, Settings |
 | Watch face | long press | Choose the watch face |
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |
+| Screen off | raise / turn the wrist | Wake up, if *Raise to wake* is on |
 | Button, screen off | short press | Wake up |
 | Button, not on the face | short press | Back to the watch face (in WebRX while listening: screen off, listening continues) |
 | Button, on the face | short press | Screen off |
@@ -83,8 +90,8 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 calls still ring. A moon shows on the watch face.
 
 **Settings** (← then *Settings*): *Display* (face, brightness, timeout, language), *Alerts &
-wake* (vibration, wake on notification or silent mode, double tap, speaker test),
-*Bluetooth* (airplane mode, pairing, *Forget devices* behind a confirmation), *Battery*,
+wake* (vibration, wake on notification or silent mode, double tap, speaker test), *Motion*
+(raise to wake, step counter), *Bluetooth* (airplane mode, pairing, *Forget devices* behind a confirmation), *Battery*,
 *About*, *Update*.
 
 ---
@@ -175,6 +182,8 @@ Third-party components and their licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_
 - TV-B-Gone® power codes by Mitch Altman and Limor Fried, Arduino port by Ken Shirriff,
   [ESP-IDF component](https://github.com/pedrominatel/esp-components/tree/main/tv-b-gone) by
   Pedro Minatel.
+- BMA423 Sensor API and feature-engine firmware (Bosch Sensortec, BSD-3-Clause), in
+  [`components/bma423/`](components/bma423/).
 - Helix MP3 and AAC fixed-point decoders (RealNetworks, Helix DNA project), as packaged by
   [ESP8266Audio](https://github.com/earlephilhower/ESP8266Audio) (Earle F. Philhower III).
 - Apple's public *ANCS*, *AMS* and *Accessory Design Guidelines* specifications.

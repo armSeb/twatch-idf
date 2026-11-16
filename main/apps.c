@@ -9,6 +9,7 @@
 extern const app_t app_chrono;
 extern const app_t app_timer;
 extern const app_t app_lamp;
+extern const app_t app_steps;
 extern const app_t app_rfgen;
 extern const app_t app_wifi;
 extern const app_t app_sdr;
@@ -22,6 +23,7 @@ extern const app_t app_tvoff;          /* codes TV-B-Gone, CC BY-SA 4.0 */
 const app_t *const g_apps[] = {
     &app_chrono,
     &app_timer,
+    &app_steps,
     &app_lamp,
 #ifndef TW_NO_TVOFF
     &app_tvoff,

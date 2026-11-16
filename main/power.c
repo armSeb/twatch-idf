@@ -6,6 +6,7 @@
 #include "axp202.h"
 #include "i2c_bus.h"
 #include "board.h"
+#include "motion.h"
 #include "app_events.h"
 #include "esp_log.h"
 #include "esp_pm.h"
@@ -334,21 +335,6 @@ void power_backlight(uint8_t level)
 }
 
 /* ------------------------------------------------------------------ */
-/* BMA423 : on le met en suspend (~2,5 µA au lieu de ~500 µA)           */
-/* ------------------------------------------------------------------ */
-static void bma423_suspend(void)
-{
-    i2c_master_dev_handle_t bma;
-    if (i2c_bus_add(I2C_BUS_SENSORS, BOARD_BMA423_ADDR, &bma) != ESP_OK) return;
-    uint8_t id = 0;
-    i2c_reg_read8(bma, 0x00, &id);
-    i2c_reg_write8(bma, 0x7D, 0x00);         /* PWR_CTRL : accéléro OFF */
-    vTaskDelay(pdMS_TO_TICKS(2));
-    i2c_reg_write8(bma, 0x7C, 0x01);         /* PWR_CONF : adv_power_save */
-    ESP_LOGI(TAG, "BMA423 (id 0x%02x) en suspend", id);
-}
-
-/* ------------------------------------------------------------------ */
 /* Broches inutilisées : état défini, aucun tirage                      */
 /* ------------------------------------------------------------------ */
 static void unused_gpio_setup(void)
@@ -392,7 +378,6 @@ esp_err_t power_init(void)
     power_backlight(0);
 
     ESP_ERROR_CHECK(axp_init());
-    bma423_suspend();
 
     s_vbus = axp_vbus_present();
     s_charging = axp_is_charging();
@@ -425,6 +410,9 @@ esp_err_t power_init(void)
     gpio_isr_handler_add(BOARD_AXP_INT, axp_isr, NULL);
     gpio_wakeup_enable(BOARD_AXP_INT, GPIO_INTR_LOW_LEVEL);
     esp_sleep_enable_gpio_wakeup();
+
+    /* BMA423 : suspend, ou compteur de pas / lever de poignet (réglages) */
+    if (motion_init() != ESP_OK) ESP_LOGW(TAG, "BMA423 absent");
 
     /* PM : DFS + light sleep auto. Avec le BLE actif sur ESP32 « classique »
      * (horloge BT = quartz principal), le contrôleur garde NO_LIGHT_SLEEP :

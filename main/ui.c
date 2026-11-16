@@ -17,6 +17,7 @@
 #include "app_events.h"
 #include "wclock.h"
 #include "settings.h"
+#include "motion.h"
 #include "display.h"
 #include "sound.h"
 #include "crashlog.h"
@@ -35,7 +36,7 @@
 #define ANIM_MS UI_ANIM_MS
 
 typedef enum {
-    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_MEDIA, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT, SCR_OTA,
+    SCR_WATCH, SCR_LIST, SCR_DETAIL, SCR_CALL, SCR_MENU, SCR_POWER, SCR_PAIR, SCR_ABOUT, SCR_MEDIA, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_MOTION, SCR_SET_BT, SCR_OTA,
     SCR_LAUNCHER, SCR_QUICK, SCR_APP, SCR_COUNT
 } scr_id_t;
 
@@ -50,7 +51,7 @@ static lv_obj_t *q_info, *q_bri;
 /* cadran */
 static lv_obj_t *w_digital, *w_classic, *w_pub, *w_scr, *w_dnd;
 enum { FACE_CLASSIC = 0, FACE_DIGITAL = 1, FACE_PUB = 2 };
-static lv_obj_t *w_time, *w_date, *w_ble, *w_batt, *w_notif;
+static lv_obj_t *w_time, *w_date, *w_ble, *w_batt, *w_notif, *w_steps;
 /* liste */
 static lv_obj_t *l_list;
 static bool l_dirty = true;
@@ -72,11 +73,11 @@ static lv_obj_t *b_card, *b_icon, *b_app, *b_title, *b_msg;
 static lv_timer_t *b_timer;
 static uint32_t b_hash;
 static void banner_hide(bool anim);
-static lv_obj_t *m_sw_nwake, *m_sw_tap;
+static lv_obj_t *m_sw_nwake, *m_sw_tap, *m_sw_steps, *m_sw_wrist;
 static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_bm_lang, *m_toast;
 static void menu_lang_cb(lv_event_t *ev);
 static lv_timer_t *w_clock_t;
-static lv_obj_t *m_sum[6], *m_bt_info, *m_confirm;
+static lv_obj_t *m_sum[7], *m_bt_info, *m_confirm;
 static lv_obj_t *o_info, *o_bar, *o_status, *o_btn, *o_pw, *o_prev, *o_prev_modal, *o_title;
 static int o_app = -1;           /* ≥ 0 : session « réglages » de cette app (WebRX), sinon mise à jour */
 static void ota_ui_idle(void);
@@ -101,6 +102,7 @@ static lv_obj_t *a_lbl;
 static void show(scr_id_t id, lv_screen_load_anim_t anim);
 static void list_rebuild(void);
 static void watch_refresh_status(void);
+static void watch_update_steps(void);
 static void watch_update_time(bool force);
 
 /* ------------------------------------------------------------------ */
@@ -267,7 +269,8 @@ enum { G_NONE = 0, G_MENU, G_MEDIA, G_LAUNCHER, G_QUICK, G_APP };
 static int group_of(scr_id_t id)
 {
     switch (id) {
-    case SCR_MENU: case SCR_SET_DISP: case SCR_SET_ALERT: case SCR_SET_BT: case SCR_OTA: return G_MENU;
+    case SCR_MENU: case SCR_SET_DISP: case SCR_SET_ALERT: case SCR_SET_MOTION: case SCR_SET_BT: case SCR_OTA:
+        return G_MENU;
     case SCR_MEDIA:    return G_MEDIA;
     case SCR_LAUNCHER: return G_LAUNCHER;
     case SCR_QUICK:    return G_QUICK;
@@ -414,6 +417,31 @@ static void apply_face(void)
     lv_obj_move_foreground(w_dnd);
     if (f != FACE_DIGITAL && settings_get()->dnd) lv_obj_remove_flag(w_dnd, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(w_dnd, LV_OBJ_FLAG_HIDDEN);
+    watch_update_steps();
+}
+
+/* pas du jour sur le cadran (compteur activé) : sous la date en numérique,
+ * petite gravure à 9 h sur les analogiques */
+static void watch_update_steps(void)
+{
+    if (!w_steps) return;
+    uint8_t f = settings_get()->watchface;
+    if (!motion_steps_on()) { lv_obj_add_flag(w_steps, LV_OBJ_FLAG_HIDDEN); return; }
+    uint32_t v = motion_steps_today();
+    if (v >= 1000) lv_label_set_text_fmt(w_steps, SYM_WALK " %lu %03lu", (unsigned long)(v / 1000), (unsigned long)(v % 1000));
+    else lv_label_set_text_fmt(w_steps, SYM_WALK " %lu", (unsigned long)v);
+    lv_obj_remove_flag(w_steps, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(w_steps);
+    if (f == FACE_DIGITAL) {
+        lv_obj_set_style_text_color(w_steps, C_DIM, 0);
+        lv_obj_align(w_steps, LV_ALIGN_CENTER, 0, 80);
+    } else if (f == FACE_PUB) {
+        lv_obj_set_style_text_color(w_steps, lv_color_hex(0xC9A24A), 0);
+        lv_obj_align(w_steps, LV_ALIGN_CENTER, -62, 26);
+    } else {
+        lv_obj_set_style_text_color(w_steps, lv_color_hex(0x23407E), 0);
+        lv_obj_align(w_steps, LV_ALIGN_CENTER, -56, 34);
+    }
 }
 
 static void watch_refresh_status(void)
@@ -455,11 +483,15 @@ static void watch_refresh_status(void)
                    bi.state == BLE_ST_ADVERTISING ? PUB_LINK_ADV : PUB_LINK_OFF;
         face_pub_set_status(p, power_charging(), link, n);
     }
+    watch_update_steps();
 }
 
 static void clock_timer_cb(lv_timer_t *t)
 {
-    if (s_cur == SCR_WATCH) watch_update_time(false);
+    static uint8_t n;
+    if (s_cur != SCR_WATCH) return;
+    watch_update_time(false);
+    if (++n % 10 == 0) watch_update_steps();      /* lecture I2C toutes les 10 s */
 }
 
 static void build_watch(void)
@@ -483,6 +515,8 @@ static void build_watch(void)
     lv_obj_align(w_date, LV_ALIGN_CENTER, 0, 52);
     lv_obj_t *hint = mk_label(d, &font_text_16, C_OFF, LV_SYMBOL_UP);
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -6);
+    w_steps = mk_label(s, &font_text_16, C_DIM, "");
+    lv_obj_add_flag(w_steps, LV_OBJ_FLAG_HIDDEN);
 
     /* cadrans analogiques : créés par apply_face() selon le réglage */
     w_scr = s;
@@ -763,6 +797,17 @@ static void menu_tap_cb(lv_event_t *ev)
     settings_get()->tap_wake = on;
     settings_save();
     display_tap_enable(on);
+}
+
+static void menu_motion_cb(lv_event_t *ev)
+{
+    settings_t *st = settings_get();
+    st->step_count = lv_obj_has_state(m_sw_steps, LV_STATE_CHECKED);
+    st->wrist_wake = lv_obj_has_state(m_sw_wrist, LV_STATE_CHECKED);
+    settings_save();
+    motion_apply();
+    if ((st->step_count || st->wrist_wake) && !motion_ok()) toast(_("Capteur de mouvement indisponible"));
+    watch_refresh_status();
 }
 
 static void menu_bt_cb(lv_event_t *ev)
@@ -1081,6 +1126,12 @@ static void menu_refresh_summaries(void)
     snprintf(b, sizeof(b), _("Firmware %s"), esp_app_get_description()->version);
     lv_label_set_text(m_sum[4], b);
     lv_label_set_text(m_sum[5], _("Par Wi-Fi, sans câble"));
+
+    if (st->step_count && st->wrist_wake) snprintf(b, sizeof(b), "%s · %s", _("Poignet"), _("pas"));
+    else if (st->wrist_wake) snprintf(b, sizeof(b), "%s", _("Lever le poignet"));
+    else if (st->step_count) snprintf(b, sizeof(b), "%s", _("Compteur de pas"));
+    else snprintf(b, sizeof(b), "%s", _("Capteur en veille"));
+    lv_label_set_text(m_sum[6], b);
 }
 
 static void build_toast(void)
@@ -1245,6 +1296,7 @@ static void build_menu(void)
     lv_obj_t *col = mk_page(SCR_MENU, _("Réglages"));
     mk_entry(col, SYM_EYE, _("Affichage"), SCR_SET_DISP, &m_sum[0]);
     mk_entry(col, LV_SYMBOL_BELL, _("Alertes et réveil"), SCR_SET_ALERT, &m_sum[1]);
+    mk_entry(col, SYM_WALK, _("Mouvement"), SCR_SET_MOTION, &m_sum[6]);
     mk_entry(col, LV_SYMBOL_BLUETOOTH, _("Bluetooth"), SCR_SET_BT, &m_sum[2]);
     mk_entry(col, LV_SYMBOL_CHARGE, _("Énergie"), SCR_POWER, &m_sum[3]);
     mk_entry(col, LV_SYMBOL_LIST, _("À propos"), SCR_ABOUT, &m_sum[4]);
@@ -1283,6 +1335,15 @@ static void build_menu(void)
     lv_obj_t *ts = mk_button(col, with_sym(LV_SYMBOL_VOLUME_MAX, _("Tester le haut-parleur")), C_CARD,
                              sound_test_cb, NULL);
     lv_obj_set_size(ts, lv_pct(100), 44);
+
+    /* ---- mouvement (BMA423) ---- */
+    col = mk_page(SCR_SET_MOTION, _("Mouvement"));
+    m_sw_wrist = mk_switch_row(col, _("Lever le poignet"), _("Allume l'écran"), menu_motion_cb);
+    m_sw_steps = mk_switch_row(col, _("Compteur de pas"), _("Cadran et app Pas"), menu_motion_cb);
+    lv_obj_t *mn = mk_label(col, &font_small_11, C_DIM,
+                            _("Les deux tournent dans le capteur : quelques µA. Tout coupé, il dort."));
+    lv_label_set_long_mode(mn, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(mn, lv_pct(100));
 
     /* ---- bluetooth ---- */
     col = mk_page(SCR_SET_BT, _("Bluetooth"));
@@ -1550,6 +1611,8 @@ static void menu_sync_from_settings(void)
     lv_obj_set_state(m_sw_vib, LV_STATE_CHECKED, st->vibrate);
     lv_obj_set_state(m_sw_tap, LV_STATE_CHECKED, st->tap_wake);
     lv_obj_set_state(m_sw_nwake, LV_STATE_CHECKED, st->notif_wake);
+    lv_obj_set_state(m_sw_steps, LV_STATE_CHECKED, st->step_count);
+    lv_obj_set_state(m_sw_wrist, LV_STATE_CHECKED, st->wrist_wake);
     lv_obj_set_state(m_sw_bt, LV_STATE_CHECKED, st->ble_enabled);
     for (int i = 0; i < 3; i++) {
         if (FACE_ORDER[i] == st->watchface) lv_buttonmatrix_set_button_ctrl(m_bm_face, i, LV_BUTTONMATRIX_CTRL_CHECKED);
@@ -1706,10 +1769,11 @@ static void about_refresh(void)
              (unsigned long)g_wake_cnt[EV_BLE_STATE]);
     if (n > 0 && n < (int)sizeof(s)) {
         /* rails AXP (0x12 sorties, 0x29 LDO3 : bit 7 mode, 6:0 tension) et son */
-        n += snprintf(s + n, sizeof(s) - n, "\nPSRAM %u/%u Ko\nAXP 12=%02X 28=%02X 29=%02X · audio %d",
+        n += snprintf(s + n, sizeof(s) - n, "\nPSRAM %u/%u Ko\nAXP 12=%02X 28=%02X 29=%02X · audio %d\nBMA423 %s · poignet %lu",
                       (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024),
                       (unsigned)(heap_caps_get_total_size(MALLOC_CAP_SPIRAM) / 1024),
-                      axp_reg(0x12), axp_reg(0x28), axp_reg(0x29), sound_last_error());
+                      axp_reg(0x12), axp_reg(0x28), axp_reg(0x29), sound_last_error(),
+                      motion_ok() ? "actif" : "veille", (unsigned long)g_wake_cnt[EV_MOTION]);
     }
     if (n > 0 && n < (int)sizeof(s) && crashlog_text()[0]) {
         n += snprintf(s + n, sizeof(s) - n, "\n\n%s", crashlog_text());
@@ -2318,12 +2382,13 @@ void ui_init(void)
 static void release_menu(void)
 {
     if (!s_scr[SCR_MENU] || is_menu_group(s_cur)) return;
-    static const scr_id_t grp[] = { SCR_MENU, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_BT, SCR_OTA };
+    static const scr_id_t grp[] = { SCR_MENU, SCR_SET_DISP, SCR_SET_ALERT, SCR_SET_MOTION, SCR_SET_BT, SCR_OTA };
     for (size_t i = 0; i < sizeof(grp) / sizeof(grp[0]); i++) {
         if (s_scr[grp[i]]) { scr_delete(s_scr[grp[i]]); s_scr[grp[i]] = NULL; }
     }
     /* plus aucun pointeur vers des objets détruits */
     m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = m_bm_lang = NULL;
+    m_sw_steps = m_sw_wrist = NULL;
     m_bt_info = m_confirm = NULL;
     o_info = o_bar = o_status = o_btn = o_pw = o_prev = o_prev_modal = NULL;
     memset(m_sum, 0, sizeof(m_sum));

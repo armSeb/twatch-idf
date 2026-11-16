@@ -13,6 +13,8 @@ typedef struct {
     bool    notif_wake;       /* false = notif : vibre seulement, bouton pour voir */
     uint8_t lang;             /* 0 = français, 1 = anglais (i18n.h) */
     bool    dnd;              /* ne pas déranger : ni vibration ni allumage (sauf appels) */
+    bool    step_count;       /* compteur de pas (BMA423) */
+    bool    wrist_wake;       /* lever le poignet = allumer l'écran (BMA423) */
 } settings_t;
 
 void        settings_load(void);

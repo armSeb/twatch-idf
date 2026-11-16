@@ -128,10 +128,32 @@ verrou `ESP_PM_NO_LIGHT_SLEEP`, quel que soit le framework. Tout le reste est do
 | Tâches | aucun timer périodique écran éteint ; la tâche app dort jusqu'à un événement (60 s max) ; tick LVGL lu à la demande |
 | Écran | ST7789 en veille, rétroéclairage coupé, tactile en mode monitor avec un détecteur de double tap interrogé seulement après une interruption tactile |
 | AXP202 | ADC limités à la tension et au courant batterie, LED de charge éteinte ; rails inutilisés coupés ; le rail du haut-parleur n'est alimenté que pendant un son |
-| Périphériques | BMA423 en suspend, CLKOUT du PCF8563 coupé, GPIO inutilisés à un niveau défini |
+| Périphériques | BMA423 en suspend sauf si le lever de poignet ou le compteur de pas est activé (alors 50 Hz en mode basse conso moyenné, fonctions dans le capteur), CLKOUT du PCF8563 coupé, GPIO inutilisés à un niveau défini |
 | Mode avion | contrôleur BT arrêté → **light sleep automatique** |
 
 Résultat typique : environ **7,7 mA en veille**, iPhone connecté et notifications actives.
+
+## Capteur de mouvement (`motion.c`)
+
+Le BMA423 a un petit moteur de fonctions qui exécute un microcode Bosch (le fichier de
+configuration du pilote Bosch, `components/bma423/`, BSD-3-Clause). Si *Lever le poignet* ou
+le *Compteur de pas* est activé, `motion_init()` (appelé par `power_init()`) réinitialise le
+capteur, charge ce microcode (~6 Ko en I2C par paquets de 64 octets), remappe les axes pour la
+T-Watch 2020 V1 et règle un échantillonnage basse consommation moyenné à 50 Hz avec
+l'économie avancée. Les deux coupés : capteur en suspend (~2,5 µA), microcode non chargé.
+
+- **Lever le poignet** : la fonction *wrist wear* est routée sur INT1 (GPIO39, mémorisée,
+  active haute). Une interruption GPIO sur niveau haut (aussi source de réveil du light sleep)
+  poste `EV_MOTION` ; la tâche app lit le statut (ce qui libère la ligne), réarme
+  l'interruption et, écran éteint, l'allume comme un appui sur le bouton.
+- **Compteur de pas** : le capteur compte seul. Total du jour = base gardée en NVS + compteur
+  du capteur. La tâche app vérifie la date locale à son réveil périodique (≤ 60 s) : à minuit
+  le total passe dans un historique de 7 jours et le compteur repart de zéro (plusieurs jours
+  si la montre était éteinte). Le total est sauvé en NVS toutes les 15 min s'il a changé, au
+  changement de jour, à la désactivation et dans un gestionnaire d'arrêt avant tout
+  redémarrage logiciel. Les cadrans le lisent toutes les 10 s quand ils sont affichés (cache
+  de 2 s). Testé sur PC avec un faux capteur (`motion.c` lui-même : sauvegarde, redémarrage,
+  minuit, jours manquants, heure inconnue).
 
 ## Jauge de batterie adaptative
 

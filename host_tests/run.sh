@@ -6,3 +6,7 @@ gcc -std=gnu17 -Wall -Wextra -Wno-missing-field-initializers -fsanitize=address,
 gcc -std=gnu17 -Wall -Wextra -fsanitize=address,undefined -g -DGAUGE_HOST_TEST \
     -I../main -o test_gauge test_gauge.c ../main/gauge.c -lm && ./test_gauge | tail -1
 python3 check_i18n.py
+# compteur de pas : deux « démarrages » (le 2e relit le NVS écrit par le 1er)
+(cd motion && gcc -std=gnu17 -Wall -Wno-unused-function -Wno-unused-label -fsanitize=address,undefined -g \
+    -Istubs -I../../main -I../../components/bma423/include -o test_motion test_motion.c ../../main/motion.c && \
+    ./test_motion 2>&1 | grep -v "^I motion" && ./test_motion b 2>&1 | grep -v "^I motion"; rm -f nvs.bin)

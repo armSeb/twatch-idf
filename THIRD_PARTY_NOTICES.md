@@ -20,6 +20,7 @@ tiers suivants, chacun sous sa propre licence.*
 | [LVGL](https://github.com/lvgl/lvgl) 9.2.2 | linked | LVGL Kft | MIT |
 | [Montserrat](https://github.com/JulietaUla/Montserrat) (Medium), converted to bitmaps in `main/fonts/` | embedded | Julieta Ulanovsky and contributors | SIL Open Font License 1.1 |
 | [Font Awesome Free](https://fontawesome.com) 5 icons, converted to bitmaps in `main/fonts/` | embedded | Fonticons, Inc. | Icons: CC BY 4.0 — font files: SIL OFL 1.1 |
+| BMA423 Sensor API and feature-engine configuration file, in [`components/bma423/`](components/bma423/) (see its `NOTICE.md`), from [wasp-os/BMA423-Sensor-API](https://github.com/wasp-os/BMA423-Sensor-API) | linked (step counter, raise to wake) | Bosch Sensortec GmbH | BSD-3-Clause |
 | Helix MP3 decoder, in [`components/helix_mp3/`](components/helix_mp3/) (see its `NOTICE.md`), from [ESP8266Audio](https://github.com/earlephilhower/ESP8266Audio) | linked (Radio app) | RealNetworks, Inc.; ESP adaptation Earle F. Philhower III | **RPSL 1.0** or RCSL 1.0 |
 | Helix AAC / HE-AAC decoder, in [`components/helix_aac/`](components/helix_aac/) (see its `NOTICE.md`), from ESP8266Audio | linked (Radio app) | RealNetworks, Inc.; ESP adaptation Earle F. Philhower III | **RPSL 1.0** or RCSL 1.0 |
 | TV-B-Gone® WORLDcodes power-code database and RMT transmitter, adapted in [`components/tvbgone/`](components/tvbgone/) (see its `NOTICE.md`) | embedded unless built with `TW_NO_TVOFF=1` | Mitch Altman, Limor Fried; Arduino port Ken Shirriff; ESP-IDF component Pedro Minatel | **CC BY-SA 4.0** |

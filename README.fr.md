@@ -12,6 +12,7 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
 ![cadrans](docs/img/faces-fr.png)
 ![écrans](docs/img/screens-fr.png)
 ![apps radio](docs/img/radio-fr.png)
+![mouvement](docs/img/motion-fr.png)
 
 *(rendus PC de l'interface réelle avec des données factices)*
 
@@ -53,6 +54,12 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   issu de la PLL audio de l'ESP32) et *TV off* (éteint la plupart des téléviseurs par la LED
   infrarouge, codes Europe/USA). Une app ouverte garde la main : l'écran s'éteint dessus et
   le réveil y revient. Un petit cadre d'applications permet d'en ajouter en un seul fichier.
+- **Lever le poignet** pour allumer l'écran et **compteur de pas** (accéléromètre BMA423),
+  chacun activable dans *Réglages › Mouvement* : les deux tournent dans le moteur de fonctions
+  du capteur (microcode Bosch chargé au démarrage), l'ESP32 ne fait rien pendant la marche ;
+  quelques µA activés, capteur en suspend s'ils sont coupés. Les pas du jour s'affichent sur
+  tous les cadrans ; l'app *Pas* montre le jour, la distance et les 7 derniers jours (conservés
+  au redémarrage, nouveau jour à minuit heure locale).
 - **Les notifications ne font jamais quitter une app ou un menu** : elles glissent en
   bannière par-dessus (toucher pour lire, glisser vers le haut pour fermer) ; sur le cadran,
   elles s'ouvrent en plein écran comme avant.
@@ -82,10 +89,11 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Pas, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |
+| Écran éteint | lever / tourner le poignet | Réveil, si *Lever le poignet* est activé |
 | Bouton, écran éteint | appui court | Réveil |
 | Bouton, hors cadran | appui court | Retour au cadran (dans WebRX pendant l'écoute : écran éteint, l'écoute continue) |
 | Bouton, sur le cadran | appui court | Éteint l'écran |
@@ -96,7 +104,7 @@ dans la liste ; les appels sonnent toujours. Une lune le signale sur le cadran.
 
 **Réglages** (← puis *Réglages*) : *Affichage* (cadran, luminosité, extinction, langue),
 *Alertes et réveil* (vibreur, allumage sur notif ou mode discret, double tap, test du
-haut-parleur), *Bluetooth* (mode avion, appairage, *Oublier les appareils* derrière une
+haut-parleur), *Mouvement* (lever le poignet, compteur de pas), *Bluetooth* (mode avion, appairage, *Oublier les appareils* derrière une
 confirmation), *Énergie*, *À propos*, *Mise à jour*.
 
 ---
@@ -188,6 +196,8 @@ Composants tiers et leurs licences : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICE
 - Codes TV-B-Gone® de Mitch Altman et Limor Fried, port Arduino de Ken Shirriff,
   [composant ESP-IDF](https://github.com/pedrominatel/esp-components/tree/main/tv-b-gone) de
   Pedro Minatel.
+- Pilote BMA423 et microcode du moteur de fonctions (Bosch Sensortec, BSD-3-Clause), dans
+  [`components/bma423/`](components/bma423/).
 - Décodeurs MP3 et AAC en virgule fixe Helix (RealNetworks, projet Helix DNA), dans la
   version de [ESP8266Audio](https://github.com/earlephilhower/ESP8266Audio) (Earle F. Philhower III).
 - Spécifications publiques d'Apple : *ANCS*, *AMS*, *Accessory Design Guidelines*.

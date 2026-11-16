@@ -2,6 +2,23 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.27.0 — 2026-11-16
+
+- **Raise to wake** and **step counter**, each optional in the new *Settings › Motion* page
+  (both off by default). They run inside the BMA423's own feature engine: the Bosch firmware
+  is uploaded at boot only when one of them is on, sampling is 50 Hz averaged low-power, and
+  the ESP32 stays idle while you walk. Both off: the sensor stays suspended as before.
+- Raise to wake: turning the wrist lights the screen (like the button: last unseen
+  notification, otherwise the face or the open app). Works in airplane mode too (GPIO39 is a
+  light-sleep wake source).
+- Step counter: today's steps on all three watch faces; new **Steps** app with today's total,
+  distance, 7-day average and a bar chart of the last 8 days, plus a button to turn the counter
+  on. Days roll over at local midnight; totals survive restarts (saved every 15 minutes and
+  before any software restart).
+- *About* shows the sensor state and how many wrist wake-ups happened with the screen off.
+- Bosch BMA423 Sensor API added under `components/bma423/` (BSD-3-Clause); host test for the
+  step bookkeeping.
+
 ## 0.26.3 — 2026-11-13
 
 - Back to the 0.25 behaviour for SDR: opening the app restarts the watch in "SDR mode"

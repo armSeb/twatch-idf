@@ -120,10 +120,31 @@ without an external 32 kHz crystal (the T-Watch 2020 has none): the controller h
 | Tasks | no periodic timer with the screen off; the app task sleeps until an event (60 s max); LVGL tick read on demand |
 | Display | ST7789 in sleep mode, backlight off, touch controller in monitor mode with a double-tap detector polled only after a touch interrupt |
 | AXP202 | ADCs limited to battery voltage/current, charge LED off; unused rails off; the speaker rail is powered only while a sound plays |
-| Peripherals | BMA423 suspended, PCF8563 CLKOUT off, unused GPIOs driven to a defined level |
+| Peripherals | BMA423 suspended unless raise to wake or the step counter is on (then 50 Hz averaged low-power mode, features in the sensor), PCF8563 CLKOUT off, unused GPIOs driven to a defined level |
 | Airplane mode | BT controller stopped → **automatic light sleep** |
 
 Typical result: about **7.7 mA in standby** with the iPhone connected and notifications on.
+
+## Motion sensor (`motion.c`)
+
+The BMA423 has a small feature engine that runs Bosch firmware (the configuration file of
+the Bosch Sensor API, `components/bma423/`, BSD-3-Clause). When *Raise to wake* or the *Step
+counter* is on, `motion_init()` (called from `power_init()`) soft-resets the sensor, uploads
+that firmware (~6 KB over I2C in 64-byte bursts), remaps the axes for the T-Watch 2020 V1 and
+sets 50 Hz averaged low-power sampling with advanced power save. Both off: the sensor stays
+suspended (~2.5 µA) and the firmware is not loaded.
+
+- **Raise to wake**: the *wrist wear* feature is mapped to INT1 (GPIO39, latched, active
+  high). A high-level GPIO interrupt (also a light-sleep wake source) posts `EV_MOTION`; the
+  app task reads the interrupt status (which releases the line), re-arms the interrupt and,
+  with the screen off, wakes it like a button press.
+- **Step counter**: the sensor counts on its own. Today's total = a base kept in NVS + the
+  sensor counter. The app task checks the local date on its periodic wake (≤ 60 s): at
+  midnight the total goes into a 7-day history and the counter is reset (several days if the
+  watch was off). The total is saved to NVS every 15 minutes if it changed, on a day change,
+  when the counter is turned off, and in a shutdown handler before any software restart.
+  Faces read it every 10 s while shown (cached 2 s). Tested on the PC with a fake sensor
+  (`motion.c` itself: save, restart, midnight, missing days, unknown time).
 
 ## Adaptive battery gauge
 

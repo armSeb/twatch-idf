@@ -34,6 +34,7 @@
 #include "esp_bt.h"
 #include "ancs.h"
 #include "notif_store.h"
+#include "motion.h"
 
 #ifndef TW_DIAG_BARE
 #define TW_DIAG_BARE 0
@@ -156,6 +157,13 @@ static void handle_event(const app_event_t *ev)
     case EV_NOTIF:
         handle_notifs();
         break;
+    case EV_MOTION:
+        /* poignet levé : comme un appui sur le bouton, écran éteint seulement */
+        if (motion_on_irq() && !display_is_on()) {
+            crashlog_mark('W', 0, 0);
+            wake_to_pending_or_home();
+        }
+        break;
     case EV_NOTIF_REMOVED:
         ui_on_notif_removed((uint32_t)ev->a);
         break;
@@ -232,6 +240,7 @@ static void app_task(void *arg)
             last_batt = now;
             wclock_resync();
             power_update();
+            motion_tick();                /* minuit, sauvegarde des pas */
             ble_set_battery((uint8_t)power_percent());
             ui_on_power();
         }

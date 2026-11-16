@@ -22,6 +22,7 @@ typedef enum {
     EV_MEDIA,           /* lecture en cours (AMS) modifiée : media_get()     */
     EV_OTA,             /* a = code OTA_EV_* (progression, fin, erreur)      */
     EV_APP,             /* a = (index app << 16) | code (app_post_event)     */
+    EV_MOTION,          /* ligne INT1 du BMA423 (geste « lever le poignet ») */
     EV_COUNT,
 } app_ev_type_t;
 
