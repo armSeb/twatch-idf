@@ -2,6 +2,14 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.28.1 — 2026-11-16
+
+- Standby current: with the motion sensor suspended (both motion features off, the default),
+  its INT1 output was disabled and GPIO39 — wired straight to it, input-only, no pull
+  resistor on the board — was left floating, which can make the ESP32 input stage draw
+  current. INT1 is now kept as a push-pull output with nothing mapped, so the line sits firmly
+  low in every mode (the old firmware never configured it either).
+
 ## 0.28.0 — 2026-11-16
 
 - Raise to wake: **gesture sensitivity** (low / medium / high, default medium) in *Settings ›

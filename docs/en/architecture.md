@@ -120,7 +120,7 @@ without an external 32 kHz crystal (the T-Watch 2020 has none): the controller h
 | Tasks | no periodic timer with the screen off; the app task sleeps until an event (60 s max); LVGL tick read on demand |
 | Display | ST7789 in sleep mode, backlight off, touch controller in monitor mode with a double-tap detector polled only after a touch interrupt |
 | AXP202 | ADCs limited to battery voltage/current, charge LED off; unused rails off; the speaker rail is powered only while a sound plays |
-| Peripherals | BMA423 suspended unless raise to wake or the step counter is on (then 50 Hz averaged low-power mode, features in the sensor), PCF8563 CLKOUT off, unused GPIOs driven to a defined level |
+| Peripherals | BMA423 suspended unless raise to wake or the step counter is on (then 50 Hz averaged low-power mode, features in the sensor; its INT1 output kept driven low so GPIO39, which has no pull, never floats), PCF8563 CLKOUT off, unused GPIOs driven to a defined level |
 | Airplane mode | BT controller stopped → **automatic light sleep** |
 
 Typical result: about **7.7 mA in standby** with the iPhone connected and notifications on.

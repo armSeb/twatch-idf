@@ -128,7 +128,7 @@ verrou `ESP_PM_NO_LIGHT_SLEEP`, quel que soit le framework. Tout le reste est do
 | Tâches | aucun timer périodique écran éteint ; la tâche app dort jusqu'à un événement (60 s max) ; tick LVGL lu à la demande |
 | Écran | ST7789 en veille, rétroéclairage coupé, tactile en mode monitor avec un détecteur de double tap interrogé seulement après une interruption tactile |
 | AXP202 | ADC limités à la tension et au courant batterie, LED de charge éteinte ; rails inutilisés coupés ; le rail du haut-parleur n'est alimenté que pendant un son |
-| Périphériques | BMA423 en suspend sauf si le lever de poignet ou le compteur de pas est activé (alors 50 Hz en mode basse conso moyenné, fonctions dans le capteur), CLKOUT du PCF8563 coupé, GPIO inutilisés à un niveau défini |
+| Périphériques | BMA423 en suspend sauf si le lever de poignet ou le compteur de pas est activé (alors 50 Hz en mode basse conso moyenné, fonctions dans le capteur ; sa sortie INT1 reste tenue au niveau bas pour que GPIO39, sans tirage, ne flotte jamais), CLKOUT du PCF8563 coupé, GPIO inutilisés à un niveau défini |
 | Mode avion | contrôleur BT arrêté → **light sleep automatique** |
 
 Résultat typique : environ **7,7 mA en veille**, iPhone connecté et notifications actives.
