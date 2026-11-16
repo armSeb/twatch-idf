@@ -36,7 +36,8 @@ static shutdown_handler_t SH;
 int esp_register_shutdown_handler(shutdown_handler_t h) { SH = h; return 0; }
 /* faux capteur */
 static uint32_t CNT; static bool STEP_EN, WRIST_EN, ACC; static int LOADS, RESETS;
-int8_t bma4_soft_reset(struct bma4_dev *d) { CNT = 0; STEP_EN = WRIST_EN = false; return 0; }
+/* la vraie puce n'acquitte pas toujours la commande de reset : erreur de bus */
+int8_t bma4_soft_reset(struct bma4_dev *d) { CNT = 0; STEP_EN = WRIST_EN = false; return BMA4_E_COM_FAIL; }
 int8_t bma423_init(struct bma4_dev *d) { d->chip_id = 0x13; return 0; }
 int8_t bma423_write_config_file(struct bma4_dev *d) { LOADS++; return 0; }
 int8_t bma423_set_remap_axes(const struct bma423_axes_remap *r, struct bma4_dev *d) { return 0; }
@@ -112,4 +113,6 @@ phase2:
 #include "app_events.h"
 esp_err_t i2c_bus_add(i2c_bus_id_t b, uint8_t a, i2c_master_dev_handle_t *o) { *o = (void *)1; return 0; }
 esp_err_t i2c_reg_write8(i2c_master_dev_handle_t d, uint8_t r, uint8_t v) { if (r == 0x7D) ACC = v; return 0; }
+esp_err_t i2c_reg_read8(i2c_master_dev_handle_t d, uint8_t r, uint8_t *v) { *v = 0; return 0; }
+void ble_diag(const char *f, ...) {}
 bool app_post_from_isr(const app_event_t *e, BaseType_t *h) { return true; }

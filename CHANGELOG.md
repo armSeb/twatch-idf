@@ -2,6 +2,14 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.27.1 — 2026-11-16
+
+- Motion: fixed "Motion sensor unavailable" when turning on raise to wake or the step
+  counter. The BMA423 resets while it receives the soft-reset command and may not acknowledge
+  the end of the I2C write; that bus error aborted the firmware upload. It is now ignored, the
+  sequence is retried up to 3 times, and a remaining failure is written to the BLE log in
+  *About* (step, error code, chip ID, internal status).
+
 ## 0.27.0 — 2026-11-16
 
 - **Raise to wake** and **step counter**, each optional in the new *Settings › Motion* page

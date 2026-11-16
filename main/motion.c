@@ -8,6 +8,7 @@
 #include "settings.h"
 #include "wclock.h"
 #include "app_events.h"
+#include "ble.h"
 #include "nvs.h"
 #include "esp_log.h"
 #include "esp_attr.h"
@@ -171,12 +172,24 @@ static bool load_microcode(void)
     s_dev.intf_ptr = &s_i2c;
 
     int64_t t0 = esp_timer_get_time();
-    int8_t r = bma4_soft_reset(&s_dev);
-    vTaskDelay(pdMS_TO_TICKS(5));
-    if (r == BMA4_OK) r = bma423_init(&s_dev);
-    if (r == BMA4_OK) r = bma423_write_config_file(&s_dev);
+    int8_t r = BMA4_OK;
+    const char *step = "";
+    for (int tries = 0; tries < 3; tries++) {
+        /* la puce se réinitialise pendant la commande : elle peut ne pas
+         * acquitter la fin de l'écriture, le résultat est donc ignoré */
+        bma4_soft_reset(&s_dev);
+        vTaskDelay(pdMS_TO_TICKS(10));
+        step = "id";
+        r = bma423_init(&s_dev);
+        if (r == BMA4_OK) { step = "microcode"; r = bma423_write_config_file(&s_dev); }
+        if (r == BMA4_OK) break;
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
     if (r != BMA4_OK) {
-        ESP_LOGE(TAG, "microcode BMA423 non chargé (%d)", r);
+        uint8_t st = 0xFF;
+        i2c_reg_read8(s_i2c, 0x2A, &st);                  /* INTERNAL_STATUS */
+        ESP_LOGE(TAG, "microcode BMA423 non chargé (%s %d, id 0x%02x, état 0x%02x)", step, r, s_dev.chip_id, st);
+        ble_diag("BMA %s e%d id%02x st%02x", step, r, s_dev.chip_id, st);
         return false;
     }
     /* T-Watch 2020 V1 : orientation du capteur sur la carte */
