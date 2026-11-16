@@ -74,6 +74,9 @@ static lv_timer_t *b_timer;
 static uint32_t b_hash;
 static void banner_hide(bool anim);
 static lv_obj_t *m_sw_nwake, *m_sw_tap, *m_sw_steps, *m_sw_wrist;
+static lv_obj_t *m_bm_wsens, *m_sw_glance, *m_bm_gpct, *m_bm_gdur;
+static const uint8_t GPCT_VALUES[] = { 10, 25, 50 };
+static const uint8_t GDUR_VALUES[] = { 3, 4, 6 };
 static lv_obj_t *m_slider, *m_sw_vib, *m_sw_bt, *m_bm_tmo, *m_bm_face, *m_bm_lang, *m_toast;
 static void menu_lang_cb(lv_event_t *ev);
 static lv_timer_t *w_clock_t;
@@ -810,6 +813,36 @@ static void menu_motion_cb(lv_event_t *ev)
     watch_refresh_status();
 }
 
+static void menu_wsens_cb(lv_event_t *ev)
+{
+    uint32_t i = lv_buttonmatrix_get_selected_button(m_bm_wsens);
+    if (i > 2) return;
+    settings_get()->wrist_sens = (uint8_t)i;
+    settings_save();
+}
+
+static void menu_glance_cb(lv_event_t *ev)
+{
+    settings_get()->glance = lv_obj_has_state(m_sw_glance, LV_STATE_CHECKED);
+    settings_save();
+}
+
+static void menu_gpct_cb(lv_event_t *ev)
+{
+    uint32_t i = lv_buttonmatrix_get_selected_button(m_bm_gpct);
+    if (i >= sizeof(GPCT_VALUES)) return;
+    settings_get()->glance_pct = GPCT_VALUES[i];
+    settings_save();
+}
+
+static void menu_gdur_cb(lv_event_t *ev)
+{
+    uint32_t i = lv_buttonmatrix_get_selected_button(m_bm_gdur);
+    if (i >= sizeof(GDUR_VALUES)) return;
+    settings_get()->glance_s = GDUR_VALUES[i];
+    settings_save();
+}
+
 static void menu_bt_cb(lv_event_t *ev)
 {
     bool on = lv_obj_has_state(m_sw_bt, LV_STATE_CHECKED);
@@ -1339,6 +1372,21 @@ static void build_menu(void)
     /* ---- mouvement (BMA423) ---- */
     col = mk_page(SCR_SET_MOTION, _("Mouvement"));
     m_sw_wrist = mk_switch_row(col, _("Lever le poignet"), _("Allume l'écran"), menu_motion_cb);
+    mk_section(col, _("SENSIBILITÉ DU GESTE"));
+    static const char *wsens_map[3 + 1];
+    wsens_map[0] = _("Basse"); wsens_map[1] = _("Moyenne"); wsens_map[2] = _("Haute"); wsens_map[3] = "";
+    m_bm_wsens = mk_segmented(col, wsens_map, menu_wsens_cb);
+    m_sw_glance = mk_switch_row(col, _("Coup d'œil"), _("Tamisé et bref"), menu_glance_cb);
+    mk_section(col, _("LUMINOSITÉ DU COUP D'ŒIL"));
+    static const char *gpct_map[] = { "10 %", "25 %", "50 %", "" };
+    m_bm_gpct = mk_segmented(col, gpct_map, menu_gpct_cb);
+    mk_section(col, _("DURÉE DU COUP D'ŒIL"));
+    static const char *gdur_map[] = { "3 s", "4 s", "6 s", "" };
+    m_bm_gdur = mk_segmented(col, gdur_map, menu_gdur_cb);
+    lv_obj_t *gn = mk_label(col, &font_small_11, C_DIM,
+                            _("Pendant un coup d'œil, toucher l'écran ou appuyer sur le bouton l'allume normalement."));
+    lv_label_set_long_mode(gn, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(gn, lv_pct(100));
     m_sw_steps = mk_switch_row(col, _("Compteur de pas"), _("Cadran et app Pas"), menu_motion_cb);
     lv_obj_t *mn = mk_label(col, &font_small_11, C_DIM,
                             _("Les deux tournent dans le capteur : quelques µA. Tout coupé, il dort."));
@@ -1613,6 +1661,16 @@ static void menu_sync_from_settings(void)
     lv_obj_set_state(m_sw_nwake, LV_STATE_CHECKED, st->notif_wake);
     lv_obj_set_state(m_sw_steps, LV_STATE_CHECKED, st->step_count);
     lv_obj_set_state(m_sw_wrist, LV_STATE_CHECKED, st->wrist_wake);
+    lv_buttonmatrix_set_button_ctrl(m_bm_wsens, st->wrist_sens <= 2 ? st->wrist_sens : 1, LV_BUTTONMATRIX_CTRL_CHECKED);
+    lv_obj_set_state(m_sw_glance, LV_STATE_CHECKED, st->glance);
+    for (size_t i = 0; i < sizeof(GPCT_VALUES); i++)
+        if (GPCT_VALUES[i] >= st->glance_pct || i + 1 == sizeof(GPCT_VALUES)) {
+            lv_buttonmatrix_set_button_ctrl(m_bm_gpct, i, LV_BUTTONMATRIX_CTRL_CHECKED); break;
+        }
+    for (size_t i = 0; i < sizeof(GDUR_VALUES); i++)
+        if (GDUR_VALUES[i] >= st->glance_s || i + 1 == sizeof(GDUR_VALUES)) {
+            lv_buttonmatrix_set_button_ctrl(m_bm_gdur, i, LV_BUTTONMATRIX_CTRL_CHECKED); break;
+        }
     lv_obj_set_state(m_sw_bt, LV_STATE_CHECKED, st->ble_enabled);
     for (int i = 0; i < 3; i++) {
         if (FACE_ORDER[i] == st->watchface) lv_buttonmatrix_set_button_ctrl(m_bm_face, i, LV_BUTTONMATRIX_CTRL_CHECKED);
@@ -2389,6 +2447,7 @@ static void release_menu(void)
     /* plus aucun pointeur vers des objets détruits */
     m_slider = m_sw_vib = m_sw_bt = m_sw_tap = m_sw_nwake = m_bm_tmo = m_bm_face = m_bm_lang = NULL;
     m_sw_steps = m_sw_wrist = NULL;
+    m_bm_wsens = m_sw_glance = m_bm_gpct = m_bm_gdur = NULL;
     m_bt_info = m_confirm = NULL;
     o_info = o_bar = o_status = o_btn = o_pw = o_prev = o_prev_modal = NULL;
     memset(m_sum, 0, sizeof(m_sum));

@@ -287,6 +287,42 @@ bool motion_on_irq(void)
     return s_wrist && (st & BMA423_WRIST_WEAR_INT);
 }
 
+/* ------------------------------------------------------------------ */
+/* Confirmation du geste : le moteur Bosch n'a pas de réglage de       */
+/* sensibilité. On vérifie que l'écran regarde vers le haut (gravité   */
+/* surtout sur l'axe Z, signe indifférent) et que la montre est tenue  */
+/* immobile un instant ; en sensibilité basse, une montre posée à plat */
+/* (bras sur la table) est aussi refusée. 2 g, 12 bits : 1024 = 1 g.   */
+/* ------------------------------------------------------------------ */
+typedef struct { int samples, gap_ms, zmin, zmax, still; } conf_t;
+static const conf_t CONF[2] = {
+    { 3, 220, 785, 1000, 150 },   /* basse : < 38° de l'horizontale, pas à plat (> 12°), immobile */
+    { 2, 250, 640, 2048, 260 },   /* moyenne : < 50°, presque immobile */
+};
+
+static int iabs(int v) { return v < 0 ? -v : v; }
+
+bool motion_wrist_confirm(int sens)
+{
+    if (sens >= 2 || !s_loaded) return true;
+    const conf_t *c = &CONF[sens < 0 ? 0 : sens];
+    struct bma4_accel a, prev = { 0 };
+    for (int i = 0; i < c->samples; i++) {
+        if (i) vTaskDelay(pdMS_TO_TICKS(c->gap_ms));
+        if (bma4_read_accel_xyz(&a, &s_dev) != BMA4_OK) return true;   /* doute : on allume */
+        int z = iabs(a.z);
+        int ok = z >= c->zmin && z <= c->zmax;
+        if (ok && i && (iabs(a.x - prev.x) > c->still || iabs(a.y - prev.y) > c->still ||
+                        iabs(a.z - prev.z) > c->still)) ok = 0;
+        if (!ok) {
+            ESP_LOGI(TAG, "geste refusé (x %d y %d z %d, échantillon %d)", a.x, a.y, a.z, i);
+            return false;
+        }
+        prev = a;
+    }
+    return true;
+}
+
 void motion_tick(void)
 {
     if (!s_i2c) return;

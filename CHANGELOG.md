@@ -2,6 +2,19 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.28.0 — 2026-11-16
+
+- Raise to wake: **gesture sensitivity** (low / medium / high, default medium) in *Settings ›
+  Motion*. The Bosch gesture has no tuning, so the watch now checks its position before
+  lighting: screen facing up and held still for a moment (medium), stricter and never flat on
+  a table (low), or the gesture alone (high, the 0.27 behaviour). No new wake for 1.5 s after
+  a glance that timed out.
+- **Glance** mode for raise to wake (on by default): the screen lights dimmed (10 / 25 / 50 %,
+  default 25 %) with the CPU left at its 80 MHz minimum, for 3 / 4 / 6 s (default 4 s). A
+  touch (not passed to the interface) or the button wakes it fully: normal brightness, CPU
+  and timeout. Turned off, raise to wake lights the screen normally.
+- Small font: Œ / œ glyphs.
+
 ## 0.27.2 — 2026-11-16
 
 - BLE log prepared before the sensors start, so a BMA423 upload failure at boot stays visible

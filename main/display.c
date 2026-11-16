@@ -21,7 +21,10 @@ static lv_display_t *s_disp;
 static lv_indev_t *s_indev;
 static i2c_master_dev_handle_t s_touch;
 static bool s_on;
-static bool s_turbo;     /* verrou CPU_FREQ_MAX tenu */
+static bool s_turbo;
+static bool s_glance;          /* allumé en coup d'œil */
+static bool s_glance_touch;    /* toucher reçu en coup d'œil, pas encore traité */
+static bool s_swallow;         /* doigt posé pendant le coup d'œil : ignoré jusqu'au relâcher */     /* verrou CPU_FREQ_MAX tenu */
 
 /* Écran allumé sans interaction ni animation depuis TURBO_IDLE_MS : le CPU
  * redescend à POWER_CPU_MIN_MHZ (l'aiguille des secondes se dessine très bien
@@ -71,6 +74,12 @@ static void touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
                 data->state = LV_INDEV_STATE_PRESSED;
             }
         }
+    }
+    /* coup d'œil : le toucher réveille, il n'agit pas sur l'interface */
+    if (data->state == LV_INDEV_STATE_PRESSED && s_glance) { s_glance_touch = true; s_swallow = true; }
+    if (s_swallow) {
+        if (data->state == LV_INDEV_STATE_RELEASED) s_swallow = false;
+        data->state = LV_INDEV_STATE_RELEASED;
     }
     data->point.x = last_x;
     data->point.y = last_y;
@@ -256,7 +265,31 @@ esp_err_t display_init(void)
     return ESP_OK;
 }
 
-void display_set_on(bool on)
+static void set_on(bool on, bool glance, uint8_t level);
+
+void display_set_on(bool on) { set_on(on, false, 0); }
+
+void display_set_glance(uint8_t level) { set_on(true, true, level); }
+
+bool display_is_glance(void) { return s_on && s_glance; }
+
+bool display_glance_take_touch(void)
+{
+    bool t = s_glance_touch;
+    s_glance_touch = false;
+    return t;
+}
+
+void display_glance_end(void)
+{
+    if (!s_on || !s_glance) return;
+    s_glance = false;
+    power_backlight(settings_get()->brightness);
+    if (!s_turbo) { power_hold_active(true); s_turbo = true; }
+    lv_display_trigger_activity(s_disp);
+}
+
+static void set_on(bool on, bool glance, uint8_t level)
 {
     if (on == s_on) return;
     power_screen_segment(on);
@@ -265,8 +298,12 @@ void display_set_on(bool on)
         s_tap.on = false;
         s_tap_phantom = 0;
         power_hold_nosleep(true);                /* LEDC sur REF_TICK : pas de light sleep écran allumé */
-        power_hold_active(true);                 /* CPU max pour le premier rendu */
-        s_turbo = true;
+        s_glance = glance;
+        s_glance_touch = s_swallow = false;
+        if (!glance) {
+            power_hold_active(true);             /* CPU max pour le premier rendu */
+            s_turbo = true;
+        }
         esp_lcd_panel_disp_sleep(s_panel, false);/* SLPOUT (+ délai driver) */
         touch_power(true);
         lv_indev_reset(s_indev, NULL);
@@ -276,7 +313,7 @@ void display_set_on(bool on)
         lv_obj_invalidate(lv_screen_active());
         lv_refr_now(s_disp);
         esp_lcd_panel_disp_on_off(s_panel, true);
-        power_backlight(settings_get()->brightness);
+        power_backlight(glance ? level : settings_get()->brightness);
         s_on = true;
     } else {
         power_backlight(0);
@@ -285,6 +322,7 @@ void display_set_on(bool on)
         lv_indev_enable(s_indev, false);
         touch_power(false);
         s_on = false;
+        s_glance = s_glance_touch = s_swallow = false;
         if (settings_get()->tap_wake) tap_arm(true);
         if (s_turbo) { power_hold_active(false); s_turbo = false; }
         power_hold_nosleep(false);
@@ -295,7 +333,7 @@ bool display_is_on(void) { return s_on; }
 
 void display_perf_tick(void)
 {
-    if (!s_on) return;
+    if (!s_on || s_glance) return;            /* coup d'œil : CPU au minimum */
     bool busy = lv_display_get_inactive_time(s_disp) < TURBO_IDLE_MS
                 || lv_anim_count_running() > 0;
     if (busy != s_turbo) {
@@ -306,5 +344,5 @@ void display_perf_tick(void)
 
 void display_set_brightness(uint8_t level)
 {
-    if (s_on) power_backlight(level);
+    if (s_on && !s_glance) power_backlight(level);
 }

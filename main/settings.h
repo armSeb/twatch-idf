@@ -15,6 +15,10 @@ typedef struct {
     bool    dnd;              /* ne pas déranger : ni vibration ni allumage (sauf appels) */
     bool    step_count;       /* compteur de pas (BMA423) */
     bool    wrist_wake;       /* lever le poignet = allumer l'écran (BMA423) */
+    uint8_t wrist_sens;       /* 0 basse, 1 moyenne, 2 haute (geste Bosch seul) */
+    bool    glance;           /* poignet : écran tamisé et bref, toucher = réveil complet */
+    uint8_t glance_pct;       /* luminosité du coup d'œil, % */
+    uint8_t glance_s;         /* durée du coup d'œil, s */
 } settings_t;
 
 void        settings_load(void);

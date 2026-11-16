@@ -57,7 +57,10 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
 - **Lever le poignet** pour allumer l'écran et **compteur de pas** (accéléromètre BMA423),
   chacun activable dans *Réglages › Mouvement* : les deux tournent dans le moteur de fonctions
   du capteur (microcode Bosch chargé au démarrage), l'ESP32 ne fait rien pendant la marche ;
-  quelques µA activés, capteur en suspend s'ils sont coupés. Les pas du jour s'affichent sur
+  quelques µA activés, capteur en suspend s'ils sont coupés. Le lever de poignet a une
+  sensibilité réglable (basse / moyenne / haute) et un mode *coup d'œil* : écran tamisé
+  (10/25/50 %), CPU laissé au minimum, 3/4/6 s ; un toucher ou le bouton l'allume normalement.
+  Les pas du jour s'affichent sur
   tous les cadrans ; l'app *Pas* montre le jour, la distance et les 7 derniers jours (conservés
   au redémarrage, nouveau jour à minuit heure locale).
 - **Les notifications ne font jamais quitter une app ou un menu** : elles glissent en

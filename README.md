@@ -49,7 +49,9 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 - **Raise to wake** and **step counter** (BMA423 accelerometer), each optional in *Settings ›
   Motion*: both run inside the sensor's own feature engine (Bosch firmware loaded at boot), so
   the ESP32 does nothing while you walk; a few µA when on, sensor suspended when both are off.
-  Today's steps show on every watch face; the *Steps* app shows today, distance and the last
+  Raise to wake has a gesture sensitivity (low / medium / high) and a *glance* mode: the screen
+  lights dimmed (10/25/50 %) with the CPU left at its minimum, for 3/4/6 s; a touch or the
+  button wakes it fully. Today's steps show on every watch face; the *Steps* app shows today, distance and the last
   7 days (kept across restarts, new day at local midnight).
 - **Notifications never pull you out of an app or menu**: they slide in as a banner on top
   (tap to read, swipe up to dismiss); on the watch face they open full screen as before.

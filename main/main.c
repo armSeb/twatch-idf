@@ -70,6 +70,7 @@ static void wake_to_pending_or_home(void);
 
 static void screen_wake(void)
 {
+    display_glance_end();                /* coup d'œil en cours : réveil complet */
     if (!display_is_on()) {
         crashlog_mark('I', 0, 0);
         wclock_resync();                 /* l'heure affichée vient de la RTC */
@@ -83,7 +84,9 @@ static void handle_axp(void)
 {
     uint64_t m = power_handle_irq();
     if (m & AXP_IRQ_PEK_SHORT) {
-        if (!display_is_on()) {
+        if (display_is_glance()) {
+            display_glance_end();            /* comme un toucher : réveil complet */
+        } else if (!display_is_on()) {
             wake_to_pending_or_home();
         } else if (!ui_is_home() && !ui_button_sleeps()) {
             ui_go_home();
@@ -134,6 +137,21 @@ static void wake_to_pending_or_home(void)
     screen_wake();
 }
 
+/* lever le poignet : coup d'œil (tamisé, bref, CPU au minimum) ou réveil normal */
+static int64_t s_glance_off_us;          /* fin du dernier coup d'œil sans interaction */
+
+static void wrist_wake(void)
+{
+    const settings_t *st = settings_get();
+    if (!st->glance) { wake_to_pending_or_home(); return; }
+    if (!ui_open_pending()) ui_go_home_or_app();
+    crashlog_mark('I', 1, 0);
+    wclock_resync();
+    ui_on_wake();
+    int lvl = st->glance_pct * 255 / 100;
+    display_set_glance((uint8_t)(lvl < 6 ? 6 : lvl));
+}
+
 static void handle_event(const app_event_t *ev)
 {
     switch (ev->type) {
@@ -159,9 +177,11 @@ static void handle_event(const app_event_t *ev)
         break;
     case EV_MOTION:
         /* poignet levé : comme un appui sur le bouton, écran éteint seulement */
-        if (motion_on_irq() && !display_is_on()) {
+        if (motion_on_irq() && !display_is_on() &&
+            esp_timer_get_time() - s_glance_off_us > 1500000 &&   /* pas de rallumage en rafale */
+            motion_wrist_confirm(settings_get()->wrist_sens)) {
             crashlog_mark('W', 0, 0);
-            wake_to_pending_or_home();
+            wrist_wake();
         }
         break;
     case EV_NOTIF_REMOVED:
@@ -201,11 +221,15 @@ static void app_task(void *arg)
         if (display_is_on()) {
             display_perf_tick();
             uint32_t next = lv_timer_handler();
+            if (display_glance_take_touch()) display_glance_end();   /* toucher en coup d'œil */
             static int64_t s_last_hchk;
             int64_t tn = esp_timer_get_time();
             if (tn - s_last_hchk > 2000000) { s_last_hchk = tn; crashlog_heap_check('t'); }
-            if (lv_display_get_inactive_time(NULL) > ui_timeout_ms()) {
+            bool glance = display_is_glance();
+            uint32_t tmo = glance ? settings_get()->glance_s * 1000u : ui_timeout_ms();
+            if (lv_display_get_inactive_time(NULL) > tmo) {
                 crashlog_mark('O', 0, 0);
+                if (glance) s_glance_off_us = esp_timer_get_time();
                 display_set_on(false);
                 ui_go_home_or_app();         /* cadran, ou app active (chrono…) */
                 ui_release_idle();

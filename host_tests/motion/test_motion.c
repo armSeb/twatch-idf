@@ -47,6 +47,7 @@ int8_t bma4_set_interrupt_mode(uint8_t m, struct bma4_dev *d) { return 0; }
 int8_t bma423_feature_enable(uint8_t f, uint8_t en, struct bma4_dev *d)
 { if (f & BMA423_STEP_CNTR) STEP_EN = en; if (f & BMA423_WRIST_WEAR) WRIST_EN = en; return 0; }
 int8_t bma423_map_interrupt(uint8_t l, uint16_t m, uint8_t en, struct bma4_dev *d) { return 0; }
+int8_t bma4_read_accel_xyz(struct bma4_accel *a, struct bma4_dev *d) { a->x = 50; a->y = -300; a->z = -900; return 0; }
 int8_t bma423_read_int_status(uint16_t *s, struct bma4_dev *d) { *s = WRIST_EN ? BMA423_WRIST_WEAR_INT : 0; return 0; }
 int8_t bma4_set_advance_power_save(uint8_t e, struct bma4_dev *d) { return 0; }
 int8_t bma4_set_accel_enable(uint8_t e, struct bma4_dev *d) { ACC = e; return 0; }
@@ -106,6 +107,10 @@ phase2:
     TV = false; walk(10); assert(today() == 10);
     /* tout coupé */
     S.step_count = S.wrist_wake = false; motion_apply(); assert(!ACC && !motion_steps_on() && !motion_on_irq());
+    /* confirmation du geste : écran vers le haut, immobile */
+    S.wrist_wake = true; motion_apply();
+    assert(motion_wrist_confirm(0) && motion_wrist_confirm(1) && motion_wrist_confirm(2));
+    S.wrist_wake = false; motion_apply();
     printf("OK (%d écritures NVS)\n", N_writes);
     return 0;
 }

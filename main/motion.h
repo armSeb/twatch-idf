@@ -25,6 +25,9 @@
 esp_err_t motion_init(void);          /* power_init : suspend ou fonctions selon les réglages */
 void      motion_apply(void);         /* après un changement des réglages */
 bool      motion_on_irq(void);        /* EV_MOTION : true = geste « lever le poignet » */
+/* Après un geste : confirme d'après la position de la montre selon la
+ * sensibilité (0 basse … 2 haute = geste Bosch seul). Bloque 0 à ~0,5 s. */
+bool      motion_wrist_confirm(int sens);
 void      motion_tick(void);          /* périodique : minuit, sauvegarde */
 
 bool      motion_ok(void);            /* capteur et microcode prêts */

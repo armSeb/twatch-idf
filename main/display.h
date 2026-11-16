@@ -13,6 +13,13 @@
 
 esp_err_t display_init(void);          /* LCD + tactile + lv_init + display/indev */
 void      display_set_on(bool on);      /* séquence complète veille/réveil */
+/* « coup d'œil » (lever le poignet) : rétroéclairage réduit, CPU laissé au
+ * minimum (pas de verrou CPU max) ; le premier toucher n'est pas transmis à
+ * l'interface, il demande le réveil complet (display_glance_take_touch). */
+void      display_set_glance(uint8_t level);   /* allume en coup d'œil */
+bool      display_is_glance(void);
+void      display_glance_end(void);     /* passe en réveil complet (luminosité, CPU) */
+bool      display_glance_take_touch(void); /* true une fois si un toucher a demandé le réveil */
 bool      display_is_on(void);
 void      display_set_brightness(uint8_t level);
 void      display_perf_tick(void);

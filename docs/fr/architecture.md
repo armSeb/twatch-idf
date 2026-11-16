@@ -145,7 +145,17 @@ l'économie avancée. Les deux coupés : capteur en suspend (~2,5 µA), microcod
 - **Lever le poignet** : la fonction *wrist wear* est routée sur INT1 (GPIO39, mémorisée,
   active haute). Une interruption GPIO sur niveau haut (aussi source de réveil du light sleep)
   poste `EV_MOTION` ; la tâche app lit le statut (ce qui libère la ligne), réarme
-  l'interruption et, écran éteint, l'allume comme un appui sur le bouton.
+  l'interruption et, écran éteint, l'allume. Le geste Bosch n'a pas de réglage de
+  sensibilité : `motion_wrist_confirm()` vérifie la position de la montre. Moyenne = gravité
+  surtout sur Z (écran à moins de 50° de l'horizontale, signe indifférent) sur deux mesures à
+  250 ms, peu de mouvement ; basse = moins de 38°, pas à plat (bras posé sur la table), trois
+  mesures immobiles sur 440 ms ; haute = geste Bosch seul. Pas de nouveau réveil 1,5 s après
+  un coup d'œil expiré.
+- **Coup d'œil** (`display_set_glance()`) : l'écran s'allume à la luminosité du coup d'œil
+  sans verrou `CPU_FREQ_MAX` (CPU à 80 MHz, première image comprise) et s'éteint après la durée
+  réglée. Le pilote tactile avale le premier toucher (jamais transmis à LVGL) et le signale ; la
+  tâche app appelle alors `display_glance_end()` : luminosité normale, verrou CPU, délai
+  normal. Le bouton, une notification ou tout autre `screen_wake()` font de même.
 - **Compteur de pas** : le capteur compte seul. Total du jour = base gardée en NVS + compteur
   du capteur. La tâche app vérifie la date locale à son réveil périodique (≤ 60 s) : à minuit
   le total passe dans un historique de 7 jours et le compteur repart de zéro (plusieurs jours

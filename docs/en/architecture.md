@@ -137,7 +137,16 @@ suspended (~2.5 µA) and the firmware is not loaded.
 - **Raise to wake**: the *wrist wear* feature is mapped to INT1 (GPIO39, latched, active
   high). A high-level GPIO interrupt (also a light-sleep wake source) posts `EV_MOTION`; the
   app task reads the interrupt status (which releases the line), re-arms the interrupt and,
-  with the screen off, wakes it like a button press.
+  with the screen off, wakes it. The Bosch gesture has no sensitivity parameter, so
+  `motion_wrist_confirm()` checks the watch position: medium = gravity mostly on Z (screen
+  within 50° of horizontal, either sign) on two samples 250 ms apart with little movement;
+  low = within 38°, not flat (arm resting on a table), three still samples over 440 ms; high =
+  the Bosch gesture alone. No new wake for 1.5 s after a glance that timed out.
+- **Glance** (`display_set_glance()`): the screen lights at the glance brightness without the
+  `CPU_FREQ_MAX` lock (the CPU stays at its 80 MHz minimum, first frame included) and turns off
+  after the glance duration. The touch driver swallows the first touch (never passed to LVGL)
+  and flags it; the app task then calls `display_glance_end()`: normal brightness, CPU lock,
+  normal timeout. The button, a notification or any other `screen_wake()` does the same.
 - **Step counter**: the sensor counts on its own. Today's total = a base kept in NVS + the
   sensor counter. The app task checks the local date on its periodic wake (≤ 60 s): at
   midnight the total goes into a 7-day history and the counter is reset (several days if the
