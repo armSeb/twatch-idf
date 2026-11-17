@@ -107,7 +107,8 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   display it is advanced in 5-minute steps from the last visit (up to 7 days; tested on the
   host), state saved as one 76-byte NVS blob. Steps of the day turn into shamrocks. The view is
   a tiny sprite engine: an 80×50 buffer of palette indices redrawn at 12.5 frames/s while the
-  screen is on (sky from time-of-day keyframes, stars, moon or sun, drifting clouds, hills,
+  screen is on (sky keyframes placed around the day's real sunrise and sunset — `puca_sun()`,
+  computed for central France with the local offset, so winter evenings get dark early — stars, moon or sun, drifting clouds, hills,
   droppings, the pet, particles), then scaled ×3 into a 240×150 RGB565 canvas in PSRAM.
   Expressions are composed: bodies have no face, shared 3×3 eye and mouth glyphs are placed at
   per-body anchors, so every form gets open/blink/happy/sleep/sad/sick faces. Night with the

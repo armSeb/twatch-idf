@@ -94,6 +94,14 @@ int main(void)
     puca_update(&r, at(1, 0), TZ, 0, 1);
     puca_update(&r, at(400, 12), TZ, 0, 400);
     assert(r.stage == PS_GONE);
+    /* soleil : 17 novembre (heure d'hiver) et 21 juin (heure d'été) au centre de la France */
+    float sr, st;
+    puca_sun(320, 60, &sr, &st);
+    printf("17/11 : lever %.2f h, coucher %.2f h\n", sr, st);
+    assert(sr > 7.8f && sr < 8.4f && st > 16.9f && st < 17.4f);
+    puca_sun(171, 120, &sr, &st);
+    printf("21/06 : lever %.2f h, coucher %.2f h\n", sr, st);
+    assert(sr > 5.7f && sr < 6.2f && st > 21.6f && st < 22.1f);
     printf("Púca : OK (taille de l'état %u o)\n", (unsigned)sizeof(puca_t));
     return 0;
 }

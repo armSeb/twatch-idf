@@ -73,3 +73,7 @@ puca_res_t puca_heal(puca_t *p);
 void       puca_light(puca_t *p);
 uint32_t   puca_rand(puca_t *p);
 int        puca_care_pct(const puca_t *p);               /* moyenne des soins, % */
+/* lever et coucher du soleil en heures locales (centre de la France,
+ * 46,5° N 2,5° E) : yday = jour de l'année (0 = 1er janvier), tz en minutes
+ * (heure d'été comprise) ; précision de quelques minutes */
+void       puca_sun(int yday, int32_t tz_min, float *rise, float *set);

@@ -13,7 +13,7 @@ adult form depends on how you look after it.
 | Where | What |
 |---|---|
 | Top | stage and age (*Baby · 5 h*, *Horse · 4 d*), sound effects on/off (tap the speaker) |
-| Scene | sky following the time (dawn, day, dusk, starry night), the púca wandering about, its droppings; shamrocks top left |
+| Scene | sky following the time and season (dawn and dusk at the real sunrise and sunset, starry night), the púca wandering about, its droppings; shamrocks top left |
 | Gauges | fullness (potato), mood (heart), energy (bolt) |
 | Buttons | **feed**, **play**, **clean**, **heal**, **light** |
 

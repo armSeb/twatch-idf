@@ -192,18 +192,28 @@ static void draw_puca(const puca_body_t *b, int frame, const puca_spr_t *eye, co
 #undef FX
 }
 
-/* ciel : couleurs (haut, bas) et luminosité de la scène selon l'heure */
+/* ciel : couleurs (haut, bas) et luminosité de la scène selon l'heure,
+ * calées sur les vrais lever et coucher du soleil du jour */
 typedef struct { float h; uint32_t top, bot; float lum; } skykey_t;
-static const skykey_t SKY[] = {
-    { 0.0f,  0x0b1030, 0x232a5c, 0.50f },
-    { 5.5f,  0x0b1030, 0x232a5c, 0.50f },
-    { 7.0f,  0x5a4fb0, 0xffb38a, 0.80f },
-    { 9.0f,  0x4aa8ec, 0xc8ecfa, 1.00f },
-    { 17.5f, 0x4aa8ec, 0xc8ecfa, 1.00f },
-    { 19.5f, 0x41307a, 0xff8f5e, 0.80f },
-    { 21.0f, 0x0b1030, 0x232a5c, 0.50f },
-    { 24.0f, 0x0b1030, 0x232a5c, 0.50f },
-};
+#define SK_NIGHT 0x0b1030, 0x232a5c, 0.50f
+#define SK_DAWN  0x5a4fb0, 0xffb38a, 0.80f
+#define SK_DAY   0x4aa8ec, 0xc8ecfa, 1.00f
+#define SK_DUSK  0x41307a, 0xff8f5e, 0.80f
+static skykey_t SKY[8];
+static int s_sky_day = -1;
+
+static void sky_keys(const struct tm *t)
+{
+    if (t->tm_yday == s_sky_day) return;
+    s_sky_day = t->tm_yday;
+    float rise, set;
+    puca_sun(t->tm_yday, tz(), &rise, &set);
+    const skykey_t k[8] = {
+        { 0.0f, SK_NIGHT }, { rise - 1.0f, SK_NIGHT }, { rise, SK_DAWN }, { rise + 1.3f, SK_DAY },
+        { set - 1.0f, SK_DAY }, { set, SK_DUSK }, { set + 1.1f, SK_NIGHT }, { 24.0f, SK_NIGHT },
+    };
+    memcpy(SKY, k, sizeof SKY);
+}
 
 static uint32_t mix(uint32_t a, uint32_t b, float t)
 {
@@ -217,9 +227,10 @@ static uint16_t to565(uint32_t c) { return lv_color_to_u16(lv_color_hex(c)); }
 
 static float day_hour(void)
 {
-    if (!wclock_time_valid()) return 12;
     struct tm t;
+    if (!wclock_time_valid()) { memset(&t, 0, sizeof t); t.tm_yday = 172; sky_keys(&t); return 12; }
     wclock_local_tm(&t);
+    sky_keys(&t);
     return (float)t.tm_hour + t.tm_min / 60.0f;
 }
 

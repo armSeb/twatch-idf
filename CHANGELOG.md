@@ -2,6 +2,13 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.29.2 — 2026-11-17
+
+- Púca: the sky follows the real sunrise and sunset of the day (computed for central France,
+  local time with summer/winter offset) instead of fixed hours: dark by about 17:30 in
+  November, daylight until about 22:00 in June. Dawn and dusk colours sit around those times.
+  The pet still sleeps from 22:00 to 7:00.
+
 ## 0.29.1 — 2026-11-17
 
 - Púca: energy rebalanced — the game tired it far too fast (12 % per game, a dozen games a day

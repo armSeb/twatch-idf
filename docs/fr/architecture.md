@@ -115,7 +115,9 @@ d'ESP-IDF 5.
   affichage il avance par pas de 5 minutes depuis la dernière visite (7 jours au plus ; testé
   sur PC), état gardé en un blob NVS de 76 octets. Les pas du jour deviennent des trèfles. La
   vue est un petit moteur de sprites : un tampon de 80×50 indices de palette redessiné à
-  12,5 images/s écran allumé (ciel par images clés selon l'heure, étoiles, lune ou soleil,
+  12,5 images/s écran allumé (ciel par images clés placées autour des vrais lever et coucher
+  du soleil du jour — `puca_sun()`, calculés pour le centre de la France avec le décalage local,
+  la nuit tombe donc tôt l'hiver — étoiles, lune ou soleil,
   nuages, collines, crottes, l'animal, particules), puis agrandi ×3 dans un canevas RGB565 de
   240×150 en PSRAM. Les expressions sont composées : les corps n'ont pas de visage, des glyphes
   d'yeux et de bouche 3×3 communs sont posés aux ancres de chaque corps, d'où les visages

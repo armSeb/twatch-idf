@@ -13,7 +13,7 @@ et soigner. Sa forme adulte dépend de la façon dont tu t'en occupes.
 | Où | Quoi |
 |---|---|
 | En haut | stade et âge (*Bébé · 5 h*, *Cheval · 4 j*), son des effets (toucher le haut-parleur) |
-| Scène | ciel qui suit l'heure (aube, jour, crépuscule, nuit étoilée), le púca qui se promène, ses crottes ; trèfles en haut à gauche |
+| Scène | ciel qui suit l'heure et la saison (aube et crépuscule aux vrais lever et coucher du soleil, nuit étoilée), le púca qui se promène, ses crottes ; trèfles en haut à gauche |
 | Jauges | satiété (pomme de terre), humeur (cœur), énergie (éclair) |
 | Boutons | **nourrir**, **jouer**, **laver**, **soigner**, **lumière** |
 

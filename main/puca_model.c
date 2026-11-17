@@ -1,5 +1,6 @@
 /* puca_model.c — voir puca_model.h */
 #include "puca_model.h"
+#include <math.h>
 #include <string.h>
 
 #define TICK      300                     /* s */
@@ -220,3 +221,19 @@ puca_res_t puca_heal(puca_t *p)
 }
 
 void puca_light(puca_t *p) { p->light_off = !p->light_off; }
+
+void puca_sun(int yday, int32_t tz_min, float *rise, float *set)
+{
+    const float lat = 46.5f * (float)M_PI / 180, lon = 2.5f;
+    int n = yday + 1;
+    float decl = 23.44f * (float)M_PI / 180 * sinf(2 * (float)M_PI * (284 + n) / 365.0f);
+    float b = 2 * (float)M_PI * (n - 81) / 364.0f;
+    float eot = 9.87f * sinf(2 * b) - 7.53f * cosf(b) - 1.5f * sinf(b);         /* minutes */
+    float c = (sinf(-0.833f * (float)M_PI / 180) - sinf(lat) * sinf(decl)) / (cosf(lat) * cosf(decl));
+    if (c > 1) c = 1;
+    if (c < -1) c = -1;
+    float half = acosf(c) * 180 / (float)M_PI / 15.0f;                          /* heures */
+    float noon = 12.0f - lon / 15.0f - eot / 60.0f + tz_min / 60.0f;
+    *rise = noon - half;
+    *set = noon + half;
+}
