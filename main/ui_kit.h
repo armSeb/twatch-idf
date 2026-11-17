@@ -37,6 +37,7 @@
 #define SYM_HEADPHONES "\xEF\x80\xA5"  /* U+F025 */
 #define SYM_PODCAST   "\xEF\x8B\x8E"   /* U+F2CE */
 #define SYM_WALK      "\xEF\x95\x94"   /* U+F554 */
+#define SYM_GHOST     "\xEF\x9B\xA2"   /* U+F6E2 */
 
 #define UI_ANIM_MS 140
 

@@ -63,6 +63,12 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   Les pas du jour s'affichent sur
   tous les cadrans ; l'app *Pas* montre le jour, la distance et les 7 derniers jours (conservés
   au redémarrage, nouveau jour à minuit heure locale).
+- **Púca**, un animal virtuel en pixel art tiré du folklore irlandais : faire éclore l'œuf, le
+  nourrir (pommes de terre, ou gâteau payé en trèfles), jouer à *gauche ou droite*, nettoyer, le
+  soigner, éteindre la lumière la nuit. Il grandit (bébé, jeune, adulte) et sa forme adulte
+  dépend des soins : lièvre (bien soigné et tu marches beaucoup — 1000 pas rapportent un
+  trèfle), cheval, ou bouc ronchon. Ciel qui suit l'heure, petits airs 8 bits, rien ne tourne en
+  fond (sa vie est calculée à l'ouverture) — voir le [guide Púca](docs/fr/puca.md).
 - **Les notifications ne font jamais quitter une app ou un menu** : elles glissent en
   bannière par-dessus (toucher pour lire, glisser vers le haut pour fermer) ; sur le cadran,
   elles s'ouvrent en plein écran comme avant.
@@ -92,7 +98,7 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Pas, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Pas, Púca, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |
@@ -164,6 +170,7 @@ Pour aller plus loin : [compiler, flasher, tester](docs/fr/building.md).
 | Notes matérielles (broches, alimentations, pièges) | [docs/fr/hardware.md](docs/fr/hardware.md) | [docs/en/hardware.md](docs/en/hardware.md) |
 | WebRX (client OpenWebRX) : réglages et utilisation | [docs/fr/webrx.md](docs/fr/webrx.md) | [docs/en/webrx.md](docs/en/webrx.md) |
 | Radio (webradios) : réglages et utilisation | [docs/fr/radio.md](docs/fr/radio.md) | [docs/en/radio.md](docs/en/radio.md) |
+| Púca (animal virtuel) : sa vie, comment s'en occuper | [docs/fr/puca.md](docs/fr/puca.md) | [docs/en/puca.md](docs/en/puca.md) |
 | Écrire une app, traduire | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) |
 | Historique | | [CHANGELOG.md](CHANGELOG.md) |
 | Contribuer | [CONTRIBUTING.md](CONTRIBUTING.md) | |

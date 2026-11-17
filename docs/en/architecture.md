@@ -102,6 +102,19 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   (19.5 dBm otherwise). Failures retry after 5, 10, 20, 30 then 60 s; a dropped stream
   resumes after 2 s. Tested on the host with the real decoders and a fake HTTP server
   (redirect, `.pls`, ICY titles).
+- **Púca** (`app_puca.c` view, `puca_model.c` life, `puca_gfx.c` art, `puca_sfx.c` sounds;
+  user guide: [puca.md](puca.md)): virtual pet. The model has no task and no timer: on each
+  display it is advanced in 5-minute steps from the last visit (up to 7 days; tested on the
+  host), state saved as one 76-byte NVS blob. Steps of the day turn into shamrocks. The view is
+  a tiny sprite engine: an 80×50 buffer of palette indices redrawn at 12.5 frames/s while the
+  screen is on (sky from time-of-day keyframes, stars, moon or sun, drifting clouds, hills,
+  droppings, the pet, particles), then scaled ×3 into a 240×150 RGB565 canvas in PSRAM.
+  Expressions are composed: bodies have no face, shared 3×3 eye and mouth glyphs are placed at
+  per-body anchors, so every form gets open/blink/happy/sleep/sad/sick faces. Night with the
+  light off dims every palette entry except the "glowing" ones (eyes, moon, stars). All sprites
+  live as text grids in `tools/puca_art.py`, which generates `puca_gfx.c/.h` and a preview
+  sheet. Sound effects are short square-wave tunes played by a one-shot task through the I2S
+  stream.
 - **Language change** rebuilds every screen in place, without a restart.
 - LVGL objects are allocated from the heap; allocations above 4 KB go to PSRAM, the internal
   RAM is kept for stacks, DMA buffers and the radio.

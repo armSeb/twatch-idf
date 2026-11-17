@@ -2,6 +2,24 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.29.0 — 2026-11-17
+
+- New **Púca** app: a pixel-art virtual pet from Irish folklore. Hatch the egg (six taps),
+  then feed it (meal, or cake paid in shamrocks), play *left or right?* (five rounds), clean up
+  its droppings, heal it, turn off the light at night, pet it. Baby → young (24 h) → adult
+  (72 h) with an animated evolution; the adult form follows the care received: hare (well cared
+  for and many steps), horse (well cared for) or grumpy goat (neglected). Abandoned for 48 h,
+  it returns to the fairy mound and a new egg appears.
+- Scene redrawn at 12.5 frames/s while visible: sky following the time of day (dawn, day,
+  dusk, starry night with moon), drifting clouds, hills, standing stone and fairy-ring
+  mushrooms; composed expressions (blink, happy, asleep, sad with rain cloud, sick with swirl),
+  particles (hearts, sparkles, Zzz, shells), glowing eyes in the dark. 8-bit sound effects
+  (toggle in the app). Steps of the day earn shamrocks (one per 1000).
+- No background cost: its life is computed when the app opens, in 5-minute steps since the
+  last visit (up to 7 days).
+- Art source in `tools/puca_art.py` (generates `main/puca_gfx.c/.h` and a preview sheet).
+- Fonts: ghost (launcher icon) and mute glyphs.
+
 ## 0.28.3 — 2026-11-16
 
 - *About*: AXP202 ADC and TS pin registers (0x82–0x84) with the TS current source decoded

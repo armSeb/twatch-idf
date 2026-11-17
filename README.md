@@ -53,6 +53,12 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   lights dimmed (10/25/50 %) with the CPU left at its minimum, for 3/4/6 s; a touch or the
   button wakes it fully. Today's steps show on every watch face; the *Steps* app shows today, distance and the last
   7 days (kept across restarts, new day at local midnight).
+- **Púca**, a pixel-art virtual pet from Irish folklore: hatch the egg, feed it (potatoes, or
+  cake paid in shamrocks), play *left or right*, clean up, heal it, turn off the light at night.
+  It grows from baby to young to adult, and its adult form depends on your care: hare (well
+  cared for and you walk a lot — 1000 steps earn a shamrock), horse, or grumpy goat. Day/night
+  sky following the time, 8-bit sound effects, nothing running in the background (its life is
+  computed when you open it) — see the [Púca guide](docs/en/puca.md).
 - **Notifications never pull you out of an app or menu**: they slide in as a banner on top
   (tap to read, swipe up to dismiss); on the watch face they open full screen as before.
 - **Quick controls**: Bluetooth, **Do not disturb**, torch, now playing, brightness.
@@ -78,7 +84,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 |---|---|---|
 | Watch face | swipe ↑ | Notifications (close: ↓ or →) |
 | Watch face | swipe ↓ | Quick controls (close: ↑ or →) |
-| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Steps, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Carrier, Battery, Settings |
+| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Steps, Púca, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Carrier, Battery, Settings |
 | Watch face | long press | Choose the watch face |
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |
@@ -149,6 +155,7 @@ More: [building, flashing and tests](docs/en/building.md).
 | Hardware notes (pins, power rails, pitfalls) | [docs/en/hardware.md](docs/en/hardware.md) | [docs/fr/hardware.md](docs/fr/hardware.md) |
 | WebRX (OpenWebRX client): setup and use | [docs/en/webrx.md](docs/en/webrx.md) | [docs/fr/webrx.md](docs/fr/webrx.md) |
 | Radio (web radios): setup and use | [docs/en/radio.md](docs/en/radio.md) | [docs/fr/radio.md](docs/fr/radio.md) |
+| Púca (virtual pet): how it lives and how to care for it | [docs/en/puca.md](docs/en/puca.md) | [docs/fr/puca.md](docs/fr/puca.md) |
 | Writing apps, translating | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) |
 | Changes | [CHANGELOG.md](CHANGELOG.md) | |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) | |

@@ -110,6 +110,20 @@ d'ESP-IDF 5.
   puissance d'émission Wi-Fi descend à 11 dBm (19,5 dBm sinon). Les échecs sont réessayés après
   5, 10, 20, 30 puis 60 s ; un flux coupé reprend après 2 s. Testé sur PC avec les vrais
   décodeurs et un faux serveur HTTP (redirection, `.pls`, titres ICY).
+- **Púca** (vue `app_puca.c`, vie `puca_model.c`, dessins `puca_gfx.c`, sons `puca_sfx.c` ;
+  guide : [puca.md](puca.md)) : animal virtuel. Le modèle n'a ni tâche ni minuteur : à chaque
+  affichage il avance par pas de 5 minutes depuis la dernière visite (7 jours au plus ; testé
+  sur PC), état gardé en un blob NVS de 76 octets. Les pas du jour deviennent des trèfles. La
+  vue est un petit moteur de sprites : un tampon de 80×50 indices de palette redessiné à
+  12,5 images/s écran allumé (ciel par images clés selon l'heure, étoiles, lune ou soleil,
+  nuages, collines, crottes, l'animal, particules), puis agrandi ×3 dans un canevas RGB565 de
+  240×150 en PSRAM. Les expressions sont composées : les corps n'ont pas de visage, des glyphes
+  d'yeux et de bouche 3×3 communs sont posés aux ancres de chaque corps, d'où les visages
+  ouvert / clignement / content / endormi / triste / malade pour toutes les formes. La nuit,
+  lumière éteinte, toute la palette s'assombrit sauf les couleurs « lumineuses » (yeux, lune,
+  étoiles). Tous les sprites sont des grilles de texte dans `tools/puca_art.py`, qui génère
+  `puca_gfx.c/.h` et une planche d'aperçu. Les effets sonores sont de courts airs en onde
+  carrée joués par une tâche éphémère sur le flux I2S.
 - **Changer de langue** reconstruit tous les écrans sur place, sans redémarrer.
 - Les objets LVGL sont alloués sur le tas ; les allocations de plus de 4 Ko vont en PSRAM, la
   RAM interne est gardée pour les piles, les tampons DMA et la radio.

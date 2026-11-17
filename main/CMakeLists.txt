@@ -42,6 +42,10 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/audio_fx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/app_radio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/app_steps.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_puca.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/puca_model.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/puca_gfx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/puca_sfx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/motion.c
     ${CMAKE_CURRENT_SOURCE_DIR}/radio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/webrx.c
