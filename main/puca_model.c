@@ -93,7 +93,7 @@ static void tick(puca_t *p, uint32_t t, int32_t tz_min)
         if (!p->light_off) add(&p->mood, -2);             /* dort mal à la lumière */
     } else {
         add(&p->hunger, -8);                               /* ~10 h de plein à vide */
-        add(&p->energy, -4 - (p->sick ? 3 : 0));
+        add(&p->energy, -3 - (p->sick ? 3 : 0));          /* ~28 h de plein à vide */
         add(&p->mood, -5 - 2 * p->poops - (p->sick ? 5 : 0) - (p->hunger == 0 ? 5 : 0));
         if (p->digest) {
             p->digest_s += TICK;
@@ -151,7 +151,7 @@ bool puca_egg_tap(puca_t *p, time_t now)
     if (++p->egg_taps < PUCA_HATCH_TAPS) return false;
     p->stage = p->prev_stage = PS_BABY;
     p->born = p->last = (uint32_t)now;
-    p->hunger = 700; p->mood = 800; p->energy = 900;
+    p->hunger = 700; p->mood = 800; p->energy = PUCA_MAX;
     p->rng ^= (uint32_t)now;
     return true;
 }
@@ -184,14 +184,14 @@ puca_res_t puca_play_ok(const puca_t *p, time_t now, int32_t tz_min)
 {
     if (puca_asleep(p, now, tz_min)) return PR_ASLEEP;
     if (p->sick) return PR_SICK;
-    if (p->energy < 150) return PR_TIRED;
+    if (p->energy < 100) return PR_TIRED;
     return PR_OK;
 }
 
 void puca_play_done(puca_t *p, int wins, int rounds)
 {
     p->games++;
-    add(&p->energy, -120);
+    add(&p->energy, -60);                                 /* une partie : 6 % */
     if (wins * 2 > rounds) {
         p->wins++;
         if (p->clovers < 999) p->clovers++;

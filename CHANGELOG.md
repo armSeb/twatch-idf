@@ -2,6 +2,13 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.29.1 — 2026-11-17
+
+- Púca: energy rebalanced — the game tired it far too fast (12 % per game, a dozen games a day
+  was impossible). Now 6 % per game, about 3.6 % per waking hour instead of 4.8 %, full energy
+  at hatching (was 90 %), too tired to play below 10 % (was 15 %). A night with the light off
+  still refills it.
+
 ## 0.29.0 — 2026-11-17
 
 - New **Púca** app: a pixel-art virtual pet from Irish folklore. Hatch the egg (six taps),
