@@ -345,7 +345,7 @@ static const tr_t EN[] = {
     { "Gauche ou droite ?", "Left or right?" },
     { "Tout est propre", "All clean" },
     { "Il va très bien", "It's perfectly fine" },
-    { "Il fait jour, il est réveillé", "It's daytime, it's awake" },
+    { "Trop tôt pour dormir", "Too early for bed" },
     { "Œuf", "Egg" },
     { "Bébé", "Baby" },
     { "Jeune", "Young" },

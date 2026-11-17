@@ -26,8 +26,9 @@ et soigner. Sa forme adulte dépend de la façon dont tu t'en occupes.
    - **lièvre** — bien soigné (≥ 60 %) et tu marches beaucoup (≥ 5000 pas par jour en moyenne) ;
    - **cheval** — bien soigné ;
    - **bouc** ronchon — soins négligés.
-4. Il **dort de 22 h à 7 h**. Lumière éteinte (bouton lune), il récupère mieux ; laissée
-   allumée, il dort mal. Elle se rallume seule au réveil.
+4. Il **s'endort seul à 22 h** et se réveille à 7 h. Dès le coucher du soleil (ou 20 h), le
+   bouton lune le **met au lit plus tôt**, lumière éteinte. Lumière éteinte il récupère mieux ;
+   laissée allumée, il dort mal. Rallumer avant 22 h le réveille. Elle se rallume seule le matin.
 
 Rien ne tourne en tâche de fond : à l'ouverture de l'app, sa vie depuis ta dernière visite est
 calculée d'un coup, par pas de 5 minutes (au plus 7 jours). Aucun coût sur la batterie.
@@ -41,7 +42,7 @@ calculée d'un coup, par pas de 5 minutes (au plus 7 jours). Aucun coût sur la 
 | **Jouer** : *gauche ou droite ?* | cinq manches : devine de quel côté il va regarder. 3 réussies ou plus : humeur +30 % et **un trèfle**. Fatigue un peu ; impossible s'il est malade ou épuisé |
 | **Laver** | enlève les crottes (le bouton se colore quand il y en a au moins deux) |
 | **Soigner** (potion) | guérit ; le bouton devient violet quand il est malade |
-| **Lumière** | la nuit seulement |
+| **Lumière** (lune) | le soir : le coucher ; endormi : éteindre ou rallumer |
 | **Le caresser** (toucher le púca) | petit bond et un cœur |
 
 **Trèfles** : un trèfle par tranche de 1000 pas du jour (compteur de pas activé dans

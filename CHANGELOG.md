@@ -2,6 +2,13 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.29.3 — 2026-11-17
+
+- Púca: **bedtime**. From sunset (or 8 pm) the moon button puts it to bed early, light off; it
+  sleeps (and recovers) until 7 am. Before sunset: "Too early for bed". Asleep, the button
+  switches the light; turning it back on before 10 pm wakes it up. It still falls asleep by
+  itself at 10 pm. The saved state gains one field; a 0.29.0–0.29.2 pet is kept as is.
+
 ## 0.29.2 — 2026-11-17
 
 - Púca: the sky follows the real sunrise and sunset of the day (computed for central France,

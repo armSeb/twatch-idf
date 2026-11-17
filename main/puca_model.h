@@ -45,7 +45,9 @@ typedef struct {
     uint32_t care_sum, care_n;
     uint32_t steps_day, steps_seen, steps_total;
     uint32_t rng;
+    uint32_t bed;                       /* couché tôt (UTC), 0 sinon ; v2 */
 } puca_t;
+#define PUCA_V1_SIZE 76                 /* état v1 (sans « bed ») : relu tel quel */
 
 typedef enum {
     PR_OK = 0,
@@ -55,6 +57,7 @@ typedef enum {
     PR_TIRED,       /* trop fatigué pour jouer */
     PR_SICK,        /* malade : pas de jeu */
     PR_NOTHING,     /* rien à faire */
+    PR_TOO_EARLY,   /* pas encore la nuit : trop tôt pour le coucher */
 } puca_res_t;
 
 void       puca_new(puca_t *p);                          /* œuf neuf */
@@ -70,6 +73,10 @@ puca_res_t puca_play_ok(const puca_t *p, time_t now, int32_t tz_min);
 void       puca_play_done(puca_t *p, int wins, int rounds);
 puca_res_t puca_clean(puca_t *p);
 puca_res_t puca_heal(puca_t *p);
+/* bouton lune : le soir (dès le coucher du soleil) il le met au lit, lumière
+ * éteinte ; endormi, il éteint ou rallume — rallumer avant 22 h le réveille */
+puca_res_t puca_bedtime(puca_t *p, time_t now, int32_t tz_min);
+bool       puca_evening(time_t now, int32_t tz_min);   /* soleil couché (ou ≥ 20 h) */
 void       puca_light(puca_t *p);
 uint32_t   puca_rand(puca_t *p);
 int        puca_care_pct(const puca_t *p);               /* moyenne des soins, % */

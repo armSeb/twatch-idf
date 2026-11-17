@@ -56,7 +56,10 @@ static void load(void)
     size_t n = sizeof m;
     bool ok = false;
     if (nvs_open("puca", NVS_READONLY, &h) == ESP_OK) {
-        ok = nvs_get_blob(h, "st", &m, &n) == ESP_OK && n == sizeof m && m.ver == 1;
+        memset(&m, 0, sizeof m);
+        ok = nvs_get_blob(h, "st", &m, &n) == ESP_OK &&
+             ((n == sizeof m && m.ver == 2) || (n == PUCA_V1_SIZE && m.ver == 1));
+        if (ok) m.ver = 2;                     /* v1 : « bed » à 0 */
         nvs_close(h);
     }
     if (!ok) {
@@ -666,8 +669,7 @@ static void act_cb(lv_event_t *e)
         save(); anim(A_HEAL); sfx(SFX_HEAL);
         break;
     case 4:                                  /* lumière */
-        if (!asleep()) { say(_("Il fait jour, il est réveillé"), 1600); return; }
-        puca_light(&m);
+        if (puca_bedtime(&m, now, tz()) == PR_TOO_EARLY) { say(_("Trop tôt pour dormir"), 1600); return; }
         save(); sfx(SFX_LIGHT);
         break;
     }
@@ -791,7 +793,8 @@ static void refresh_ui(void)
     for (int i = 0; i < 3; i++) lv_bar_set_value(v_bar[i], alive ? vals[i] / 10 : 0, LV_ANIM_ON);
 
     bool sl = asleep();
-    const bool en[5] = { alive && !sl, alive && !sl && !m.sick, alive && m.poops > 0, alive && m.sick, alive && sl };
+    bool eve = wclock_time_valid() && puca_evening(time(NULL), tz());
+    const bool en[5] = { alive && !sl, alive && !sl && !m.sick, alive && m.poops > 0, alive && m.sick, alive && (sl || eve) };
     for (int i = 0; i < 5; i++) lv_obj_set_style_opa(v_btn[i], en[i] ? LV_OPA_COVER : LV_OPA_40, 0);
     /* le soin clignote quand il est malade */
     lv_obj_set_style_bg_color(v_btn[3], m.sick ? lv_color_hex(0x5b2a86) : C_CARD, 0);

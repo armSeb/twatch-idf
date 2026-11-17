@@ -26,8 +26,10 @@ adult form depends on how you look after it.
    - **hare** — well cared for (≥ 60 %) and you walk a lot (≥ 5000 steps a day on average);
    - **horse** — well cared for;
    - grumpy **goat** — neglected.
-4. It **sleeps from 10 pm to 7 am**. With the light off (moon button) it rests better; left
-   on, it sleeps badly. The light comes back on by itself in the morning.
+4. It **falls asleep by itself at 10 pm** and wakes at 7 am. From sunset (or 8 pm) the moon
+   button **puts it to bed earlier**, light off. With the light off it rests better; left on,
+   it sleeps badly. Turning the light back on before 10 pm wakes it up. The light comes back on
+   by itself in the morning.
 
 Nothing runs in the background: when you open the app, its life since your last visit is
 computed in one go, in 5-minute steps (up to 7 days). No battery cost.
@@ -41,7 +43,7 @@ computed in one go, in 5-minute steps (up to 7 days). No battery cost.
 | **Play**: *left or right?* | five rounds: guess which way it will look. 3 or more right: mood +30 % and **one shamrock**. A bit tiring; not when sick or exhausted |
 | **Clean** | removes droppings (the button lights up from two) |
 | **Heal** (potion) | cures it; the button turns purple when it is sick |
-| **Light** | at night only |
+| **Light** (moon) | in the evening: put it to bed; asleep: light off or on |
 | **Pet it** (tap the púca) | little hop and a heart |
 
 **Shamrocks**: one per 1000 steps of the day (step counter on in *Settings › Motion*), one per

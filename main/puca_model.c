@@ -1,7 +1,10 @@
 /* puca_model.c — voir puca_model.h */
 #include "puca_model.h"
 #include <math.h>
+#include <stddef.h>
 #include <string.h>
+
+_Static_assert(offsetof(puca_t, bed) == PUCA_V1_SIZE, "état v1 : préfixe inchangé");
 
 #define TICK      300                     /* s */
 #define MAX_GAP   (7 * 86400)
@@ -31,7 +34,7 @@ void puca_new(puca_t *p)
     uint8_t snd = p->ver ? p->sound : 1;
     uint32_t r = p->rng;
     memset(p, 0, sizeof *p);
-    p->ver = 1;
+    p->ver = 2;
     p->stage = p->prev_stage = PS_EGG;
     p->sound = snd;
     p->rng = r ? r : 0x1234567u;
@@ -51,9 +54,50 @@ static bool night_at(time_t t, int32_t tz_min)
     return h >= NIGHT_FROM || h < NIGHT_TO;
 }
 
+/* réveil à 7 h locales après l'heure du coucher */
+static uint32_t wake_after(uint32_t bed, int32_t tz_min)
+{
+    int64_t l = (int64_t)bed + (int64_t)tz_min * 60;
+    int64_t s = l % 86400;
+    if (s < 0) s += 86400;
+    int64_t w = l - s + NIGHT_TO * 3600;
+    if (l >= w) w += 86400;
+    return (uint32_t)(w - (int64_t)tz_min * 60);
+}
+
+static bool sleeping_at(const puca_t *p, time_t t, int32_t tz_min)
+{
+    if (night_at(t, tz_min)) return true;
+    return p->bed && (uint32_t)t >= p->bed && (uint32_t)t < wake_after(p->bed, tz_min);
+}
+
 bool puca_asleep(const puca_t *p, time_t now, int32_t tz_min)
 {
-    return p->stage >= PS_BABY && p->stage <= PS_ADULT && night_at(now, tz_min);
+    return p->stage >= PS_BABY && p->stage <= PS_ADULT && sleeping_at(p, now, tz_min);
+}
+
+bool puca_evening(time_t now, int32_t tz_min)
+{
+    time_t l = now + (time_t)tz_min * 60;
+    struct tm t;
+    gmtime_r(&l, &t);
+    float h = t.tm_hour + t.tm_min / 60.0f, rise, set;
+    puca_sun(t.tm_yday, tz_min, &rise, &set);
+    return h >= set || h >= 20.0f || h < NIGHT_TO;
+}
+
+puca_res_t puca_bedtime(puca_t *p, time_t now, int32_t tz_min)
+{
+    if (p->stage < PS_BABY || p->stage > PS_ADULT) return PR_NOTHING;
+    if (puca_asleep(p, now, tz_min)) {
+        p->light_off = !p->light_off;
+        if (!p->light_off && !night_at(now, tz_min)) p->bed = 0;   /* rallumé tôt : il se lève */
+        return PR_OK;
+    }
+    if (!puca_evening(now, tz_min)) return PR_TOO_EARLY;
+    p->bed = (uint32_t)now;
+    p->light_off = 1;
+    return PR_OK;
 }
 
 uint32_t puca_age_h(const puca_t *p, time_t now)
@@ -84,9 +128,9 @@ static void grow(puca_t *p, uint32_t t)
 
 static void tick(puca_t *p, uint32_t t, int32_t tz_min)
 {
-    bool night = night_at(t, tz_min);
-    bool was_night = night_at(t - TICK, tz_min);
-    if (was_night && !night) p->light_off = 0;            /* réveil : lumière rallumée */
+    bool night = sleeping_at(p, t, tz_min);
+    bool was_night = sleeping_at(p, t - TICK, tz_min);
+    if (was_night && !night) { p->light_off = 0; p->bed = 0; }   /* réveil : lumière rallumée */
 
     if (night) {
         add(&p->hunger, -2);

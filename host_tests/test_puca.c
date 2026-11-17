@@ -94,6 +94,23 @@ int main(void)
     puca_update(&r, at(1, 0), TZ, 0, 1);
     puca_update(&r, at(400, 12), TZ, 0, 400);
     assert(r.stage == PS_GONE);
+    /* le coucher plus tôt : refusé l'après-midi, accepté après le coucher du soleil,
+     * il dort jusqu'à 7 h ; rallumer avant 22 h le réveille */
+    puca_t b = { 0 };
+    puca_new(&b);
+    for (int i = 0; i < PUCA_HATCH_TAPS; i++) puca_egg_tap(&b, at(0, 9));
+    assert(puca_bedtime(&b, at(0, 15), TZ) == PR_TOO_EARLY);
+    assert(puca_evening(at(0, 19), TZ) && puca_bedtime(&b, at(0, 19), TZ) == PR_OK);
+    assert(puca_asleep(&b, at(0, 20), TZ) && b.light_off);
+    assert(puca_bedtime(&b, at(0, 20), TZ) == PR_OK && !b.light_off && !puca_asleep(&b, at(0, 20), TZ));
+    assert(puca_bedtime(&b, at(0, 20) + 60, TZ) == PR_OK);
+    puca_update(&b, at(0, 21), TZ, 0, 0);
+    uint16_t eb = b.energy;
+    puca_update(&b, at(0, 21) + 1800, TZ, 0, 0);
+    assert(b.energy > eb);                                 /* il récupère dès 21 h */
+    puca_update(&b, at(1, 8), TZ, 0, 1);
+    assert(!puca_asleep(&b, at(1, 8), TZ) && b.bed == 0 && !b.light_off);
+
     /* soleil : 17 novembre (heure d'hiver) et 21 juin (heure d'été) au centre de la France */
     float sr, st;
     puca_sun(320, 60, &sr, &st);
