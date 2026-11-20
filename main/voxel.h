@@ -21,7 +21,7 @@ typedef struct {
     float x, y;                      /* position sur la carte */
     float h;                         /* altitude */
     float a;                         /* cap (rad) */
-    float roll;                      /* inclinaison : décalage d'horizon par colonne */
+    float roll;                      /* inclinaison (lignes par colonne, pour 120 colonnes) */
     float pitch;                     /* lignes : + = horizon plus bas (nez levé) */
 } vox_cam_t;
 
@@ -32,9 +32,13 @@ float vox_ground(float x, float y);  /* hauteur du sol (eau comprise), interpol�
 /* un point de départ dans une vallée dégagée, et le cap le plus libre */
 void  vox_find_valley(float *x, float *y, float *dir);
 
-/* fy : échelle verticale (≈ 70 pour 120 lignes) ; depth (optionnel) : z par
- * pixel, 255 = ciel ; t : temps (s) pour les reflets et les nuages */
-void  vox_render(gsurf_t *s, uint8_t *depth, const vox_cam_t *c, float fy, float t);
+/* fy : échelle verticale (≈ 70 pour 120 lignes) ; t : temps (s) pour les
+ * reflets et les nuages ; occ (optionnel, w × VOX_OCC octets) : pour chaque
+ * colonne, la ligne du haut du relief à quelques distances, pour cacher les
+ * objets derrière les collines (vox_visible) */
+#define VOX_OCC 16
+void  vox_render(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t);
+bool  vox_visible(const uint8_t *occ, int w, int x, int y, float z);
 /* projection d'un point du monde, false s'il est derrière la caméra */
 bool  vox_project(const gsurf_t *s, const vox_cam_t *c, float fy, float wx, float wy, float wh,
                   float *sx, float *sy, float *z);

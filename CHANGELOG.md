@@ -2,6 +2,18 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.31.1 — 2026-11-20
+
+- Soar: about 4 frames/s on the watch, now several times faster. The terrain frame buffer did
+  not fit in internal RAM and fell back to PSRAM, written column by column (one cache miss per
+  pixel), plus a PSRAM depth buffer. Now: 160×120 render in internal RAM (widened ×1.5), each
+  column built in a local buffer then copied, height and colour merged into one 32-bit map
+  word (one PSRAM read per sample), and a 2.5 KB per-column occlusion table instead of the
+  depth buffer. The demo landscape benefits too.
+- Soar: **pause** by tapping the score corner (top left), with a **Quit** button and the frame
+  rate. Leaving during a game was nearly impossible: at 4 frames/s the swipe was not
+  recognised and turned into a boost tap.
+
 ## 0.31.0 — 2026-11-20
 
 - **Demo** rewritten and doubled in length (about 2 min, 64 bars): particle title, textured

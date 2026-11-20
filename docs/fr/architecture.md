@@ -137,8 +137,10 @@ d'ESP-IDF 5.
   `voxgen` de basse priorité sur le cœur 0 — relief, rivières, prés de Voronoï bordés de haies,
   forêts, fermes, éclairage avec ombres portées par lancer de rayon vers le soleil — puis rendu
   colonne par colonne avec tampon de hauteur, interpolation au premier plan, brume, reflets,
-  nuages projetés, roulis par colonne et tampon de profondeur optionnel. La démo rend en
-  120×120 doublé, le jeu en 240×120 aux lignes doublées. Les deux tiennent 240 MHz tant
+  nuages projetés, roulis par colonne et table d'occultation optionnelle (haut du relief à 16
+  distances par colonne). Après la génération, hauteur et couleur sont fusionnées dans un mot
+  de 32 bits par case (1 Mo) : une seule lecture PSRAM par échantillon, c'est ce qui limite
+  le débit. La démo rend en 120×120 doublé, le jeu en 160×120 élargi ×1,5. Les deux tiennent 240 MHz tant
   qu'elles sont affichées et lisent l'accéléromètre en direct (`motion_accel_*` : le capteur
   est allumé à 100 Hz si ni pas ni poignet ne l'utilisent, puis remis dans son état). Le
   record d'Envol est un blob NVS (`flight`/`best`).

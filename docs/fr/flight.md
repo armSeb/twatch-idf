@@ -17,6 +17,8 @@ On survole l'Irlande au coucher du soleil en pilotant au poignet, et on traverse
 3. **Penché à gauche / à droite** : virage (l'avion s'incline). **Penché vers soi / vers
    l'avant** : monter / descendre.
 4. **Toucher l'écran** : turbo (×1,7 pendant 1,2 s), la jauge *TURBO* se recharge en 4 s.
+5. **Toucher le coin du score** (en haut à gauche, sous le symbole ⏸) : pause, avec le bouton
+   **QUITTER** et le nombre d'images par seconde. Toucher ailleurs reprend la partie.
 
 ## Règles
 
@@ -36,8 +38,12 @@ reste allumé et le processeur à 240 MHz pendant le jeu ; quitter l'app abandon
 
 ## Comment c'est fait
 
-Le relief est rendu en 240×120 (pleine largeur, lignes doublées à l'écran : le voxel space
-est fait de colonnes, la résolution horizontale compte le plus), avec un tampon de profondeur
-pour que les anneaux se cachent derrière les collines. L'interface (chrono, score, jauge,
+Le relief est rendu en 160×120 dans un tampon en RAM interne, élargi ×1,5 et aux lignes
+doublées à l'écran (le voxel space est fait de colonnes, la résolution horizontale compte le
+plus). Chaque colonne est d'abord calculée dans un petit tampon local, puis recopiée d'un
+bloc ; la carte garde hauteur et couleur dans le même mot de 32 bits, si bien qu'un
+échantillon ne coûte qu'une lecture en PSRAM. Pour cacher les anneaux derrière les collines,
+le rendu note pour chaque colonne le haut du relief à 16 distances (2,5 Ko au lieu d'un
+tampon de profondeur complet). L'interface (chrono, score, jauge,
 flèche, messages) est dessinée ensuite à pleine résolution. Effets : reflet du soleil dans
 l'objectif, lignes de vitesse en turbo, gerbes d'étincelles, secousse et éclair rouge au crash.

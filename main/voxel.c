@@ -14,7 +14,10 @@
 #define CLOUD_N 128
 
 static uint8_t *hmap;                /* hauteurs (sous VOX_SEA : eau) */
-static uint16_t *cmap;               /* couleurs éclairées */
+static uint16_t *cmap;               /* couleurs éclairées (génération) */
+/* carte de rendu : couleur (bits 0–15) et hauteur (16–23) dans le même mot,
+ * une seule ligne de cache PSRAM lue par échantillon */
+static uint32_t *vmap;
 static uint8_t *cloud;               /* densité des nuages 128×128 */
 static float *lat;                   /* treillis du bruit 64×64 */
 static volatile int s_prog = -1;     /* -1 : rien ; 0..100 */
@@ -195,7 +198,14 @@ static void generate(void)
     gen_height();
     if (!s_abort) gen_color();
     if (!s_abort) gen_clouds();
-    if (!s_abort) s_prog = 100;
+    if (!s_abort) {
+        for (int i = 0; i < N * N; i++) vmap[i] = cmap[i] | (uint32_t)hmap[i] << 16;
+#ifdef ESP_PLATFORM
+        heap_caps_free(hmap); heap_caps_free(cmap);       /* 768 Ko rendus */
+        hmap = NULL; cmap = NULL;
+#endif
+        s_prog = 100;
+    }
 }
 
 #ifdef ESP_PLATFORM
@@ -209,12 +219,13 @@ static void gen_task(void *arg)
 
 bool vox_gen_start(uint32_t seed)
 {
-    if (hmap) return true;
+    if (vmap) return true;
     hmap = heap_caps_malloc(N * N, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     cmap = heap_caps_malloc(N * N * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    vmap = heap_caps_malloc(N * N * 4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     cloud = heap_caps_malloc(CLOUD_N * CLOUD_N, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     lat = heap_caps_malloc(64 * 64 * sizeof(float), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!hmap || !cmap || !cloud || !lat) { vox_free(); return false; }
+    if (!hmap || !cmap || !vmap || !cloud || !lat) { vox_free(); return false; }
     s_seed = seed;
     s_abort = false;
     s_prog = 0;
@@ -238,16 +249,13 @@ void vox_free(void)
 #ifdef ESP_PLATFORM
     for (int i = 0; i < 300 && s_task; i++) vTaskDelay(pdMS_TO_TICKS(10));
 #endif
-    heap_caps_free(hmap); heap_caps_free(cmap); heap_caps_free(cloud); heap_caps_free(lat);
-    hmap = NULL; cmap = NULL; cloud = NULL; lat = NULL;
+    heap_caps_free(hmap); heap_caps_free(cmap); heap_caps_free(vmap); heap_caps_free(cloud); heap_caps_free(lat);
+    hmap = NULL; cmap = NULL; vmap = NULL; cloud = NULL; lat = NULL;
     s_prog = -1;
 }
 
-static inline float hat(int x, int y)
-{
-    int h = hmap[(y & MASK) * N + (x & MASK)];
-    return h < VOX_SEA ? VOX_SEA : h;
-}
+static inline int hof(uint32_t v) { int h = (int)(v >> 16); return h < VOX_SEA ? VOX_SEA : h; }
+static inline float hat(int x, int y) { return hof(vmap[(y & MASK) * N + (x & MASK)]); }
 
 float vox_ground(float x, float y)
 {
@@ -291,7 +299,9 @@ static inline float fsin(float x)                    /* sinus approché par tabl
     return s_sin[(int)(x * (256 / 6.2831853f)) & 255];
 }
 
-void vox_render(gsurf_t *s, uint8_t *depth, const vox_cam_t *c, float fy, float t)
+static const float OCC_Z[VOX_OCC] = { 6, 10, 15, 22, 30, 40, 52, 66, 82, 100, 125, 155, 190, 230, 280, 1000 };
+
+void vox_render(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t)
 {
     const int W = s->w, H = s->h;
     if (s_sin[64] == 0) for (int i = 0; i < 256; i++) s_sin[i] = sinf(i * 6.2831853f / 256);
@@ -306,62 +316,65 @@ void vox_render(gsurf_t *s, uint8_t *depth, const vox_cam_t *c, float fy, float 
         sky[i] = i < 18 ? g_blend(low, mid, i * 256 / 18) : g_blend(mid, top, k > 256 ? 256 : k);
     }
     const uint16_t fog = g_rgb(250, 168, 118);
+    uint16_t fogk[64];                                    /* brume par distance, en table */
+    for (int i = 0; i < 64; i++) fogk[i] = (uint16_t)(i * i * 256 / (63 * 63));
     float sd = remainderf(VOX_SUN_A - c->a, 2 * PI);
     float sun_col = fabsf(sd) < 1.2f ? half + tanf(sd) * half : -10000;
     const float sun_up = H * 0.12f;
-    /* nuages : plan à hauteur fixe au-dessus de la caméra */
     float inv_up[128];
     for (int i = 0; i < 128; i++) inv_up[i] = i > 1 ? 1.0f / i : 0;
     const float cloud_h = 260.0f * fy / 70.0f;
+    const float roll = c->roll * 120.0f / W;              /* même inclinaison quelle que soit la largeur */
+    uint16_t colbuf[128];                                 /* la colonne, en RAM interne */
 
     for (int col = 0; col < W; col++) {
         float rx = (col - half) / half;
         float dx = ca - sa * rx, dy = sa + ca * rx;
-        float horizon = hz0 + (col - half) * c->roll;
-        int ybuf = H;
+        float horizon = hz0 + (col - half) * roll;
+        int ybuf = H, ob = 0;
         float z = 1.0f, dz = 0.5f;
         while (z < ZMAX && ybuf > 0) {
+            while (z >= OCC_Z[ob]) { if (occ) occ[col * VOX_OCC + ob] = (uint8_t)ybuf; ob++; }
             float px = c->x + dx * z, py = c->y + dy * z;
             int ix = (int)floorf(px), iy = (int)floorf(py);
-            int idx = (iy & MASK) * N + (ix & MASK);
-            int hraw = hmap[idx];
+            uint32_t v0 = vmap[(iy & MASK) * N + (ix & MASK)];
+            int hraw = (int)(v0 >> 16);
             bool water = hraw < VOX_SEA;
             float hh;
-            if (z < 50 && !water) {                                     /* près : hauteur lissée */
-                float fx = px - ix, fy2 = py - iy;
-                float a = hat(ix, iy), b = hat(ix + 1, iy), cc = hat(ix, iy + 1), d = hat(ix + 1, iy + 1);
+            uint32_t v1 = 0, v2 = 0, v3 = 0;
+            bool near = z < 36 && !water;
+            float fx = 0, fy2 = 0;
+            if (near) {                                         /* près : hauteur et couleur lissées */
+                fx = px - ix; fy2 = py - iy;
+                v1 = vmap[(iy & MASK) * N + ((ix + 1) & MASK)];
+                v2 = vmap[((iy + 1) & MASK) * N + (ix & MASK)];
+                v3 = vmap[((iy + 1) & MASK) * N + ((ix + 1) & MASK)];
+                float a = hof(v0), b = hof(v1), cc = hof(v2), d = hof(v3);
                 hh = a + (b - a) * fx + (cc - a) * fy2 + (a - b - cc + d) * fx * fy2;
             } else hh = water ? VOX_SEA : hraw;
             int sy = (int)((c->h - hh) / z * fy + horizon);
             if (sy < ybuf) {
-                uint16_t col565 = cmap[idx];
-                if (z < 40 && !water) {                                 /* près : couleur lissée */
-                    float fx = px - ix, fy2 = py - iy;
-                    int i1 = (iy & MASK) * N + ((ix + 1) & MASK), i2 = ((iy + 1) & MASK) * N + (ix & MASK), i3 = ((iy + 1) & MASK) * N + ((ix + 1) & MASK);
-                    uint16_t top = g_blend(col565, cmap[i1], (int)(fx * 256)), bot = g_blend(cmap[i2], cmap[i3], (int)(fx * 256));
-                    col565 = g_blend(top, bot, (int)(fy2 * 256));
+                uint16_t col565 = (uint16_t)v0;
+                if (near) {
+                    uint16_t tp = g_blend(col565, (uint16_t)v1, (int)(fx * 256)), bt = g_blend((uint16_t)v2, (uint16_t)v3, (int)(fx * 256));
+                    col565 = g_blend(tp, bt, (int)(fy2 * 256));
                 }
                 if (water) {                                            /* reflet du ciel, rides */
                     float rip = fsin(px * 0.35f + t * 1.7f) + fsin(py * 0.29f - t * 1.3f);
                     int up = (int)(horizon - sy) + (int)(rip * 2);
                     uint16_t refl = sky[up < 0 ? 0 : up > 127 ? 127 : up];
-                    int k = 120 + (int)(rip * 30);
-                    col565 = g_blend(col565, refl, k);
+                    col565 = g_blend(col565, refl, 120 + (int)(rip * 30));
                     if (sun_col > -1000 && fabsf(col - sun_col) < 3 + z * 0.02f && rip > 0.6f) col565 = g_white(col565, 160);
                 }
-                int f = (int)(z * 256 / ZMAX);
-                col565 = g_blend(col565, fog, f * f >> 8);
+                col565 = g_blend(col565, fog, fogk[(int)(z * 63 / ZMAX)]);
                 int y0 = sy < 0 ? 0 : sy;
-                uint8_t dq = (uint8_t)(z > 254 ? 254 : z);
-                for (int y = y0; y < ybuf; y++) {
-                    s->px[y * W + col] = col565;
-                    if (depth) depth[y * W + col] = dq;
-                }
+                for (int y = y0; y < ybuf; y++) colbuf[y] = col565;
                 ybuf = y0;
             }
             z += dz;
-            dz *= 1.02f;
+            dz *= 1.022f;
         }
+        if (occ) for (; ob < VOX_OCC; ob++) occ[col * VOX_OCC + ob] = (uint8_t)ybuf;
         /* ciel de la colonne */
         float dsx = col - sun_col;
         for (int y = 0; y < ybuf; y++) {
@@ -383,10 +396,21 @@ void vox_render(gsurf_t *s, uint8_t *depth, const vox_cam_t *c, float fy, float 
                 if (d2 < 22) cc = g_rgb(255, 246, 210);
                 else if (d2 < 1600) cc = g_white(cc, (int)((1600 - d2) * 110 / 1600));
             }
-            s->px[y * W + col] = cc;
-            if (depth) depth[y * W + col] = 255;
+            colbuf[y] = cc;
         }
+        uint16_t *dst = s->px + col;
+        for (int y = 0; y < H; y++, dst += W) *dst = colbuf[y];
     }
+}
+
+bool vox_visible(const uint8_t *occ, int w, int x, int y, float z)
+{
+    if ((unsigned)x >= (unsigned)w) return false;
+    int b = 0;
+    while (b < VOX_OCC - 1 && OCC_Z[b] <= z) b++;
+    /* relief plus proche que z : échantillons avant le seuil b-1 */
+    int k = b > 0 ? b - 1 : 0;
+    return y < occ[x * VOX_OCC + k];
 }
 
 bool vox_project(const gsurf_t *s, const vox_cam_t *c, float fy, float wx, float wy, float wh,
@@ -401,11 +425,11 @@ bool vox_project(const gsurf_t *s, const vox_cam_t *c, float fy, float wx, float
     if (zz < 1) return false;
     float half = s->w * 0.5f;
     *sx = half + l / zz * half;
-    *sy = s->h * 0.33f + c->pitch + (*sx - half) * c->roll + (c->h - wh) / zz * fy;
+    *sy = s->h * 0.33f + c->pitch + (*sx - half) * c->roll * 120.0f / s->w + (c->h - wh) / zz * fy;
     *z = zz;
     return true;
 }
 
 #ifndef ESP_PLATFORM
-uint16_t *vox_dbg_cmap(void) { return cmap; }   /* outils PC */
+uint16_t *vox_dbg_cmap(void) { return cmap; }   /* outils PC (avant libération) */
 #endif

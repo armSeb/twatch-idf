@@ -29,20 +29,22 @@
 #include "demo_synth.h"
 #include "voxel.h"
 
-#define W  240
+#define W  160                       /* colonnes rendues, élargies ×1,5 à l'écran */
 #define H  120
 #define PI 3.14159265f
 #define FY 70.0f
 #define NRING 3
 #define RING_R 10.0f
 
-typedef enum { ST_GEN, ST_TITLE, ST_COUNT, ST_PLAY, ST_CRASH, ST_OVER } state_t;
+typedef enum { ST_GEN, ST_TITLE, ST_COUNT, ST_PLAY, ST_CRASH, ST_OVER, ST_PAUSE } state_t;
 
 typedef struct { float x, y, h, dir; } ring_t;
 
 static gsurf_t S;                    /* relief 240×120 */
 static gsurf_t C;                    /* canevas 240×240 (interface) */
-static uint8_t *depth;
+static uint8_t *occ;                 /* occultation par le relief (voxel.c) */
+static uint32_t s_fps_t0;
+static int s_fps_n, s_fps;
 static lv_obj_t *v_cv;
 static lv_timer_t *v_tmr;
 static bool s_tilt, s_sound = true, s_vox;
@@ -128,11 +130,11 @@ static void dline(int x0, int y0, float z0, int x1, int y1, float z1, int th, ui
         float u = n ? k / (float)n : 0;
         int x = x0 + (int)((x1 - x0) * u), y = y0 + (int)((y1 - y0) * u);
         float z = z0 + (z1 - z0) * u;
-        uint8_t zq = (uint8_t)(z > 254 ? 254 : z);
+        if (!vox_visible(occ, W, x, y, z)) continue;
         for (int j = 0; j < th; j++)
             for (int i = 0; i < th; i++) {
                 int X = x + i - th / 2, Y = y + (j - th / 2) / 2;
-                if ((unsigned)X < W && (unsigned)Y < H && depth[Y * W + X] > zq) S.px[Y * W + X] = c;
+                if ((unsigned)X < W && (unsigned)Y < H) S.px[Y * W + X] = c;
             }
     }
 }
@@ -215,7 +217,7 @@ static void autopilot(float t, float dt)
     float turn = clampf((hl - hr) * 0.004f + sinf(t * 0.31f) * 0.3f, -0.9f, 0.9f);
     s_turn += (turn - s_turn) * 0.06f;
     cam.a += s_turn * dt * 0.9f;
-    cam.roll += (s_turn * 0.3f - cam.roll) * 0.1f;
+    cam.roll += (s_turn * 0.6f - cam.roll) * 0.1f;
     cam.x += cosf(cam.a) * 40 * dt;
     cam.y += sinf(cam.a) * 40 * dt;
     float ground = 0;
@@ -263,7 +265,7 @@ static void play_step(float dt)
     s_turn += (tx - s_turn) * 0.15f;
     s_climb += (ty - s_climb) * 0.15f;
     cam.a += s_turn * 1.3f * dt;
-    cam.roll += (s_turn * 0.32f - cam.roll) * 0.15f;
+    cam.roll += (s_turn * 0.64f - cam.roll) * 0.15f;
     if (boost_t > 0) boost_t -= dt;
     else if (boost_charge < 1) boost_charge = clampf(boost_charge + dt / 4.0f, 0, 1);
     float v = speed * (boost_t > 0 ? 1.7f : 1);
@@ -382,16 +384,49 @@ static void draw_world(float t, bool rings)
     float sh = shake > 0 ? shake : 0;
     vox_cam_t keep = cam;
     if (sh > 0) { cam.pitch += (g_frnd() - 0.5f) * 10 * sh; cam.roll += (g_frnd() - 0.5f) * 0.1f * sh; }
-    vox_render(&S, depth, &cam, FY, t);
+    vox_render(&S, occ, &cam, FY, t);
     if (rings) for (int i = NRING - 1; i >= 0; i--) ring_draw(&ring[i], i, t);
     cam = keep;
     flare();
 }
 
+/* 160×120 → 240×240 : colonnes 1, 2, 1, 2… (×1,5), lignes doublées */
+static void upscale(void)
+{
+    for (int y = 0; y < H; y++) {
+        const uint16_t *src = S.px + y * W;
+        uint16_t *d = C.px + (2 * y) * 240;
+        for (int x = 0; x < W; x += 2) {
+            uint16_t a = src[x], b = src[x + 1];
+            d[0] = a; d[1] = a; d[2] = b;
+            d += 3;
+        }
+        memcpy(C.px + (2 * y + 1) * 240, C.px + (2 * y) * 240, 480);
+    }
+}
+
+static void pause_draw(void)
+{
+    for (int i = 0; i < 240 * 240; i++) C.px[i] = g_blend(C.px[i], 0, 150);
+    char b[32];
+    hud_c(_("PAUSE"), 60, 4, 0xFFFF);
+    hud_c(_("TOUCHE POUR REPRENDRE"), 110, 1, g_rgb(230, 230, 240));
+    for (int y = 146; y < 182; y++)
+        for (int x = 60; x < 180; x++)
+            C.px[y * 240 + x] = (y == 146 || y == 181 || x == 60 || x == 179) ? g_rgb(255, 120, 90) : g_rgb(70, 20, 20);
+    hud_c(_("QUITTER"), 158, 2, g_rgb(255, 220, 210));
+    snprintf(b, sizeof b, _("%d IMAGES/S"), s_fps);
+    hud_c(b, 196, 1, g_rgb(150, 150, 160));
+    lv_obj_invalidate(v_cv);
+}
+
 static void frame(void)
 {
     if (!S.px || !C.px) return;
+    if (st == ST_PAUSE) return;                      /* image figée, rien à calculer */
     uint32_t ms = demo_synth_ms();
+    s_fps_n++;
+    if (ms - s_fps_t0 >= 1000) { s_fps = s_fps_n * 1000 / (int)(ms - s_fps_t0 ? ms - s_fps_t0 : 1); s_fps_n = 0; s_fps_t0 = ms; }
     float dt = (ms - s_last_ms) / 1000.0f;
     if (dt < 0 || dt > 0.1f) dt = 0.033f;
     s_last_ms = ms;
@@ -438,7 +473,7 @@ static void frame(void)
         for (int i = 0; i < W * H; i++) S.px[i] = g_blend(S.px[i], g_rgb(200, 30, 10), (int)(clampf(0.5f - ts * 0.25f, 0, 0.5f) * 256));
     }
     if (st == ST_OVER) g_fade(&S, 120);
-    g_scale(&S, C.px, 240, 1, 2);
+    upscale();
 
     /* interface à pleine résolution */
     switch (st) {
@@ -474,6 +509,8 @@ static void frame(void)
         snprintf(b, sizeof b, "%d", score);
         hud_text(b, 10, 12, 2, g_rgb(255, 210, 80));
         hud_text(_("PTS"), 10, 30, 1, g_rgb(220, 200, 150));
+        if (st == ST_PLAY)                                /* pause : toucher ici */
+            for (int y = 44; y < 56; y++) { for (int x = 12; x < 16; x++) C.px[y * 240 + x] = 0xFFFF; for (int x = 19; x < 23; x++) C.px[y * 240 + x] = 0xFFFF; }
         /* jauge d'accélérateur */
         for (int x = 0; x < 50; x++)
             for (int y = 0; y < 5; y++)
@@ -539,7 +576,13 @@ static void tap_cb(lv_event_t *e)
         start_game();
         break;
     case ST_PLAY:
+        if (p.x < 80 && p.y < 60) { st = ST_PAUSE; pause_draw(); break; }   /* coin du score : pause */
         if (boost_charge >= 1) { boost_t = 1.2f; boost_charge = 0; demo_synth_sfx(SFX_BOOST); }
+        break;
+    case ST_PAUSE:
+        if (p.y > 140 && p.y < 190 && p.x > 50 && p.x < 190) { app_close(); break; }
+        st = ST_PLAY;
+        s_last_ms = demo_synth_ms();
         break;
     case ST_OVER:
         if ((demo_synth_ms() - st_ms) > 1500) {
@@ -555,9 +598,9 @@ static void tap_cb(lv_event_t *e)
 static void free_all(void)
 {
     if (s_vox) { vox_free(); s_vox = false; }
-    heap_caps_free(S.px); heap_caps_free(C.px); heap_caps_free(depth);
+    heap_caps_free(S.px); heap_caps_free(C.px); heap_caps_free(occ);
     S.px = C.px = NULL;
-    depth = NULL;
+    occ = NULL;
 }
 
 static void create(lv_obj_t *scr)
@@ -566,9 +609,10 @@ static void create(lv_obj_t *scr)
     S = (gsurf_t){ heap_caps_malloc(W * H * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT), W, H };
     if (!S.px) S.px = heap_caps_malloc(W * H * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     C = (gsurf_t){ heap_caps_malloc(240 * 240 * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT), 240, 240 };
-    depth = heap_caps_malloc(W * H, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    occ = heap_caps_malloc(W * VOX_OCC, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!occ) occ = heap_caps_malloc(W * VOX_OCC, MALLOC_CAP_8BIT);
     v_cv = lv_canvas_create(scr);
-    if (!S.px || !C.px || !depth) {
+    if (!S.px || !C.px || !occ) {
         free_all();
         lv_obj_t *l = ui_label(scr, &font_text_16, C_FG, _("Mémoire insuffisante"));
         lv_obj_center(l);
@@ -613,7 +657,7 @@ static void on_hide(void)
     demo_synth_stop();
     if (S.px) power_hold_active(false);
     if (s_tilt) { motion_accel_end(); s_tilt = false; }
-    if (st == ST_PLAY || st == ST_COUNT) st = ST_TITLE;   /* partie abandonnée */
+    if (st == ST_PLAY || st == ST_COUNT || st == ST_PAUSE) st = ST_TITLE;   /* partie abandonnée */
 }
 
 static bool keep_on(void) { return true; }

@@ -16,6 +16,8 @@ same course twice.
    becomes neutral.
 3. **Tilt left / right**: turn (the plane banks). **Tilt towards you / away**: climb / dive.
 4. **Tap**: boost (×1.7 for 1.2 s); the *BOOST* gauge refills in 4 s.
+5. **Tap the score corner** (top left, under the ⏸ sign): pause, with a **QUIT** button and
+   the frame rate. Tap anywhere else to resume.
 
 ## Rules
 
@@ -35,8 +37,11 @@ mute by tapping *SOUND* top right on the title screen. The screen stays on and t
 
 ## How it is done
 
-The terrain is rendered at 240×120 (full width, rows doubled on screen: voxel space is made of
-columns, so horizontal resolution matters most), with a depth buffer so rings hide behind
-hills. The interface (clock, score, gauge, arrow, messages) is then drawn at full resolution.
+The terrain is rendered at 160×120 into an internal-RAM buffer, widened ×1.5 with doubled
+rows on screen (voxel space is made of columns, so horizontal resolution matters most). Each
+column is first computed into a small local buffer, then copied in one go; the map keeps
+height and colour in the same 32-bit word, so one sample costs a single PSRAM read. To hide
+rings behind hills, the renderer records for each column the top of the terrain at 16
+distances (2.5 KB instead of a full depth buffer). The interface (clock, score, gauge, arrow, messages) is then drawn at full resolution.
 Effects: sun lens flare, speed lines while boosting, spark bursts, shake and red flash on a
 crash.
