@@ -20,6 +20,9 @@ static uint16_t *cmap;               /* couleurs éclairées (génération) */
 static uint32_t *vmap;
 static uint8_t *cloud;               /* densité des nuages 128×128 */
 static float *lat;                   /* treillis du bruit 64×64 */
+#ifdef ESP_PLATFORM
+static void worker_stop(void);
+#endif
 static volatile int s_prog = -1;     /* -1 : rien ; 0..100 */
 static volatile bool s_abort, s_task;
 static uint32_t s_seed;
@@ -245,6 +248,9 @@ int vox_progress(void) { return s_prog < 0 ? 0 : s_prog; }
 
 void vox_free(void)
 {
+#ifdef ESP_PLATFORM
+    worker_stop();
+#endif
     s_abort = true;
 #ifdef ESP_PLATFORM
     for (int i = 0; i < 300 && s_task; i++) vTaskDelay(pdMS_TO_TICKS(10));
@@ -301,7 +307,7 @@ static inline float fsin(float x)                    /* sinus approché par tabl
 
 static const float OCC_Z[VOX_OCC] = { 6, 10, 15, 22, 30, 40, 52, 66, 82, 100, 125, 155, 190, 230, 280, 1000 };
 
-void vox_render(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t)
+static void render_cols(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t, int c0, int c1)
 {
     const int W = s->w, H = s->h;
     if (s_sin[64] == 0) for (int i = 0; i < 256; i++) s_sin[i] = sinf(i * 6.2831853f / 256);
@@ -327,7 +333,7 @@ void vox_render(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t)
     const float roll = c->roll * 120.0f / W;              /* même inclinaison quelle que soit la largeur */
     uint16_t colbuf[128];                                 /* la colonne, en RAM interne */
 
-    for (int col = 0; col < W; col++) {
+    for (int col = c0; col < c1; col++) {
         float rx = (col - half) / half;
         float dx = ca - sa * rx, dy = sa + ca * rx;
         float horizon = hz0 + (col - half) * roll;
@@ -342,7 +348,7 @@ void vox_render(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t)
             bool water = hraw < VOX_SEA;
             float hh;
             uint32_t v1 = 0, v2 = 0, v3 = 0;
-            bool near = z < 36 && !water;
+            bool near = z < 30 && !water;
             float fx = 0, fy2 = 0;
             if (near) {                                         /* près : hauteur et couleur lissées */
                 fx = px - ix; fy2 = py - iy;
@@ -355,7 +361,7 @@ void vox_render(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t)
             int sy = (int)((c->h - hh) / z * fy + horizon);
             if (sy < ybuf) {
                 uint16_t col565 = (uint16_t)v0;
-                if (near) {
+                if (near && z < 18) {
                     uint16_t tp = g_blend(col565, (uint16_t)v1, (int)(fx * 256)), bt = g_blend((uint16_t)v2, (uint16_t)v3, (int)(fx * 256));
                     col565 = g_blend(tp, bt, (int)(fy2 * 256));
                 }
@@ -372,7 +378,7 @@ void vox_render(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t)
                 ybuf = y0;
             }
             z += dz;
-            dz *= 1.022f;
+            dz *= 1.024f;
         }
         if (occ) for (; ob < VOX_OCC; ob++) occ[col * VOX_OCC + ob] = (uint8_t)ybuf;
         /* ciel de la colonne */
@@ -401,6 +407,67 @@ void vox_render(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t)
         uint16_t *dst = s->px + col;
         for (int y = 0; y < H; y++, dst += W) *dst = colbuf[y];
     }
+}
+
+/* ------------------------------------------------------------------ deux cœurs */
+/* La moitié gauche de l'image est calculée par une tâche sur le cœur 0 (presque
+ * inactif pendant le jeu), la moitié droite par l'appelant sur le cœur 1. */
+#ifdef ESP_PLATFORM
+#include "freertos/semphr.h"
+static SemaphoreHandle_t s_go, s_done;
+static TaskHandle_t s_worker;
+static volatile bool s_worker_quit;
+static struct { gsurf_t *s; uint8_t *occ; const vox_cam_t *c; float fy, t; int c0, c1; } s_job;
+
+static void worker_task(void *arg)
+{
+    for (;;) {
+        xSemaphoreTake(s_go, portMAX_DELAY);
+        if (s_worker_quit) break;
+        render_cols(s_job.s, s_job.occ, s_job.c, s_job.fy, s_job.t, s_job.c0, s_job.c1);
+        xSemaphoreGive(s_done);
+    }
+    xSemaphoreGive(s_done);
+    vTaskDelete(NULL);
+}
+
+static void worker_stop(void)
+{
+    if (!s_worker) return;
+    s_worker_quit = true;
+    xSemaphoreGive(s_go);
+    xSemaphoreTake(s_done, pdMS_TO_TICKS(500));
+    s_worker = NULL;
+    vSemaphoreDelete(s_go); vSemaphoreDelete(s_done);
+    s_go = s_done = NULL;
+}
+#endif
+
+void vox_render(gsurf_t *s, uint8_t *occ, const vox_cam_t *c, float fy, float t)
+{
+    if (!vmap || s_prog != 100) return;
+#ifdef ESP_PLATFORM
+    if (!s_worker) {
+        s_go = xSemaphoreCreateBinary();
+        s_done = xSemaphoreCreateBinary();
+        s_worker_quit = false;
+        if (s_go && s_done && xTaskCreatePinnedToCore(worker_task, "voxrend", 4096, NULL, 5, &s_worker, 0) != pdPASS) s_worker = NULL;
+        if (!s_worker) {
+            if (s_go) vSemaphoreDelete(s_go);
+            if (s_done) vSemaphoreDelete(s_done);
+            s_go = s_done = NULL;
+        }
+    }
+    if (s_worker) {
+        int mid = s->w / 2;
+        s_job.s = s; s_job.occ = occ; s_job.c = c; s_job.fy = fy; s_job.t = t; s_job.c0 = 0; s_job.c1 = mid;
+        xSemaphoreGive(s_go);
+        render_cols(s, occ, c, fy, t, mid, s->w);
+        xSemaphoreTake(s_done, portMAX_DELAY);
+        return;
+    }
+#endif
+    render_cols(s, occ, c, fy, t, 0, s->w);
 }
 
 bool vox_visible(const uint8_t *occ, int w, int x, int y, float z)

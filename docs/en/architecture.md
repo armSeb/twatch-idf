@@ -128,7 +128,10 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   column by column with a height buffer, foreground interpolation, fog, reflections, projected
   clouds, per-column roll and an optional occlusion table (top of the terrain at 16 distances
   per column). After generation, height and colour are merged into one 32-bit word per cell
-  (1 MB): a single PSRAM read per sample, which is what bounds the frame rate. The demo
+  (1 MB): a single PSRAM read per sample, which is what bounds the frame rate. Rendering is
+  split between the two cores: a `voxrend` task (core 0, created on the first render, stopped
+  with the world) computes the left half while the caller computes the right, synchronised by
+  two semaphores. The demo
   renders at 120×120 doubled, the game at 160×120 widened ×1.5. Both hold 240 MHz while shown and read the
   accelerometer live (`motion_accel_*`: the sensor is woken at 100 Hz if neither steps nor
   raise to wake use it, then put back as it was). Soar's best score is an NVS blob

@@ -2,6 +2,14 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.31.3 — 2026-11-20
+
+- Landscape rendering on **both cores**: the left half of the picture is computed by a task
+  on core 0 (nearly idle while playing), the right half on core 1, in parallel. Fewer PSRAM
+  reads in the foreground (colour smoothing only very close up) and slightly sparser samples
+  in the distance, hidden by the haze. Soar measured 8 frames/s in 0.31.2; the demo's flight
+  benefits too.
+
 ## 0.31.2 — 2026-11-20
 
 - Fix: **Battery** and **Settings** had vanished from the app launcher (and with them the

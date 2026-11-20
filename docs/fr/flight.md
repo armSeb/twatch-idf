@@ -44,6 +44,7 @@ plus). Chaque colonne est d'abord calculée dans un petit tampon local, puis rec
 bloc ; la carte garde hauteur et couleur dans le même mot de 32 bits, si bien qu'un
 échantillon ne coûte qu'une lecture en PSRAM. Pour cacher les anneaux derrière les collines,
 le rendu note pour chaque colonne le haut du relief à 16 distances (2,5 Ko au lieu d'un
-tampon de profondeur complet). L'interface (chrono, score, jauge,
+tampon de profondeur complet). Le calcul est partagé entre les deux cœurs de l'ESP32 : la
+moitié gauche de l'image sur le cœur 0, la moitié droite sur le cœur 1, en même temps. L'interface (chrono, score, jauge,
 flèche, messages) est dessinée ensuite à pleine résolution. Effets : reflet du soleil dans
 l'objectif, lignes de vitesse en turbo, gerbes d'étincelles, secousse et éclair rouge au crash.
