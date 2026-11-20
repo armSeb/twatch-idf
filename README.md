@@ -59,10 +59,13 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   cared for and you walk a lot — 1000 steps earn a shamrock), horse, or grumpy goat. Day/night
   sky following the time, 8-bit sound effects, nothing running in the background (its life is
   computed when you open it) — see the [Púca guide](docs/en/puca.md).
-- **Demo "Tír na nÓg"**, a demoscene-style intro computed entirely on the watch: starfield and
-  particle title, textured tunnel, shaded 3D torus, then a flight over sunset hills in "voxel
-  space" with a sine-scroller — and at the end you fly by tilting your wrist. 4-voice chiptune
-  synthesised live — see the [Demo guide](docs/en/demo.md).
+- **Demo "Tír na nÓg"**, a 2-minute demoscene-style intro computed entirely on the watch:
+  particle title, textured tunnel, rotozoom, shaded torus, morphing dot swarm, metaballs, fire,
+  a flight over a freshly invented Irish landscape (hedged fields, rivers, farms, cast
+  shadows), a 3D Celtic knot — on a chiptune synthesised live — see the
+  [Demo guide](docs/en/demo.md).
+- **Soar**, a flying game over that landscape: tilt your wrist to fly through gold rings
+  against the clock, combos, boost, crashes, best score — see the [Soar guide](docs/en/flight.md).
 - **Notifications never pull you out of an app or menu**: they slide in as a banner on top
   (tap to read, swipe up to dismiss); on the watch face they open full screen as before.
 - **Quick controls**: Bluetooth, **Do not disturb**, torch, now playing, brightness.
@@ -88,7 +91,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 |---|---|---|
 | Watch face | swipe ↑ | Notifications (close: ↓ or →) |
 | Watch face | swipe ↓ | Quick controls (close: ↑ or →) |
-| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Steps, Púca, Demo, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Carrier, Battery, Settings |
+| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Steps, Púca, Demo, Soar, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Carrier, Battery, Settings |
 | Watch face | long press | Choose the watch face |
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |
@@ -161,6 +164,7 @@ More: [building, flashing and tests](docs/en/building.md).
 | Radio (web radios): setup and use | [docs/en/radio.md](docs/en/radio.md) | [docs/fr/radio.md](docs/fr/radio.md) |
 | Púca (virtual pet): how it lives and how to care for it | [docs/en/puca.md](docs/en/puca.md) | [docs/fr/puca.md](docs/fr/puca.md) |
 | Demo "Tír na nÓg": scenes, controls, how it is done | [docs/en/demo.md](docs/en/demo.md) | [docs/fr/demo.md](docs/fr/demo.md) |
+| Soar (flying game): controls and rules | [docs/en/flight.md](docs/en/flight.md) | [docs/fr/flight.md](docs/fr/flight.md) |
 | Writing apps, translating | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) |
 | Changes | [CHANGELOG.md](CHANGELOG.md) | |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) | |

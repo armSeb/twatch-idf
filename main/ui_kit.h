@@ -39,6 +39,7 @@
 #define SYM_WALK      "\xEF\x95\x94"   /* U+F554 */
 #define SYM_GHOST     "\xEF\x9B\xA2"   /* U+F6E2 */
 #define SYM_ROCKET    "\xEF\x84\xB5"   /* U+F135 */
+#define SYM_PLANE     "\xEF\x81\xB2"   /* U+F072 */
 
 #define UI_ANIM_MS 140
 

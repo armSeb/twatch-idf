@@ -370,16 +370,55 @@ static const tr_t EN[] = {
     { "SUR LA", "ON THE" },
     { "MONTRE", "WATCH" },
     { "RENDU LOGICIEL", "SOFTWARE RENDER" },
-    { "TÍR NA NÓG · UNE INTRO POUR T-WATCH 2020 · TOUT EST CALCULÉ ICI, MÊME LA MUSIQUE · "
-      "SALUTATIONS À FARBRAUSCH · LILYGO · ESPRESSIF · LA DÉMOSCÈNE · "
-      "ET AUX AMIS DES QSO DES GASCONS · BONS 73 ! ·         ",
-      "TÍR NA NÓG · AN INTRO FOR THE T-WATCH 2020 · EVERYTHING IS COMPUTED HERE, EVEN THE MUSIC · "
-      "GREETINGS TO FARBRAUSCH · LILYGO · ESPRESSIF · THE DEMOSCENE · "
-      "AND TO THE QSO DES GASCONS FRIENDS · 73 ! ·         " },
-    { "À TOI !", "YOUR TURN!" },
-    { "PENCHE LE POIGNET", "TILT YOUR WRIST" },
     { "SON", "SOUND" },
     { "MUET", "MUTE" },
+    { "ROTOZOOM", "ROTOZOOM" },
+    { "SUR PLASMA", "ON PLASMA" },
+    { "LE NŒUD CELTE", "THE CELTIC KNOT" },
+    { "SPHÈRE", "SPHERE" },
+    { "TORE", "TORUS" },
+    { "CUBE", "CUBE" },
+    { "GALAXIE", "GALAXY" },
+    { "700 POINTS", "700 DOTS" },
+    { "MUSIQUE", "MUSIC" },
+    { "SYNTHÉ 4 VOIES", "4-VOICE SYNTH" },
+    { "IMAGES", "GRAPHICS" },
+    { "120 × 120, ×2", "120 × 120, ×2" },
+    { "CODE", "CODE" },
+    { "POIDS", "SIZE" },
+    { "0 OCTET D'IMAGE", "0 BYTES OF IMAGES" },
+    { "MERCI !", "THANKS!" },
+    { "TÍR NA NÓG", "TÍR NA NÓG" },
+    { "SEB & CLAUDE · 2026", "SEB & CLAUDE · 2026" },
+    { "TOUCHE POUR REVOIR", "TAP TO WATCH AGAIN" },
+    { "COMBO ×%d", "COMBO ×%d" },
+    { "RATÉ ! −3 S", "MISSED! −3 S" },
+    { "CRÉATION DU MONDE", "BUILDING THE WORLD" },
+    { "ENVOL", "SOAR" },
+    { "RECORD %u", "BEST %u" },
+    { "TOUCHE POUR DÉCOLLER", "TAP TO TAKE OFF" },
+    { "PENCHE LE POIGNET POUR PILOTER", "TILT YOUR WRIST TO FLY" },
+    { "GO !", "GO!" },
+    { "TIENS LA MONTRE À PLAT", "HOLD THE WATCH LEVEL" },
+    { "PTS", "PTS" },
+    { "TURBO", "BOOST" },
+    { "ALTITUDE !", "PULL UP!" },
+    { "TRAVERSE LES ANNEAUX D'OR", "FLY THROUGH THE GOLD RINGS" },
+    { "CRASH !", "CRASH!" },
+    { "TEMPS ÉCOULÉ", "TIME'S UP" },
+    { "%d ANNEAUX", "%d RINGS" },
+    { "1 ANNEAU", "1 RING" },
+    { "NOUVEAU RECORD !", "NEW BEST!" },
+    { "TOUCHE POUR REJOUER", "TAP TO PLAY AGAIN" },
+    { "Envol", "Soar" },
+    { "TÍR NA NÓG · UNE INTRO POUR T-WATCH 2020 · TOUT EST CALCULÉ ICI, MÊME LA MUSIQUE · "
+      "LE PAYSAGE EST INVENTÉ À CHAQUE LANCEMENT : PRÉS, HAIES, FERMES, RIVIÈRES · "
+      "SALUTATIONS À LILYGO · ESPRESSIF · LA DÉMOSCÈNE · "
+      "ET AUX AMIS DES QSO DES GASCONS · BONS 73 ! ·         ",
+      "TÍR NA NÓG · AN INTRO FOR THE T-WATCH 2020 · EVERYTHING IS COMPUTED HERE, EVEN THE MUSIC · "
+      "THE LANDSCAPE IS INVENTED AT EVERY LAUNCH: MEADOWS, HEDGES, FARMS, RIVERS · "
+      "GREETINGS TO LILYGO · ESPRESSIF · THE DEMOSCENE · "
+      "AND TO THE QSO DES GASCONS FRIENDS · 73 ! ·         " },
 };
 
 static int s_lang = LANG_FR;

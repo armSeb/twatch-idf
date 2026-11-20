@@ -1,18 +1,23 @@
 /*
- * app_demo.c — « Tír na nÓg », une petite intro façon démoscène.
+ * app_demo.c — « Tír na nÓg », une intro façon démoscène (~2 min).
  *
- * Tout est calculé sur la montre, rien n'est stocké : étoiles, titre en
- * particules, tunnel texturé, tore ombré, paysage en voxels (carte générée au
- * lancement) et musique (demo_synth.c). L'image est rendue en 120×120 dans un
- * tampon en RAM interne puis doublée dans un canevas 240×240 en PSRAM.
+ * Tout est calculé sur la montre, rien n'est stocké. L'image est rendue en
+ * 120×120 dans un tampon en RAM interne puis doublée dans un canevas 240×240
+ * en PSRAM. L'horloge est celle de la musique (demo_synth.c) : les scènes et
+ * les effets tombent sur les mesures et les coups de grosse caisse.
  *
- *   0–7,7 s    champ d'étoiles, le titre se forme en particules, éclair
- *   7,7–15 s   tunnel infini (motif entrelacé, couleurs qui tournent)
- *   15–31 s    tore ombré qui pulse sur la grosse caisse
- *   31 s →     survol des collines au coucher du soleil, défilement des
- *              salutations, puis « À TOI ! » : on pilote en penchant le poignet
+ *   mesures  0–4   étoiles, « présentent », le titre se forme en particules
+ *            4–8   tunnel texturé
+ *            8–12  rotozoom d'un entrelacs sur plasma
+ *           12–16  tore ombré
+ *           16–24  nuée de 700 points qui change de forme, barres « copper »
+ *           24–28  métaballes (le pont), générique
+ *           28–32  le titre brûle, roulement
+ *           32–48  survol du paysage (voxel.c), défilement des salutations
+ *           48–56  nœud celtique en 3D
+ *           56–64  retour aux étoiles, « MERCI ! », fondu
  *
- * Toucher l'écran coupe ou remet le son. Glisser à droite pour quitter.
+ * Toucher l'écran coupe ou remet le son ; à la fin, toucher relance la démo.
  */
 #include <math.h>
 #include <stdio.h>
@@ -21,228 +26,37 @@
 #include "app.h"
 #include "ui_kit.h"
 #include "i18n.h"
-#include "motion.h"
 #include "power.h"
 #include "esp_heap_caps.h"
+#include "esp_random.h"
+#include "demo_gfx.h"
 #include "demo_synth.h"
+#include "voxel.h"
 
 #define W  120
 #define H  120
 #define PI 3.14159265f
+#define BAR(n) ((uint32_t)(n) * DEMO_BAR_MS)
 
-#define T_TUNNEL  (4 * DEMO_BAR_MS)
-#define T_TORUS   (8 * DEMO_BAR_MS)
-#define T_VOXEL   (16 * DEMO_BAR_MS)
-#define T_SCROLL  (T_VOXEL + 1500)
-#define T_PILOT   (36 * DEMO_BAR_MS)
-
-static uint16_t *fb;                 /* 120×120, RAM interne */
+static gsurf_t S;                    /* l'image (120×120, RAM interne) */
 static uint16_t *cv;                 /* 240×240, PSRAM (canevas) */
-static uint8_t *hmap;                /* 256×256 hauteurs */
-static uint16_t *cmap;               /* 256×256 couleurs */
 static uint8_t *t_ang, *t_dep, *t_shd;   /* tunnel : angle, profondeur, ombre */
-static uint8_t *tex;                 /* 128×128 */
+static uint8_t *tex;                 /* entrelacs 128×128 */
+static uint8_t *fire;                /* 120×122 */
 static lv_obj_t *v_cv;
 static lv_timer_t *v_tmr;
-static bool s_sound = true, s_tilt;
-static uint32_t s_sound_ms;          /* affichage de l'icône son */
-static uint32_t s_last_ms;
+static bool s_sound = true;
+static uint32_t s_sound_ms, s_last_ms;
+static bool s_vox;                   /* paysage demandé */
 
-static inline uint16_t rgb(int r, int g, int b)
-{
-    r = r < 0 ? 0 : r > 255 ? 255 : r;
-    g = g < 0 ? 0 : g > 255 ? 255 : g;
-    b = b < 0 ? 0 : b > 255 ? 255 : b;
-    return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
-}
+static inline float clampf(float v, float a, float b) { return v < a ? a : v > b ? b : v; }
+static inline float ease(float t) { t = clampf(t, 0, 1); return t * t * (3 - 2 * t); }
 
-static inline uint16_t blend(uint16_t a, uint16_t b, int t /* 0..256 */)
-{
-    int ar = a >> 11, ag = (a >> 5) & 63, ab = a & 31;
-    int br = b >> 11, bg = (b >> 5) & 63, bb = b & 31;
-    return (uint16_t)(((ar + ((br - ar) * t >> 8)) << 11) | ((ag + ((bg - ag) * t >> 8)) << 5) | (ab + ((bb - ab) * t >> 8)));
-}
-
-static inline uint16_t add565(uint16_t a, int k /* 0..255 vers le blanc */)
-{
-    return blend(a, 0xFFFF, k);
-}
-
-static uint32_t rng = 0x1234567;
-static uint32_t rnd(void) { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; }
-static float frnd(void) { return (rnd() & 0xFFFF) / 65535.0f; }
-
-/* ------------------------------------------------------------------ police 5×7 */
-static const struct { char c; const char *r[7]; } FONT[] = {
-    { 'A', { " ### ", "#   #", "#   #", "#####", "#   #", "#   #", "#   #" } },
-    { 'B', { "#### ", "#   #", "#   #", "#### ", "#   #", "#   #", "#### " } },
-    { 'C', { " ### ", "#   #", "#    ", "#    ", "#    ", "#   #", " ### " } },
-    { 'D', { "#### ", "#   #", "#   #", "#   #", "#   #", "#   #", "#### " } },
-    { 'E', { "#####", "#    ", "#    ", "#### ", "#    ", "#    ", "#####" } },
-    { 'F', { "#####", "#    ", "#    ", "#### ", "#    ", "#    ", "#    " } },
-    { 'G', { " ### ", "#   #", "#    ", "# ###", "#   #", "#   #", " ####" } },
-    { 'H', { "#   #", "#   #", "#   #", "#####", "#   #", "#   #", "#   #" } },
-    { 'I', { " ### ", "  #  ", "  #  ", "  #  ", "  #  ", "  #  ", " ### " } },
-    { 'J', { "  ###", "   # ", "   # ", "   # ", "   # ", "#  # ", " ##  " } },
-    { 'K', { "#   #", "#  # ", "# #  ", "##   ", "# #  ", "#  # ", "#   #" } },
-    { 'L', { "#    ", "#    ", "#    ", "#    ", "#    ", "#    ", "#####" } },
-    { 'M', { "#   #", "## ##", "# # #", "# # #", "#   #", "#   #", "#   #" } },
-    { 'N', { "#   #", "##  #", "# # #", "#  ##", "#   #", "#   #", "#   #" } },
-    { 'O', { " ### ", "#   #", "#   #", "#   #", "#   #", "#   #", " ### " } },
-    { 'P', { "#### ", "#   #", "#   #", "#### ", "#    ", "#    ", "#    " } },
-    { 'Q', { " ### ", "#   #", "#   #", "#   #", "# # #", "#  # ", " ## #" } },
-    { 'R', { "#### ", "#   #", "#   #", "#### ", "# #  ", "#  # ", "#   #" } },
-    { 'S', { " ####", "#    ", "#    ", " ### ", "    #", "    #", "#### " } },
-    { 'T', { "#####", "  #  ", "  #  ", "  #  ", "  #  ", "  #  ", "  #  " } },
-    { 'U', { "#   #", "#   #", "#   #", "#   #", "#   #", "#   #", " ### " } },
-    { 'V', { "#   #", "#   #", "#   #", "#   #", "#   #", " # # ", "  #  " } },
-    { 'W', { "#   #", "#   #", "#   #", "# # #", "# # #", "# # #", " # # " } },
-    { 'X', { "#   #", "#   #", " # # ", "  #  ", " # # ", "#   #", "#   #" } },
-    { 'Y', { "#   #", "#   #", " # # ", "  #  ", "  #  ", "  #  ", "  #  " } },
-    { 'Z', { "#####", "    #", "   # ", "  #  ", " #   ", "#    ", "#####" } },
-    { '0', { " ### ", "#   #", "#  ##", "# # #", "##  #", "#   #", " ### " } },
-    { '1', { "  #  ", " ##  ", "  #  ", "  #  ", "  #  ", "  #  ", " ### " } },
-    { '2', { " ### ", "#   #", "    #", "   # ", "  #  ", " #   ", "#####" } },
-    { '3', { "#####", "   # ", "  #  ", "   # ", "    #", "#   #", " ### " } },
-    { '4', { "   # ", "  ## ", " # # ", "#  # ", "#####", "   # ", "   # " } },
-    { '5', { "#####", "#    ", "#### ", "    #", "    #", "#   #", " ### " } },
-    { '6', { "  ## ", " #   ", "#    ", "#### ", "#   #", "#   #", " ### " } },
-    { '7', { "#####", "    #", "   # ", "  #  ", " #   ", " #   ", " #   " } },
-    { '8', { " ### ", "#   #", "#   #", " ### ", "#   #", "#   #", " ### " } },
-    { '9', { " ### ", "#   #", "#   #", " ####", "    #", "   # ", " ##  " } },
-    { '!', { "  #  ", "  #  ", "  #  ", "  #  ", "  #  ", "     ", "  #  " } },
-    { '.', { "     ", "     ", "     ", "     ", "     ", " ##  ", " ##  " } },
-    { ',', { "     ", "     ", "     ", "     ", " ##  ", "  #  ", " #   " } },
-    { '-', { "     ", "     ", "     ", "#####", "     ", "     ", "     " } },
-    { '\'', { "  #  ", "  #  ", " #   ", "     ", "     ", "     ", "     " } },
-    { ':', { "     ", " ##  ", " ##  ", "     ", " ##  ", " ##  ", "     " } },
-    { '&', { " ##  ", "#  # ", "# #  ", " #   ", "# # #", "#  # ", " ## #" } },
-    { '%', { "##   ", "##  #", "   # ", "  #  ", " #   ", "#  ##", "   ##" } },
-    { '*', { "     ", "  #  ", "# # #", " ### ", "# # #", "  #  ", "     " } },
-    { '?', { " ### ", "#   #", "    #", "   # ", "  #  ", "     ", "  #  " } },
-    { '/', { "    #", "    #", "   # ", "  #  ", " #   ", "#    ", "#    " } },
-};
-static uint8_t s_font[128][7];       /* bits 4..0 = colonnes */
-
-static void font_init(void)
-{
-    static bool done;
-    if (done) return;
-    done = true;
-    for (size_t i = 0; i < sizeof FONT / sizeof FONT[0]; i++)
-        for (int y = 0; y < 7; y++) {
-            uint8_t b = 0;
-            for (int x = 0; x < 5; x++) if (FONT[i].r[y][x] == '#') b |= 1 << (4 - x);
-            s_font[(int)FONT[i].c][y] = b;
-        }
-}
-
-/* UTF-8 → lettre de base + accent (1 aigu, 2 grave, 3 point médian, 4 circonflexe) */
-static const char *next_char(const char *s, char *base, int *acc)
-{
-    unsigned char c = (unsigned char)*s;
-    *acc = 0;
-    if (c < 0x80) { *base = (char)(c >= 'a' && c <= 'z' ? c - 32 : c); return s + 1; }
-    if ((c & 0xE0) == 0xC0 && s[1]) {
-        unsigned cp = ((c & 0x1F) << 6) | (s[1] & 0x3F);
-        switch (cp) {
-        case 0xC9: case 0xE9: *base = 'E'; *acc = 1; break;
-        case 0xC8: case 0xE8: *base = 'E'; *acc = 2; break;
-        case 0xCD: case 0xED: *base = 'I'; *acc = 1; break;
-        case 0xD3: case 0xF3: *base = 'O'; *acc = 1; break;
-        case 0xDA: case 0xFA: *base = 'U'; *acc = 1; break;
-        case 0xC0: case 0xE0: *base = 'A'; *acc = 2; break;
-        case 0xCA: case 0xEA: *base = 'E'; *acc = 4; break;
-        case 0xD4: case 0xF4: *base = 'O'; *acc = 4; break;
-        case 0xC7: case 0xE7: *base = 'C'; break;
-        case 0xB7: *base = '*'; *acc = 3; break;
-        default: *base = '?';
-        }
-        return s + 2;
-    }
-    *base = '?';
-    while (*s && (*s & 0xC0) == 0x80) s++;
-    return s + 1;
-}
-
-typedef void (*plot_fn)(int x, int y, void *ctx);
-
-/* dessine un texte ; pour chaque pixel allumé, plot(x, y) ; renvoie la largeur */
-static int text_walk(const char *s, int x, int y, int sc, plot_fn plot, void *ctx)
-{
-    int x0 = x;
-    while (*s) {
-        char b; int acc;
-        s = next_char(s, &b, &acc);
-        if (acc == 3) {                                   /* point médian */
-            for (int j = 0; j < sc; j++) for (int i = 0; i < sc; i++) plot(x + 2 * sc + i, y + 3 * sc + j, ctx);
-            x += 6 * sc;
-            continue;
-        }
-        const uint8_t *g = s_font[(unsigned char)b & 127];
-        for (int r = 0; r < 7; r++)
-            for (int c = 0; c < 5; c++)
-                if (g[r] & (1 << (4 - c)))
-                    for (int j = 0; j < sc; j++) for (int i = 0; i < sc; i++) plot(x + c * sc + i, y + r * sc + j, ctx);
-        if (acc == 4) {                                   /* circonflexe */
-            for (int j = 0; j < sc; j++) for (int i = 0; i < sc; i++) {
-                plot(x + 1 * sc + i, y - 1 * sc + j, ctx);
-                plot(x + 2 * sc + i, y - 2 * sc + j, ctx);
-                plot(x + 3 * sc + i, y - 1 * sc + j, ctx);
-            }
-        } else if (acc) {                                 /* accent au-dessus */
-            int ax = acc == 1 ? 3 : 1;
-            for (int j = 0; j < sc; j++) for (int i = 0; i < sc; i++) {
-                plot(x + ax * sc + i, y - 2 * sc + j, ctx);
-                plot(x + 2 * sc + i, y - 1 * sc + j, ctx);
-            }
-        }
-        x += 6 * sc;
-    }
-    return x - x0;
-}
-
-static int text_width(const char *s, int sc)
-{
-    int n = 0;
-    while (*s) { char b; int a; s = next_char(s, &b, &a); n++; }
-    return n * 6 * sc - sc;
-}
-
-static int fit(const char *s, int sc)            /* plus grande échelle ≤ sc qui tient */
-{
-    while (sc > 1 && text_width(s, sc) > W - 2) sc--;
-    return sc;
-}
-
-typedef struct { uint16_t col; } pctx_t;
-static void plot_fb(int x, int y, void *ctx)
-{
-    if ((unsigned)x < W && (unsigned)y < H) fb[y * W + x] = ((pctx_t *)ctx)->col;
-}
-
-static void text(const char *s, int x, int y, int sc, uint16_t col, bool shadow)
-{
-    pctx_t k = { 0 };
-    if (shadow) text_walk(s, x + 1, y + 1, sc, plot_fb, &k);
-    k.col = col;
-    text_walk(s, x, y, sc, plot_fb, &k);
-}
-
-static void text_c(const char *s, int y, int sc, uint16_t col, bool shadow)
-{
-    text(s, (W - text_width(s, sc)) / 2, y, sc, col, shadow);
-}
-
-/* ------------------------------------------------------------------ 1. étoiles et titre */
-#define NSTAR 140
+/* ------------------------------------------------------------------ particules de texte */
 #define NPART 900
-static float st_x[NSTAR], st_y[NSTAR], st_z[NSTAR];
-static int16_t *p_tx, *p_ty;          /* cibles du titre */
-static float *p_sx, *p_sy;            /* départs */
+static int16_t *p_tx, *p_ty;
+static float *p_sx, *p_sy;
 static int s_np;
-
-static const char *const TITLE_1 = "TÍR NA", *const TITLE_2 = "NÓG";
 
 typedef struct { int n; } collect_t;
 static void plot_collect(int x, int y, void *ctx)
@@ -251,81 +65,97 @@ static void plot_collect(int x, int y, void *ctx)
     if (c->n < NPART) { p_tx[c->n] = (int16_t)x; p_ty[c->n] = (int16_t)y; c->n++; }
 }
 
-static void stars_init(void)
+/* cibles = pixels de une ou deux lignes de texte ; départs sur un cercle */
+static void particles_text(const char *l1, int y1, int sc1, const char *l2, int y2, int sc2)
 {
-    for (int i = 0; i < NSTAR; i++) { st_x[i] = frnd() * 2 - 1; st_y[i] = frnd() * 2 - 1; st_z[i] = 0.05f + frnd(); }
     collect_t c = { 0 };
-    text_walk(TITLE_1, (W - text_width(TITLE_1, 2)) / 2, 40, 2, plot_collect, &c);
-    text_walk(TITLE_2, (W - text_width(TITLE_2, 3)) / 2, 62, 3, plot_collect, &c);
+    g_text_walk(l1, (W - g_text_width(l1, sc1)) / 2, y1, sc1, plot_collect, &c);
+    if (l2) g_text_walk(l2, (W - g_text_width(l2, sc2)) / 2, y2, sc2, plot_collect, &c);
     s_np = c.n;
     for (int i = 0; i < s_np; i++) {
-        float a = frnd() * 2 * PI, r = 70 + frnd() * 60;
+        float a = g_frnd() * 2 * PI, r = 70 + g_frnd() * 60;
         p_sx[i] = 60 + cosf(a) * r;
         p_sy[i] = 60 + sinf(a) * r;
     }
 }
 
-static void put(int x, int y, uint16_t c) { if ((unsigned)x < W && (unsigned)y < H) fb[y * W + x] = c; }
-
-static void scene_stars(uint32_t ms, float dt)
+/* e : 0 → 1 rassemblement, boom : 0 → 1 explosion */
+static void particles_draw(float e, float boom, uint32_t ms, uint16_t base)
 {
-    /* fond : léger dégradé nuit */
-    for (int y = 0; y < H; y++) {
-        uint16_t c = rgb(4, 4 + y / 12, 16 + y / 5);
-        for (int x = 0; x < W; x++) fb[y * W + x] = c;
+    float sw = (1 - e) * 2.4f, cs = cosf(sw), sn = sinf(sw);
+    float sweep = fmodf(ms / 900.0f, 2.0f) * 160 - 20;
+    for (int i = 0; i < s_np; i++) {
+        float cx = p_sx[i] - 60, cy = p_sy[i] - 60;
+        float rx = 60 + cx * cs - cy * sn, ry = 60 + cx * sn + cy * cs;
+        float x = rx + (p_tx[i] - rx) * e, y = ry + (p_ty[i] - ry) * e;
+        if (boom > 0) { x += (x - 60) * boom * 2.5f; y += (y - 60) * boom * 2.5f; }
+        int hl = (int)(220 - fabsf(x - sweep) * 9);
+        g_put(&S, (int)x, (int)y, g_white(base, hl < 0 ? 0 : hl));
     }
-    float speed = 0.25f + 1.6f * (ms / (float)T_TUNNEL) * (ms / (float)T_TUNNEL);
+}
+
+/* ------------------------------------------------------------------ étoiles */
+#define NSTAR 140
+static float st_x[NSTAR], st_y[NSTAR], st_z[NSTAR];
+
+static void stars_init(void)
+{
+    for (int i = 0; i < NSTAR; i++) { st_x[i] = g_frnd() * 2 - 1; st_y[i] = g_frnd() * 2 - 1; st_z[i] = 0.05f + g_frnd(); }
+}
+
+static void stars_draw(float speed, float dt)
+{
+    for (int y = 0; y < H; y++) {
+        uint16_t c = g_rgb(4, 4 + y / 12, 16 + y / 5);
+        for (int x = 0; x < W; x++) S.px[y * W + x] = c;
+    }
     for (int i = 0; i < NSTAR; i++) {
         float pz = st_z[i];
         st_z[i] -= speed * dt;
-        if (st_z[i] < 0.03f) { st_x[i] = frnd() * 2 - 1; st_y[i] = frnd() * 2 - 1; st_z[i] = 1.0f; pz = 1.0f; }
+        if (st_z[i] < 0.03f) { st_x[i] = g_frnd() * 2 - 1; st_y[i] = g_frnd() * 2 - 1; st_z[i] = 1.0f; pz = 1.0f; }
         float sx = 60 + st_x[i] / st_z[i] * 50, sy = 60 + st_y[i] / st_z[i] * 50;
         float px = 60 + st_x[i] / pz * 50, py = 60 + st_y[i] / pz * 50;
         int b = (int)(255 * (1.0f - st_z[i]));
-        uint16_t c = rgb(b, b, b + 40);
-        /* traînée */
+        uint16_t c = g_rgb(b, b, b + 40);
         int n = (int)(fabsf(sx - px) + fabsf(sy - py)) + 1;
         if (n > 12) n = 12;
         for (int k = 0; k <= n; k++) {
             float u = k / (float)n;
-            put((int)(px + (sx - px) * u), (int)(py + (sy - py) * u), blend(rgb(0, 0, 40), c, (int)(u * 256)));
+            g_put(&S, (int)(px + (sx - px) * u), (int)(py + (sy - py) * u), g_blend(g_rgb(0, 0, 40), c, (int)(u * 256)));
         }
-    }
-    /* sous-titre */
-    if (ms > 600 && ms < 3800) {
-        int a = ms < 1200 ? (int)((ms - 600) * 256 / 600) : ms > 3200 ? (int)((3800 - ms) * 256 / 600) : 256;
-        if (a > 256) a = 256;
-        if (a < 0) a = 0;
-        text_c(_("SEB & CLAUDE"), 46, 1, blend(0, rgb(170, 190, 255), a), false);
-        text_c(_("PRÉSENTENT"), 60, 1, blend(0, rgb(170, 190, 255), a), false);
-    }
-    /* le titre se forme en particules */
-    if (ms > 3200) {
-        float t = (ms - 3200) / 3000.0f;
-        if (t > 1) t = 1;
-        float e = t * t * (3 - 2 * t);
-        float boom = ms > T_TUNNEL - 450 ? (ms - (T_TUNNEL - 450)) / 450.0f : 0;
-        float sw = (1 - e) * 2.4f, cs = cosf(sw), sn = sinf(sw);
-        float sweep = fmodf(ms / 900.0f, 2.0f) * 160 - 20;
-        for (int i = 0; i < s_np; i++) {
-            float cx = p_sx[i] - 60, cy = p_sy[i] - 60;
-            float rx = 60 + cx * cs - cy * sn, ry = 60 + cx * sn + cy * cs;
-            float x = rx + (p_tx[i] - rx) * e, y = ry + (p_ty[i] - ry) * e;
-            if (boom > 0) { x += (x - 60) * boom * 2.5f; y += (y - 60) * boom * 2.5f; }
-            /* reflet doré qui balaie le titre */
-            int hl = (int)(220 - fabsf(x - sweep) * 9);
-            if (hl < 0) hl = 0;
-            uint16_t c = add565(rgb(90 + (int)(120 * e), 200, 110), hl);
-            put((int)x, (int)y, c);
-        }
-        if (e >= 1 && boom == 0) text_c("T-WATCH 2020", 92, 1, rgb(120, 160, 120), false);
     }
 }
 
-/* ------------------------------------------------------------------ 2. tunnel */
+static int fade_in_out(uint32_t ms, uint32_t a, uint32_t b, uint32_t f)
+{
+    if (ms < a || ms > b) return 0;
+    if (ms < a + f) return (int)((ms - a) * 256 / f);
+    if (ms > b - f) return (int)((b - ms) * 256 / f);
+    return 256;
+}
+
+static void scene_intro(uint32_t ms, float dt)
+{
+    float speed = 0.25f + 1.6f * (ms / (float)BAR(4)) * (ms / (float)BAR(4));
+    stars_draw(speed, dt);
+    int a = fade_in_out(ms, 600, 3800, 600);
+    if (a) {
+        uint16_t c = g_blend(0, g_rgb(170, 190, 255), a);
+        g_text_c(&S, _("SEB & CLAUDE"), 46, 1, c, false);
+        g_text_c(&S, _("PRÉSENTENT"), 60, 1, c, false);
+    }
+    if (ms > 3200) {
+        float e = ease((ms - 3200) / 3000.0f);
+        float boom = ms > BAR(4) - 450 ? (ms - (BAR(4) - 450)) / 450.0f : 0;
+        particles_draw(e, boom, ms, g_rgb(90 + (int)(120 * e), 200, 110));
+        if (e >= 1 && boom == 0) g_text_c(&S, "T-WATCH 2020", 92, 1, g_rgb(120, 160, 120), false);
+    }
+}
+
+/* ------------------------------------------------------------------ tunnel */
 static uint16_t s_pal[256];
 
-static void tunnel_init(void)
+static void textures_init(void)
 {
     for (int y = 0; y < H; y++)
         for (int x = 0; x < W; x++) {
@@ -337,83 +167,104 @@ static void tunnel_init(void)
             float s = r < 8 ? 0 : (r - 8) / 52.0f;
             t_shd[i] = (uint8_t)(s > 1 ? 255 : s * 255);
         }
-    /* texture entrelacée (vaguement celtique) */
+    /* entrelacs : rubans croisés sur une grille de 32, bords sombres */
     for (int v = 0; v < 128; v++)
         for (int u = 0; u < 128; u++) {
-            float a = sinf(u * 2 * PI / 32) * sinf(v * 2 * PI / 32);
-            float b = sinf((u + v) * 2 * PI / 64);
-            int band = ((u / 16 + v / 16) & 1) ? (u & 15) : (v & 15);
-            float k = 0.5f + 0.35f * a + 0.15f * b + (band < 3 ? -0.35f : 0);
-            tex[v * 128 + u] = (uint8_t)(k < 0 ? 0 : k > 1 ? 255 : k * 255);
+            int cu = u & 31, cv2 = v & 31;
+            float d1 = fabsf(((cu + cv2) & 31) - 16.0f), d2 = fabsf(((cu - cv2 + 64) & 31) - 16.0f);
+            bool over = ((u >> 5) + (v >> 5)) & 1;
+            float a = d1 < 6 ? 1 - d1 / 6 : 0, b = d2 < 6 ? 1 - d2 / 6 : 0;
+            float k = over ? (a > 0.1f ? a : b * (d1 > 7 ? 1 : 0.3f)) : (b > 0.1f ? b : a * (d2 > 7 ? 1 : 0.3f));
+            float base = 0.15f + 0.1f * sinf(u * 0.2f) * sinf(v * 0.2f);
+            float val = k > 0.05f ? 0.35f + 0.65f * k : base;
+            tex[v * 128 + u] = (uint8_t)(clampf(val, 0, 1) * 255);
         }
 }
 
-static void make_pal(float shift)
+static void make_pal(float shift, float sat)
 {
     for (int i = 0; i < 256; i++) {
         float t = i / 255.0f;
-        float r = 0.5f + 0.5f * cosf(2 * PI * (t * 0.9f + shift + 0.00f));
+        float r = 0.5f + 0.5f * cosf(2 * PI * (t * 0.9f + shift));
         float g = 0.5f + 0.5f * cosf(2 * PI * (t * 0.9f + shift + 0.33f));
         float b = 0.5f + 0.5f * cosf(2 * PI * (t * 0.9f + shift + 0.67f));
-        float l = t;                                     /* sombre → clair */
-        s_pal[i] = rgb((int)(r * 255 * l + 40 * l), (int)(g * 255 * l + 60 * l), (int)(b * 255 * l));
+        float l = t;
+        s_pal[i] = g_rgb((int)((r * sat + (1 - sat)) * 255 * l + 40 * l), (int)((g * sat + (1 - sat)) * 255 * l + 60 * l), (int)((b * sat + (1 - sat)) * 255 * l));
     }
+}
+
+static void big_word(const char *s, int y, uint16_t col)
+{
+    g_text_c(&S, s, y, g_text_fit(s, 2, W - 2), col, true);
 }
 
 static void scene_tunnel(uint32_t ms)
 {
-    float t = (ms - T_TUNNEL) / 1000.0f;
-    make_pal(t * 0.08f);
+    float t = (ms - BAR(4)) / 1000.0f;
+    make_pal(t * 0.08f, 1);
     int du = (int)(t * 90), dv = (int)(t * 26);
-    float kick = demo_synth_kick() + demo_synth_snare() * 0.6f;
-    int bright = (int)(kick * 70);
-    int8_t twist[256];                                   /* torsion selon la profondeur */
+    int bright = (int)((demo_synth_kick() + demo_synth_snare() * 0.6f) * 70);
+    int8_t twist[256];
     for (int d = 0; d < 256; d++) twist[d] = (int8_t)(sinf(d * 0.05f + t * 1.7f) * 18);
     for (int i = 0; i < W * H; i++) {
         int d = t_dep[i];
         int a = t_ang[i] + twist[d];
         int c = tex[((d + du) & 127) * 128 + ((a / 2 + dv) & 127)];
-        int s = t_shd[i];
-        int idx = (c * s >> 8) + bright;
-        fb[i] = s_pal[idx > 255 ? 255 : idx];
+        int idx = (c * t_shd[i] >> 8) + bright;
+        S.px[i] = s_pal[idx > 255 ? 255 : idx];
     }
-    if (t < 0.25f) {                                     /* éclair d'entrée */
-        int k = (int)((0.25f - t) * 4 * 255);
-        for (int i = 0; i < W * H; i++) fb[i] = add565(fb[i], k);
-    }
+    if (t < 0.25f) g_flash(&S, (int)((0.25f - t) * 4 * 256));
     static const char *const WORDS[] = { N_("100 %"), N_("CALCULÉ"), N_("SUR LA"), N_("MONTRE") };
     int w = (int)(t / (DEMO_BAR_MS / 1000.0f));
-    if (w >= 0 && w < 4 && fmodf(t, DEMO_BAR_MS / 1000.0f) < 1.4f) text_c(_(WORDS[w]), 54, 2, 0xFFFF, true);
+    if (w >= 0 && w < 4 && fmodf(t, DEMO_BAR_MS / 1000.0f) < 1.4f) big_word(_(WORDS[w]), 54, 0xFFFF);
 }
 
-/* ------------------------------------------------------------------ 3. tore */
-#define TU 24
-#define TV 12
-typedef struct { int16_t x, y; float z; } pv_t;
-static pv_t s_pv[TU * TV];
-static float s_vx[TU * TV], s_vy[TU * TV], s_vz[TU * TV];
-typedef struct { uint16_t i; float z; uint16_t col; } face_t;
-static face_t s_face[TU * TV];
-
-static void tri(int x0, int y0, int x1, int y1, int x2, int y2, uint16_t c)
+/* ------------------------------------------------------------------ rotozoom sur plasma */
+static void scene_roto(uint32_t ms)
 {
-    /* tri des sommets en y, remplissage par lignes (virgule fixe 16.16) */
-    if (y1 < y0) { int t = y0; y0 = y1; y1 = t; t = x0; x0 = x1; x1 = t; }
-    if (y2 < y0) { int t = y0; y0 = y2; y2 = t; t = x0; x0 = x2; x2 = t; }
-    if (y2 < y1) { int t = y1; y1 = y2; y2 = t; t = x1; x1 = x2; x2 = t; }
-    if (y2 == y0) return;
-    for (int y = y0 < 0 ? 0 : y0; y <= y2 && y < H; y++) {
-        int xa = x0 + (x2 - x0) * (y - y0) / (y2 - y0);
-        int xb;
-        if (y < y1) xb = y1 == y0 ? x1 : x0 + (x1 - x0) * (y - y0) / (y1 - y0);
-        else xb = y2 == y1 ? x1 : x1 + (x2 - x1) * (y - y1) / (y2 - y1);
-        if (xa > xb) { int t = xa; xa = xb; xb = t; }
-        if (xa < 0) xa = 0;
-        if (xb >= W) xb = W - 1;
-        uint16_t *row = fb + y * W;
-        for (int x = xa; x <= xb; x++) row[x] = c;
+    float t = (ms - BAR(8)) / 1000.0f;
+    float kick = demo_synth_kick();
+    float ang = t * 0.6f + sinf(t * 0.4f) * 0.8f;
+    float zoom = 1.0f + 0.5f * sinf(t * 0.7f) - kick * 0.1f;
+    float cu = cosf(ang) * zoom, su = sinf(ang) * zoom;
+    float ox = 64 + t * 22, oy = 64 + sinf(t * 0.5f) * 40;
+    uint8_t px[W], py[H];
+    for (int i = 0; i < W; i++) px[i] = (uint8_t)(64 + 63 * sinf(i * 0.06f + t * 1.3f));
+    for (int i = 0; i < H; i++) py[i] = (uint8_t)(64 + 63 * sinf(i * 0.045f - t * 0.9f));
+    /* palette or / vert / sarcelle */
+    for (int i = 0; i < 256; i++) {
+        float k = i / 255.0f, h = k * 2 * PI + t * 0.5f;
+        s_pal[i] = g_rgb((int)((120 + 120 * sinf(h)) * k + 30), (int)((150 + 100 * sinf(h + 1.6f)) * k + 20), (int)((90 + 90 * sinf(h + 3.4f)) * k + 25));
+    }
+    for (int y = 0; y < H; y++) {
+        float u = ox + (-60) * cu - (y - 60) * su, v = oy + (-60) * su + (y - 60) * cu;
+        int32_t U = (int32_t)(u * 256), V = (int32_t)(v * 256), dU = (int32_t)(cu * 256), dV = (int32_t)(su * 256);
+        uint16_t *row = S.px + y * W;
+        for (int x = 0; x < W; x++) {
+            int c = tex[((V >> 8) & 127) * 128 + ((U >> 8) & 127)];
+            int p = (px[x] + py[y]) >> 1;
+            int idx = (c + p * 3) >> 2;
+            idx += (int)(kick * 40);
+            row[x] = s_pal[idx > 255 ? 255 : idx];
+            U += dU; V += dV;
+        }
+    }
+    if (t < 0.2f) g_flash(&S, (int)((0.2f - t) * 5 * 256));
+    if (t > 1.0f && t < 6.5f) {
+        int a = fade_in_out(ms, BAR(8) + 1000, BAR(8) + 6500, 400);
+        g_text_c(&S, _("ROTOZOOM"), 6, 2, g_blend(0, 0xFFFF, a), true);
+        g_text_c(&S, _("SUR PLASMA"), 104, 1, g_blend(0, 0xFFFF, a), true);
     }
 }
+
+/* ------------------------------------------------------------------ objets 3D pleins */
+typedef struct { int16_t x, y; } p2_t;
+typedef struct { uint16_t a, b, c, d; float z; uint16_t col; } face_t;
+#define MAXV 600
+#define MAXF 560
+static p2_t *s_pv;
+static float *s_vx, *s_vy, *s_vz;
+static face_t *s_face;
 
 static int face_cmp(const void *a, const void *b)
 {
@@ -421,11 +272,69 @@ static int face_cmp(const void *a, const void *b)
     return d > 0 ? 1 : d < 0 ? -1 : 0;
 }
 
-static void scene_torus(uint32_t ms)
+typedef struct { float cx, sx, cy, sy, cz, sz; } rot_t;
+static rot_t rot_make(float ax, float ay, float az)
 {
-    float t = (ms - T_TORUS) / 1000.0f;
-    float kick = demo_synth_kick();
-    /* fond : halo violet qui respire + plasma discret */
+    return (rot_t){ cosf(ax), sinf(ax), cosf(ay), sinf(ay), cosf(az), sinf(az) };
+}
+static void rot_apply(const rot_t *r, float *x, float *y, float *z)
+{
+    float y1 = *y * r->cx - *z * r->sx, z1 = *y * r->sx + *z * r->cx;
+    float x2 = *x * r->cy + z1 * r->sy, z2 = -*x * r->sy + z1 * r->cy;
+    float x3 = x2 * r->cz - y1 * r->sz, y3 = x2 * r->sz + y1 * r->cz;
+    *x = x3; *y = y3; *z = z2;
+}
+
+/* maillage en grille nu×nv refermé sur lui-même (tore, tube du nœud) */
+static void draw_grid_mesh(int nu, int nv, float cam_d, float scale, float hue_t, int style)
+{
+    for (int k = 0; k < nu * nv; k++) {
+        float d = cam_d + s_vz[k];
+        s_pv[k].x = (int16_t)(60 + s_vx[k] / d * scale);
+        s_pv[k].y = (int16_t)(60 + s_vy[k] / d * scale);
+    }
+    const float lx = -0.4f, ly = -0.55f, lz = -0.73f;
+    int nf = 0;
+    for (int i = 0; i < nu; i++)
+        for (int j = 0; j < nv; j++) {
+            int a = i * nv + j, b = ((i + 1) % nu) * nv + j, c = ((i + 1) % nu) * nv + (j + 1) % nv, d = i * nv + (j + 1) % nv;
+            int cr = (s_pv[b].x - s_pv[a].x) * (s_pv[d].y - s_pv[a].y) - (s_pv[b].y - s_pv[a].y) * (s_pv[d].x - s_pv[a].x);
+            int cr2 = (s_pv[c].x - s_pv[b].x) * (s_pv[d].y - s_pv[b].y) - (s_pv[c].y - s_pv[b].y) * (s_pv[d].x - s_pv[b].x);
+            if (cr >= 0 && cr2 >= 0) continue;
+            float e1x = s_vx[b] - s_vx[a], e1y = s_vy[b] - s_vy[a], e1z = s_vz[b] - s_vz[a];
+            float e2x = s_vx[d] - s_vx[a], e2y = s_vy[d] - s_vy[a], e2z = s_vz[d] - s_vz[a];
+            float nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+            float nl = sqrtf(nx * nx + ny * ny + nz * nz) + 1e-6f;
+            float l = (nx * lx + ny * ly + nz * lz) / nl;
+            if (l < 0) l = -l * 0.2f;
+            float spec = l > 0.88f ? (l - 0.88f) * 8 : 0;
+            int rr, gg, bb;
+            if (style == 0) {                                    /* tore : anneaux colorés */
+                float h = i / (float)nu + hue_t;
+                rr = (int)(140 + 110 * sinf(h * 2 * PI)); gg = (int)(60 + 50 * sinf(h * 2 * PI + 2.1f)); bb = (int)(170 + 80 * sinf(h * 2 * PI + 4.2f));
+            } else {                                             /* nœud : or et émeraude */
+                float h = sinf(i * 2 * PI / nu * 3 + hue_t * 6) * 0.5f + 0.5f;
+                rr = (int)(60 + 170 * h); gg = (int)(150 + 50 * h); bb = (int)(70 - 30 * h);
+                if ((j & 1) && style == 1) { rr = rr * 7 / 8; gg = gg * 7 / 8; bb = bb * 7 / 8; }
+            }
+            float k = 0.12f + 0.88f * l;
+            uint16_t col = g_white(g_rgb((int)(rr * k), (int)(gg * k), (int)(bb * k)), (int)(spec * 230 > 230 ? 230 : spec * 230));
+            if (nf < MAXF) {
+                s_face[nf] = (face_t){ (uint16_t)a, (uint16_t)b, (uint16_t)c, (uint16_t)d,
+                                       s_vz[a] + s_vz[b] + s_vz[c] + s_vz[d], col };
+                nf++;
+            }
+        }
+    qsort(s_face, nf, sizeof s_face[0], face_cmp);
+    for (int f = 0; f < nf; f++) {
+        face_t *q = &s_face[f];
+        g_tri(&S, s_pv[q->a].x, s_pv[q->a].y, s_pv[q->b].x, s_pv[q->b].y, s_pv[q->c].x, s_pv[q->c].y, q->col);
+        g_tri(&S, s_pv[q->a].x, s_pv[q->a].y, s_pv[q->c].x, s_pv[q->c].y, s_pv[q->d].x, s_pv[q->d].y, q->col);
+    }
+}
+
+static void bg_halo(float t, float kick, int r0, int g0, int b0)
+{
     int8_t px[W], py[H];
     for (int i = 0; i < W; i++) px[i] = (int8_t)(sinf(i * 0.09f + t) * 8);
     for (int i = 0; i < H; i++) py[i] = (int8_t)(sinf(i * 0.07f - t * 1.3f) * 8);
@@ -433,270 +342,386 @@ static void scene_torus(uint32_t ms)
     for (int y = 0; y < H; y++)
         for (int x = 0; x < W; x++) {
             int dx = x - 60, dy = y - 60;
-            int r = (dx * dx + dy * dy) >> 6;
-            int k = 70 - r + px[x] + py[y] + kk;
+            int k = 70 - ((dx * dx + dy * dy) >> 6) + px[x] + py[y] + kk;
             if (k < 0) k = 0;
-            fb[y * W + x] = rgb(k / 2 + 6, k / 6 + 2, k + 14);
+            S.px[y * W + x] = g_rgb(k * r0 / 8 + 6, k * g0 / 8 + 2, k * b0 / 8 + 14);
         }
+}
+
+#define TU 24
+#define TV 12
+static void scene_torus(uint32_t ms)
+{
+    float t = (ms - BAR(12)) / 1000.0f;
+    float kick = demo_synth_kick();
+    bg_halo(t, kick, 4, 1, 8);
     float R = 1.0f, r = 0.42f * (1 + 0.18f * kick);
-    float ax = t * 0.9f, ay = t * 0.63f, az = t * 0.31f;
-    float cx = cosf(ax), sx = sinf(ax), cy = cosf(ay), sy = sinf(ay), cz = cosf(az), sz = sinf(az);
+    rot_t ro = rot_make(t * 0.9f, t * 0.63f, t * 0.31f);
     for (int i = 0; i < TU; i++)
         for (int j = 0; j < TV; j++) {
             float u = i * 2 * PI / TU, v = j * 2 * PI / TV;
             float x = (R + r * cosf(v)) * cosf(u), y = (R + r * cosf(v)) * sinf(u), z = r * sinf(v);
-            float y1 = y * cx - z * sx, z1 = y * sx + z * cx;           /* X */
-            float x2 = x * cy + z1 * sy, z2 = -x * sy + z1 * cy;        /* Y */
-            float x3 = x2 * cz - y1 * sz, y3 = x2 * sz + y1 * cz;       /* Z */
+            rot_apply(&ro, &x, &y, &z);
             int k = i * TV + j;
-            s_vx[k] = x3; s_vy[k] = y3; s_vz[k] = z2;
-            float d = 3.2f + z2;
-            s_pv[k].x = (int16_t)(60 + x3 / d * 82);
-            s_pv[k].y = (int16_t)(60 + y3 / d * 82);
-            s_pv[k].z = z2;
+            s_vx[k] = x; s_vy[k] = y; s_vz[k] = z;
         }
-    const float lx = -0.4f, ly = -0.55f, lz = -0.73f;
-    int nf = 0;
-    for (int i = 0; i < TU; i++)
-        for (int j = 0; j < TV; j++) {
-            int a = i * TV + j, b = ((i + 1) % TU) * TV + j, c = ((i + 1) % TU) * TV + (j + 1) % TV, d = i * TV + (j + 1) % TV;
-            /* face visible ? (sens à l'écran) */
-            int cr = (s_pv[b].x - s_pv[a].x) * (s_pv[d].y - s_pv[a].y) - (s_pv[b].y - s_pv[a].y) * (s_pv[d].x - s_pv[a].x);
-            if (cr >= 0) continue;
-            float e1x = s_vx[b] - s_vx[a], e1y = s_vy[b] - s_vy[a], e1z = s_vz[b] - s_vz[a];
-            float e2x = s_vx[d] - s_vx[a], e2y = s_vy[d] - s_vy[a], e2z = s_vz[d] - s_vz[a];
-            float nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
-            float nl = sqrtf(nx * nx + ny * ny + nz * nz) + 1e-6f;
-            float l = (nx * lx + ny * ly + nz * lz) / nl;
-            if (l < 0) l = -l * 0.25f;
-            float spec = l > 0.9f ? (l - 0.9f) * 10 : 0;
-            /* anneaux de couleur le long du tore */
-            float hue = i / (float)TU + t * 0.05f;
-            int rr = (int)((140 + 110 * sinf(hue * 2 * PI)) * (0.15f + 0.85f * l));
-            int gg = (int)((60 + 50 * sinf(hue * 2 * PI + 2.1f)) * (0.15f + 0.85f * l));
-            int bb = (int)((170 + 80 * sinf(hue * 2 * PI + 4.2f)) * (0.15f + 0.85f * l));
-            uint16_t col = add565(rgb(rr, gg, bb), (int)(spec * 220));
-            s_face[nf].i = (uint16_t)(i * TV + j);
-            s_face[nf].z = (s_pv[a].z + s_pv[b].z + s_pv[c].z + s_pv[d].z) * 0.25f;
-            s_face[nf].col = col;
-            nf++;
+    draw_grid_mesh(TU, TV, 3.2f, 82, t * 0.05f, 0);
+    if (t < 0.2f) g_flash(&S, (int)((0.2f - t) * 5 * 256));
+    if (t > 1.5f && t < 6.5f) g_text_c(&S, _("RENDU LOGICIEL"), 110, 1, g_rgb(200, 170, 255), true);
+}
+
+/* nœud de trèfle : un tube de 48 × 8 facettes */
+#define KU 48
+#define KV 8
+static void knot_point(float t, float *x, float *y, float *z)
+{
+    *x = sinf(t) + 2 * sinf(2 * t);
+    *y = cosf(t) - 2 * cosf(2 * t);
+    *z = -sinf(3 * t);
+}
+
+static void scene_knot(uint32_t ms)
+{
+    float t = (ms - BAR(48)) / 1000.0f;
+    float kick = demo_synth_kick();
+    /* fond : rayons qui tournent */
+    float ra = t * 0.4f;
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            int i = y * W + x;
+            int a = (t_ang[i] + (int)(ra * 40)) & 31;
+            int k = (a < 16 ? 30 : 12) + (int)(kick * 20) - (t_shd[i] >> 4);
+            S.px[i] = g_rgb(k / 2, k, k / 2 + 4);
         }
-    qsort(s_face, nf, sizeof s_face[0], face_cmp);
-    for (int f = 0; f < nf; f++) {
-        int i = s_face[f].i / TV, j = s_face[f].i % TV;
-        int a = i * TV + j, b = ((i + 1) % TU) * TV + j, c = ((i + 1) % TU) * TV + (j + 1) % TV, d = i * TV + (j + 1) % TV;
-        tri(s_pv[a].x, s_pv[a].y, s_pv[b].x, s_pv[b].y, s_pv[c].x, s_pv[c].y, s_face[f].col);
-        tri(s_pv[a].x, s_pv[a].y, s_pv[c].x, s_pv[c].y, s_pv[d].x, s_pv[d].y, s_face[f].col);
+    rot_t ro = rot_make(t * 0.5f, t * 0.37f, t * 0.23f);
+    float rt = 0.3f + 0.05f * kick;
+    for (int i = 0; i < KU; i++) {
+        float u = i * 2 * PI / KU;
+        float px, py, pz, qx, qy, qz;
+        knot_point(u, &px, &py, &pz);
+        knot_point(u + 0.01f, &qx, &qy, &qz);
+        float tx = qx - px, ty = qy - py, tz = qz - pz, tl = sqrtf(tx * tx + ty * ty + tz * tz);
+        tx /= tl; ty /= tl; tz /= tl;
+        /* normale : T × axe z, puis binormale */
+        float nx = ty, ny = -tx, nz = 0, nl = sqrtf(nx * nx + ny * ny) + 1e-6f;
+        nx /= nl; ny /= nl;
+        float bx = ty * nz - tz * ny, by = tz * nx - tx * nz, bz = tx * ny - ty * nx;
+        for (int j = 0; j < KV; j++) {
+            float v = j * 2 * PI / KV, cv2 = cosf(v) * rt, sv = sinf(v) * rt;
+            float x = (px + nx * cv2 + bx * sv) * 0.42f, y = (py + ny * cv2 + by * sv) * 0.42f, z = (pz + nz * cv2 + bz * sv) * 0.42f;
+            rot_apply(&ro, &x, &y, &z);
+            int k = i * KV + j;
+            s_vx[k] = x; s_vy[k] = y; s_vz[k] = z;
+        }
     }
-    if (t < 0.2f) { int k = (int)((0.2f - t) * 5 * 255); for (int i = 0; i < W * H; i++) fb[i] = add565(fb[i], k); }
-    if (t > 2 && t < 13) text_c(_("RENDU LOGICIEL"), 110, 1, rgb(200, 170, 255), true);
+    draw_grid_mesh(KU, KV, 3.2f, 100, t * 0.1f, 1);
+    if (t < 0.25f) g_flash(&S, (int)((0.25f - t) * 4 * 256));
+    int a = fade_in_out(ms, BAR(48) + 1500, BAR(48) + 7000, 500);
+    if (a) g_text_c(&S, _("LE NŒUD CELTE"), 108, 1, g_blend(0, g_rgb(255, 225, 140), a), true);
 }
 
-/* ------------------------------------------------------------------ 4. voxels */
-static float cam_x = 128, cam_y = 128, cam_a = 0, cam_h = 120, cam_roll, cam_pitch;
-static float tilt0_x, tilt0_y, s_turn;
-#define SUN_A 0.3f
-
-static float vnoise_lat[64 * 64];
-static float vnoise(float x, float y, int per)     /* bruit de valeur périodique */
+/* ------------------------------------------------------------------ nuée de points */
+#define NDOT 700
+static void dot_shape(int s, int i, float *x, float *y, float *z)
 {
-    int xi = (int)floorf(x), yi = (int)floorf(y);
-    float fx = x - xi, fy = y - yi;
-    fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
-    int x0 = xi % per, y0 = yi % per, x1 = (xi + 1) % per, y1 = (yi + 1) % per;
-    float a = vnoise_lat[y0 * 64 + x0], b = vnoise_lat[y0 * 64 + x1];
-    float c = vnoise_lat[y1 * 64 + x0], d = vnoise_lat[y1 * 64 + x1];
-    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+    float u = i / (float)NDOT;
+    switch (s) {
+    case 0: {                                                  /* sphère */
+        float yy = 1 - 2 * u, r = sqrtf(1 - yy * yy), ph = i * 2.39996f;
+        *x = cosf(ph) * r; *y = yy; *z = sinf(ph) * r;
+        break;
+    }
+    case 1: {                                                  /* tore */
+        float a = (i % 35) * 2 * PI / 35, b = (i / 35) * 2 * PI / 20;
+        *x = (0.75f + 0.32f * cosf(b)) * cosf(a); *y = (0.75f + 0.32f * cosf(b)) * sinf(a); *z = 0.32f * sinf(b);
+        break;
+    }
+    case 2: {                                                  /* cube */
+        int f = i % 6, k = i / 6;
+        float a = (k % 11) / 5.0f - 1, b = ((k / 11) % 11) / 5.0f - 1;
+        float c = (f & 1) ? 1 : -1;
+        float v[3];
+        v[f / 2] = c; v[(f / 2 + 1) % 3] = a; v[(f / 2 + 2) % 3] = b;
+        *x = v[0] * 0.7f; *y = v[1] * 0.7f; *z = v[2] * 0.7f;
+        break;
+    }
+    default: {                                                 /* galaxie spirale */
+        float r = sqrtf(u) * 1.15f;
+        float a = (i & 1 ? PI : 0) + r * 5.5f + ((i * 7919) % 100) / 100.0f * 0.5f;
+        *x = cosf(a) * r; *z = sinf(a) * r; *y = (((i * 104729) % 100) / 100.0f - 0.5f) * 0.12f * (1.2f - r);
+        break;
+    }
+    }
 }
 
-static void voxel_init(void)
+static void copper(float t)
 {
-    for (int i = 0; i < 64 * 64; i++) vnoise_lat[i] = frnd();
-    for (int y = 0; y < 256; y++)
-        for (int x = 0; x < 256; x++) {
-            /* la carte se répète tous les 256 : chaque octave a une période entière */
-            float h = 0, amp = 1, tot = 0;
-            for (int per = 6; per <= 48; per *= 2) {
-                h += vnoise(x * per / 256.0f, y * per / 256.0f, per) * amp;
-                tot += amp; amp *= 0.45f;
+    for (int y = 0; y < H; y++) {
+        int r = 3, g = 2, b = 10;
+        for (int k = 0; k < 3; k++) {
+            float cy = 60 + sinf(t * (0.9f + k * 0.37f) + k * 2.1f) * 46;
+            float d = fabsf(y - cy);
+            if (d < 9) {
+                int e = (int)((9 - d) * 22);
+                static const uint8_t C[3][3] = { { 255, 80, 60 }, { 60, 200, 120 }, { 80, 120, 255 } };
+                r += C[k][0] * e >> 8; g += C[k][1] * e >> 8; b += C[k][2] * e >> 8;
             }
-            h /= tot;
-            float v = (h - 0.36f) / 0.4f;
-            if (v < 0) v = 0;
-            v = powf(v, 1.5f) * 115;
-            hmap[y * 256 + x] = (uint8_t)(v > 255 ? 255 : v);
         }
-    for (int y = 0; y < 256; y++)
-        for (int x = 0; x < 256; x++) {
-            int h = hmap[y * 256 + x];
-            int sl = h - hmap[((y + 1) & 255) * 256 + ((x + 1) & 255)];   /* pente : lumière du soir */
-            int r, g, b;
-            if (h < 18)       { r = 20; g = 60 + h * 2; b = 110 + h * 3; }        /* mer */
-            else if (h < 26)  { r = 200; g = 180; b = 120; }                     /* sable */
-            else if (h < 70)  { r = 60 + h / 3; g = 125 + h / 3; b = 45; }       /* herbe */
-            else if (h < 95)  { r = 115; g = 105; b = 90; }                      /* roche */
-            else              { r = 235; g = 232; b = 240; }                     /* neige */
-            int k = sl * 10;
-            r += k; g += k; b += k / 2;
-            if (h >= 18) { int n = (int)(rnd() & 15) - 8; r += n; g += n; b += n; }   /* grain */
-            cmap[y * 256 + x] = rgb(r, g, b);
-        }
+        uint16_t c = g_rgb(r, g, b);
+        for (int x = 0; x < W; x++) S.px[y * W + x] = c;
+    }
 }
 
-static uint8_t H_AT(float x, float y) { return hmap[(((int)y) & 255) * 256 + (((int)x) & 255)]; }
+static void scene_dots(uint32_t ms)
+{
+    float t = (ms - BAR(16)) / 1000.0f;
+    float kick = demo_synth_kick();
+    copper(t);
+    int phase = (int)((ms - BAR(16)) / BAR(2));
+    if (phase > 3) phase = 3;
+    float m = ease(((ms - BAR(16)) - phase * BAR(2)) / 1200.0f);
+    int from = phase == 0 ? 3 : phase - 1, to = phase;
+    if (phase == 0 && ms - BAR(16) < 1200) m = ease((ms - BAR(16)) / 1200.0f);
+    rot_t ro = rot_make(t * 0.7f + 0.4f, t * 0.9f, t * 0.2f);
+    float sc = 1 + kick * 0.12f;
+    for (int i = 0; i < NDOT; i++) {
+        float ax, ay, az, bx, by, bz;
+        dot_shape(from, i, &ax, &ay, &az);
+        dot_shape(to, i, &bx, &by, &bz);
+        float x = (ax + (bx - ax) * m) * sc, y = (ay + (by - ay) * m) * sc, z = (az + (bz - az) * m) * sc;
+        if (phase == 0 && ms - BAR(16) < 1200) { x = bx * m * sc; y = by * m * sc; z = bz * m * sc; }
+        rot_apply(&ro, &x, &y, &z);
+        float d = 3.0f + z;
+        int sx = (int)(60 + x / d * 120), sy = (int)(60 + y / d * 120);
+        int b = (int)(200 - z * 80);
+        b = b < 40 ? 40 : b > 255 ? 255 : b;
+        float h = i / (float)NDOT * 2 * PI + t;
+        uint16_t c = g_rgb((int)((160 + 95 * sinf(h)) * b / 255), (int)((160 + 95 * sinf(h + 2.1f)) * b / 255), (int)((160 + 95 * sinf(h + 4.2f)) * b / 255));
+        g_glow(&S, sx, sy, c);
+        if (z < 0) { g_glow(&S, sx + 1, sy, c); g_glow(&S, sx, sy + 1, c); g_glow(&S, sx + 1, sy + 1, c); }
+    }
+    if (ms - BAR(16) < 250) g_flash(&S, (int)((250 - (ms - BAR(16))) * 256 / 250));
+    static const char *const NAMES[] = { N_("SPHÈRE"), N_("TORE"), N_("CUBE"), N_("GALAXIE") };
+    int a = fade_in_out(ms - BAR(16) - phase * BAR(2), 1300, BAR(2) - 200, 300);
+    if (a) g_text_c(&S, _(NAMES[phase]), 108, 1, g_blend(0, 0xFFFF, a), true);
+    if (phase == 0 && a) g_text_c(&S, _("700 POINTS"), 6, 1, g_blend(0, 0xFFFF, a), true);
+}
+
+/* ------------------------------------------------------------------ métaballes */
+static void scene_meta(uint32_t ms)
+{
+    float t = (ms - BAR(24)) / 1000.0f;
+    float bx[5], by[5], br[5];
+    for (int k = 0; k < 5; k++) {
+        bx[k] = 30 + 22 * sinf(t * (0.5f + k * 0.13f) + k * 1.7f) + k * 0.2f;
+        by[k] = 30 + 20 * cosf(t * (0.43f + k * 0.11f) + k * 2.3f);
+        br[k] = 26 + k * 7;
+    }
+    for (int y = 0; y < 60; y++)
+        for (int x = 0; x < 60; x++) {
+            float f = 0;
+            for (int k = 0; k < 5; k++) {
+                float dx = x - bx[k], dy = y - by[k];
+                f += br[k] / (dx * dx + dy * dy + 1);
+            }
+            int v = (int)(f * 120);
+            uint16_t c;
+            if (v < 100) c = g_rgb(v / 6, v / 4 + 6, v / 3 + 14);                 /* nuit */
+            else if (v < 120) c = g_rgb(255, 220, 140);                           /* liseré doré */
+            else { int e = v > 400 ? 400 : v; c = g_rgb(30 + e / 8, 110 + e / 4, 80 + e / 6); }
+            uint16_t *p = S.px + (2 * y) * W + 2 * x;
+            p[0] = p[1] = p[W] = p[W + 1] = c;
+        }
+    static const char *const CRED[][2] = {
+        { N_("MUSIQUE"), N_("SYNTHÉ 4 VOIES") }, { N_("IMAGES"), N_("120 × 120, ×2") },
+        { N_("CODE"), N_("SEB & CLAUDE") }, { N_("POIDS"), N_("0 OCTET D'IMAGE") },
+    };
+    int k = (int)((ms - BAR(24)) / BAR(1));
+    if (k > 3) k = 3;
+    int a = fade_in_out(ms - BAR(24) - k * BAR(1), 150, BAR(1) - 150, 300);
+    if (a) {
+        g_text_c(&S, _(CRED[k][0]), 44, 2, g_blend(0, 0xFFFF, a), true);
+        g_text_c(&S, _(CRED[k][1]), 66, 1, g_blend(0, g_rgb(255, 230, 160), a), true);
+    }
+}
+
+/* ------------------------------------------------------------------ feu */
+static uint16_t s_fpal[256];
+static void plot_heat(int x, int y, void *ctx)
+{
+    if ((unsigned)x < W && (unsigned)y < H) fire[y * W + x] = 255;
+}
+
+static void scene_fire(uint32_t ms)
+{
+    float t = (ms - BAR(28)) / 1000.0f;
+    static bool pal;
+    if (!pal) {
+        pal = true;
+        for (int i = 0; i < 256; i++) {
+            int r = i * 3, g = (i - 85) * 3, b = (i - 170) * 3;
+            s_fpal[i] = g_rgb(r, g < 0 ? 0 : g, b < 0 ? 0 : b);
+        }
+    }
+    if (ms - BAR(28) < 60) memset(fire, 0, W * (H + 2));
+    /* foyer en bas, plus fort avec le roulement */
+    int heat = 160 + (int)(t / 7.68f * 95);
+    for (int x = 0; x < W; x++) {
+        fire[(H + 1) * W + x] = (uint8_t)((g_rnd() & 1) ? heat : heat / 3);
+        fire[H * W + x] = (uint8_t)((g_rnd() & 3) ? heat : 0);
+    }
+    /* le titre brûle */
+    float rise = clampf((t - 1.0f) / 5.0f, 0, 1);
+    int ty = 70 - (int)(rise * 22);
+    g_text_walk("TÍR NA", (W - g_text_width("TÍR NA", 2)) / 2, ty, 2, plot_heat, NULL);
+    g_text_walk("NÓG", (W - g_text_width("NÓG", 3)) / 2, ty + 22, 3, plot_heat, NULL);
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            int s = fire[(y + 1) * W + (x ? x - 1 : x)] + fire[(y + 1) * W + x] + fire[(y + 1) * W + (x < W - 1 ? x + 1 : x)] + fire[(y + 2) * W + x];
+            int v = (s >> 2) - 2;
+            fire[y * W + x] = (uint8_t)(v < 0 ? 0 : v);
+        }
+    for (int i = 0; i < W * H; i++) S.px[i] = s_fpal[fire[i]];
+    g_text_c(&S, "TÍR NA", ty, 2, g_rgb(255, 250, 220), false);
+    g_text_c(&S, "NÓG", ty + 22, 3, g_rgb(255, 250, 220), false);
+    if (ms > BAR(32) - 300) g_flash(&S, (int)((ms - (BAR(32) - 300)) * 256 / 300));
+}
+
+/* ------------------------------------------------------------------ paysage */
+static vox_cam_t s_cam;
+static bool s_cam_set;
+static float s_turn;
 
 static void scene_voxel(uint32_t ms, float dt)
 {
-    float t = (ms - T_VOXEL) / 1000.0f;
-    bool pilot = ms >= T_PILOT;
-    /* ciel du soir, indexé par la hauteur au-dessus de l'horizon */
-    const uint16_t sky_top = rgb(30, 24, 80), sky_bot = rgb(255, 150, 90);
-    uint16_t sky[96];
-    for (int i = 0; i < 96; i++) { int k = 256 - i * 256 / 70; sky[i] = blend(sky_top, sky_bot, k < 0 ? 0 : k); }
-    const uint16_t fog = rgb(240, 150, 110);
-
-    /* pilote : automatique, puis le poignet */
-    float turn = 0, climb = 0;
-    if (pilot && s_tilt) {
-        int16_t ax, ay, az;
-        if (motion_accel_read(&ax, &ay, &az)) {
-            float fx = ax / 1024.0f, fy = ay / 1024.0f;
-            tilt0_x += (fx - tilt0_x) * 0.004f;          /* le neutre suit lentement la pose */
-            tilt0_y += (fy - tilt0_y) * 0.004f;
-            turn = (fx - tilt0_x) * 2.2f;
-            climb = (fy - tilt0_y) * 140;
-        }
-    } else {
-        /* pilote automatique : suit les vallées, avec un peu de fantaisie */
-        float hl = 0, hr = 0;
-        for (int k = 1; k <= 3; k++) {
-            float d = 25.0f * k;
-            hl += H_AT(cam_x + cosf(cam_a - 0.45f) * d, cam_y + sinf(cam_a - 0.45f) * d);
-            hr += H_AT(cam_x + cosf(cam_a + 0.45f) * d, cam_y + sinf(cam_a + 0.45f) * d);
-        }
-        turn = (hl - hr) * 0.004f + sinf(t * 0.31f) * 0.3f;
+    float t = (ms - BAR(32)) / 1000.0f;
+    if (vox_progress() < 100) { scene_fire(BAR(32) - 1000); return; }
+    if (!s_cam_set) {
+        s_cam_set = true;
+        vox_find_valley(&s_cam.x, &s_cam.y, &s_cam.a);
+        s_cam.h = vox_ground(s_cam.x, s_cam.y) + 40;
     }
+    /* pilote automatique : suit les vallées */
+    float hl = 0, hr = 0;
+    for (int k = 1; k <= 3; k++) {
+        float d = 25.0f * k;
+        hl += vox_ground(s_cam.x + cosf(s_cam.a - 0.45f) * d, s_cam.y + sinf(s_cam.a - 0.45f) * d);
+        hr += vox_ground(s_cam.x + cosf(s_cam.a + 0.45f) * d, s_cam.y + sinf(s_cam.a + 0.45f) * d);
+    }
+    float turn = clampf((hl - hr) * 0.004f + sinf(t * 0.31f) * 0.3f, -0.9f, 0.9f);
     s_turn += (turn - s_turn) * 0.06f;
-    turn = s_turn;
-    if (turn > 0.9f) turn = 0.9f;
-    if (turn < -0.9f) turn = -0.9f;
-    cam_a += turn * dt * 0.9f;
-    cam_roll += (turn * 0.6f - cam_roll) * 0.1f;
-    float v = 38;
-    cam_x += cosf(cam_a) * v * dt;
-    cam_y += sinf(cam_a) * v * dt;
+    s_cam.a += s_turn * dt * 0.9f;
+    s_cam.roll += (s_turn * 0.6f - s_cam.roll) * 0.1f;
+    s_cam.x += cosf(s_cam.a) * 40 * dt;
+    s_cam.y += sinf(s_cam.a) * 40 * dt;
     float ground = 0;
-    for (int k = 0; k < 8; k++) { float g = H_AT(cam_x + cosf(cam_a) * k * 9, cam_y + sinf(cam_a) * k * 9) - k * 2.0f; if (g > ground) ground = g; }
-    float target = ground + 50 + climb;
-    if (target < 40) target = 40;
-    cam_h += (target - cam_h) * 0.06f;
-    if (cam_h < ground + 12) cam_h = ground + 12;
-    cam_pitch += ((pilot ? -climb * 0.25f : 0) - cam_pitch) * 0.1f;
-
-    float hz = 40 + cam_pitch;
-    float ca = cosf(cam_a), sa = sinf(cam_a);
-    float sd = remainderf(SUN_A - cam_a, 2 * PI);          /* soleil : direction fixe */
-    int sun_col = fabsf(sd) < 1.2f ? 60 + (int)(tanf(sd) * 60) : -1000;
-    for (int col = 0; col < W; col++) {
-        float horizon = hz + (col - 60) * cam_roll;
-        float rx = (col - 60) / 60.0f;                    /* champ ±45° */
-        float dx = ca - sa * rx, dy = sa + ca * rx;
-        int ybuf = H;
-        float z = 1, dz = 1;
-        while (z < 240 && ybuf > 0) {
-            float px = cam_x + dx * z, py = cam_y + dy * z;
-            int mi = (((int)py) & 255) * 256 + (((int)px) & 255);
-            int h = hmap[mi];
-            if (h < 18) h = 18;                            /* niveau de la mer */
-            int sy = (int)((cam_h - h) / z * 70 + horizon);
-            if (sy < ybuf) {
-                uint16_t c = cmap[mi];
-                if (hmap[mi] < 18) c = blend(c, rgb(255, 190, 140), (int)(70 + 30 * sinf((px + py) * 0.2f + t * 2)));   /* reflets */
-                int f = (int)(z * 256 / 240);
-                c = blend(c, fog, f * f >> 8);
-                int y0 = sy < 0 ? 0 : sy;
-                for (int y = y0; y < ybuf; y++) fb[y * W + col] = c;
-                ybuf = y0;
-            }
-            z += dz;
-            dz *= 1.025f;
-        }
-        int dxs = col - sun_col;
-        for (int y = 0; y < ybuf; y++) {
-            int up = (int)horizon - y;                      /* pixels au-dessus de l'horizon */
-            uint16_t c = sky[up < 0 ? 0 : up > 95 ? 95 : up];
-            if (sun_col > -40 && sun_col < W + 40) {        /* soleil et halo */
-                int dy = up - 12, d2 = dxs * dxs + dy * dy;
-                if (d2 <= 30) c = rgb(255, 244, 200);
-                else if (d2 < 900) c = add565(c, (900 - d2) * 120 / 900);
-            }
-            fb[y * W + col] = c;
-        }
+    for (int k = 0; k < 8; k++) {
+        float g = vox_ground(s_cam.x + cosf(s_cam.a) * k * 9, s_cam.y + sinf(s_cam.a) * k * 9) - k * 2.0f;
+        if (g > ground) ground = g;
     }
-
-    if (t < 0.25f) { int k = (int)((0.25f - t) * 4 * 255); for (int i = 0; i < W * H; i++) fb[i] = add565(fb[i], k); }
-
-    /* défilement sinusoïdal des salutations */
-    if (ms > T_SCROLL && !pilot) {
-        const char *MSG = _("TÍR NA NÓG · UNE INTRO POUR T-WATCH 2020 · TOUT EST CALCULÉ ICI, MÊME LA MUSIQUE · "
-                            "SALUTATIONS À FARBRAUSCH · LILYGO · ESPRESSIF · LA DÉMOSCÈNE · "
-                            "ET AUX AMIS DES QSO DES GASCONS · BONS 73 ! ·         ");
-        /* vitesse calée pour que tout le texte passe avant « À TOI ! » */
-        float span = W + text_width(MSG, 2);
-        float off = (ms - T_SCROLL) * span / (T_PILOT - T_SCROLL);
+    s_cam.h += (ground + 40 - s_cam.h) * 0.06f;
+    if (s_cam.h < ground + 12) s_cam.h = ground + 12;
+    s_cam.pitch = 0;
+    vox_render(&S, NULL, &s_cam, 70, t);
+    if (t < 0.3f) g_flash(&S, (int)((0.3f - t) * 3.3f * 256));
+    /* défilement sinusoïdal, vitesse calée sur la durée de la scène */
+    const char *msg = _("TÍR NA NÓG · UNE INTRO POUR T-WATCH 2020 · TOUT EST CALCULÉ ICI, MÊME LA MUSIQUE · "
+                        "LE PAYSAGE EST INVENTÉ À CHAQUE LANCEMENT : PRÉS, HAIES, FERMES, RIVIÈRES · "
+                        "SALUTATIONS À LILYGO · ESPRESSIF · LA DÉMOSCÈNE · "
+                        "ET AUX AMIS DES QSO DES GASCONS · BONS 73 ! ·         ");
+    if (t > 1.5f) {
+        float span = W + g_text_width(msg, 2);
+        float off = (t - 1.5f) * span / (BAR(16) / 1000.0f - 2.0f);
         int x = W - (int)off;
-        const char *s = MSG;
+        const char *s = msg;
         while (*s && x < W) {
-            char b; int acc;
-            const char *n = next_char(s, &b, &acc);
+            int n = g_char_len(s);
             if (x > -12) {
-                char one[4] = { 0 };
-                memcpy(one, s, (size_t)(n - s));
+                char one[5] = { 0 };
+                memcpy(one, s, (size_t)(n < 4 ? n : 4));
                 int y = 92 + (int)(sinf(x * 0.08f + t * 4) * 6);
-                text(one, x, y, 2, rgb(255, 255, 220), true);
+                g_text(&S, one, x, y, 2, g_rgb(255, 255, 220), true);
             }
             x += 12;
-            s = n;
+            s += n;
         }
     }
-    if (pilot) {
-        float k = (ms - T_PILOT) / 1000.0f;
-        if (k < 4 && fmodf(k, 0.5f) < 0.35f) text_c(_("À TOI !"), 50, fit(_("À TOI !"), 3), 0xFFFF, true);
-        if (k > 1 && k < 7) text_c(_("PENCHE LE POIGNET"), 100, 1, 0xFFFF, true);
+}
+
+/* ------------------------------------------------------------------ fin */
+static bool s_outro_init;
+static void scene_outro(uint32_t ms, float dt)
+{
+    if (!s_outro_init) { s_outro_init = true; particles_text(_("MERCI !"), 40, g_text_fit(_("MERCI !"), 3, W - 4), NULL, 0, 0); }
+    float t = (ms - BAR(56)) / 1000.0f;
+    stars_draw(0.15f, dt);
+    if (t < 0.3f) g_flash(&S, (int)((0.3f - t) * 3.3f * 256));
+    float e = ease((t - 0.5f) / 3.5f);
+    if (t > 0.5f) particles_draw(e, 0, ms, g_rgb(255, 200, 90));
+    int a = fade_in_out(ms, BAR(56) + 5000, BAR(64), 800);
+    if (a) {
+        uint16_t c = g_blend(0, g_rgb(170, 190, 255), a);
+        g_text_c(&S, _("TÍR NA NÓG"), 78, 1, c, false);
+        g_text_c(&S, _("SEB & CLAUDE · 2026"), 92, 1, c, false);
+        g_text_c(&S, "T-WATCH 2020", 104, 1, c, false);
     }
+    if (ms > BAR(62)) g_fade(&S, (int)((ms - BAR(62)) * 256 / BAR(2)));
+}
+
+static void scene_end(uint32_t ms, float dt)
+{
+    stars_draw(0.1f, dt);
+    int a = (int)((ms - DEMO_END_MS) * 256 / 1500);
+    if (a > 256) a = 256;
+    g_text_c(&S, "TÍR NA NÓG", 48, 1, g_blend(0, g_rgb(120, 200, 120), a), false);
+    if ((ms / 600) & 1) g_text_c(&S, _("TOUCHE POUR REVOIR"), 66, 1, g_blend(0, g_rgb(150, 150, 170), a), false);
 }
 
 /* ------------------------------------------------------------------ boucle */
 static void frame(void)
 {
-    if (!fb || !cv) return;
+    if (!S.px || !cv) return;
     uint32_t ms = demo_synth_ms();
     float dt = (ms - s_last_ms) / 1000.0f;
-    if (dt < 0 || dt > 0.1f) dt = 0.033f;          /* saut d'horloge : pas normal */
+    if (dt < 0 || dt > 0.1f) dt = 0.033f;
     s_last_ms = ms;
-    if (ms < T_TUNNEL) scene_stars(ms, dt);
-    else if (ms < T_TORUS) scene_tunnel(ms);
-    else if (ms < T_VOXEL) scene_torus(ms);
-    else scene_voxel(ms, dt);
-    if (ms < s_sound_ms) text(s_sound ? _("SON") : _("MUET"), 92, 3, 1, 0xFFFF, true);
-
-    /* ×2 vers le canevas */
-    for (int y = 0; y < H; y++) {
-        const uint16_t *src = fb + y * W;
-        uint32_t *d0 = (uint32_t *)(cv + (2 * y) * 240), *d1 = (uint32_t *)(cv + (2 * y + 1) * 240);
-        for (int x = 0; x < W; x++) {
-            uint32_t p = src[x] | ((uint32_t)src[x] << 16);
-            d0[x] = p;
-            d1[x] = p;
-        }
-    }
+    if (ms < BAR(4)) scene_intro(ms, dt);
+    else if (ms < BAR(8)) scene_tunnel(ms);
+    else if (ms < BAR(12)) scene_roto(ms);
+    else if (ms < BAR(16)) scene_torus(ms);
+    else if (ms < BAR(24)) scene_dots(ms);
+    else if (ms < BAR(28)) scene_meta(ms);
+    else if (ms < BAR(32)) scene_fire(ms);
+    else if (ms < BAR(48)) scene_voxel(ms, dt);
+    else if (ms < BAR(56)) scene_knot(ms);
+    else if (ms < BAR(64)) scene_outro(ms, dt);
+    else scene_end(ms, dt);
+    /* le paysage n'est plus utile après sa scène : on rend la mémoire */
+    if (ms >= BAR(48) && s_vox) { vox_free(); s_vox = false; }
+    if (ms < s_sound_ms) g_text(&S, s_sound ? _("SON") : _("MUET"), 92, 3, 1, 0xFFFF, true);
+    g_scale(&S, cv, 240, 2, 2);
     lv_obj_invalidate(v_cv);
 }
 
 static void tick_cb(lv_timer_t *t) { frame(); }
 
+static void restart(void)
+{
+    g_seed(0x7172A);
+    stars_init();
+    particles_text("TÍR NA", 40, 2, "NÓG", 62, 3);
+    s_outro_init = false;
+    s_cam = (vox_cam_t){ .x = 256, .y = 256, .h = 80 };
+    s_cam_set = false;
+    s_turn = 0;
+    s_last_ms = 0;
+    if (!s_vox) s_vox = vox_gen_start(esp_random());
+    demo_synth_start(SONG_DEMO, s_sound);
+}
+
 static void tap_cb(lv_event_t *e)
 {
+    if (demo_synth_ms() >= DEMO_END_MS) { restart(); return; }
     s_sound = !s_sound;
     demo_synth_sound(s_sound);
     s_sound_ms = demo_synth_ms() + 1200;
@@ -716,27 +741,33 @@ static void *alloc_ps(size_t n)
 
 static void free_all(void)
 {
-    heap_caps_free(fb); heap_caps_free(cv); heap_caps_free(hmap); heap_caps_free(cmap);
-    heap_caps_free(t_ang); heap_caps_free(t_dep); heap_caps_free(t_shd); heap_caps_free(tex);
+    if (s_vox) { vox_free(); s_vox = false; }
+    heap_caps_free(S.px); heap_caps_free(cv);
+    heap_caps_free(t_ang); heap_caps_free(t_dep); heap_caps_free(t_shd); heap_caps_free(tex); heap_caps_free(fire);
     heap_caps_free(p_tx); heap_caps_free(p_ty); heap_caps_free(p_sx); heap_caps_free(p_sy);
-    fb = cv = cmap = NULL; hmap = t_ang = t_dep = t_shd = tex = NULL;
+    heap_caps_free(s_pv); heap_caps_free(s_vx); heap_caps_free(s_vy); heap_caps_free(s_vz); heap_caps_free(s_face);
+    S.px = NULL; cv = NULL;
+    t_ang = t_dep = t_shd = tex = fire = NULL;
     p_tx = p_ty = NULL; p_sx = p_sy = NULL;
+    s_pv = NULL; s_vx = s_vy = s_vz = NULL; s_face = NULL;
 }
 
 static void create(lv_obj_t *scr)
 {
-    font_init();
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
-    fb = alloc_int(W * H * 2);
-    t_ang = alloc_ps(W * H); t_dep = alloc_ps(W * H); t_shd = alloc_ps(W * H);   /* tables : la PSRAM suffit */
-    tex = alloc_ps(128 * 128);
+    S = (gsurf_t){ alloc_int(W * H * 2), W, H };
     cv = alloc_ps(240 * 240 * 2);
-    hmap = alloc_ps(256 * 256);
-    cmap = alloc_ps(256 * 256 * 2);
+    t_ang = alloc_ps(W * H); t_dep = alloc_ps(W * H); t_shd = alloc_ps(W * H);
+    tex = alloc_ps(128 * 128);
+    fire = alloc_ps(W * (H + 2));
     p_tx = alloc_ps(NPART * 2); p_ty = alloc_ps(NPART * 2);
     p_sx = alloc_ps(NPART * 4); p_sy = alloc_ps(NPART * 4);
+    s_pv = alloc_ps(MAXV * sizeof(p2_t));
+    s_vx = alloc_ps(MAXV * 4); s_vy = alloc_ps(MAXV * 4); s_vz = alloc_ps(MAXV * 4);
+    s_face = alloc_ps(MAXF * sizeof(face_t));
     v_cv = lv_canvas_create(scr);
-    if (!fb || !cv || !hmap || !cmap || !t_ang || !t_dep || !t_shd || !tex || !p_tx || !p_ty || !p_sx || !p_sy) {
+    if (!S.px || !cv || !t_ang || !t_dep || !t_shd || !tex || !fire || !p_tx || !p_ty || !p_sx || !p_sy
+        || !s_pv || !s_vx || !s_vy || !s_vz || !s_face) {
         free_all();
         lv_obj_t *l = ui_label(scr, &font_text_16, C_FG, _("Mémoire insuffisante"));
         lv_obj_center(l);
@@ -748,10 +779,7 @@ static void create(lv_obj_t *scr)
     lv_obj_add_flag(v_cv, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(v_cv, tap_cb, LV_EVENT_CLICKED, NULL);
     ui_bubble(v_cv);
-    rng = 0x1234567;
-    stars_init();
-    tunnel_init();
-    voxel_init();
+    textures_init();
 }
 
 static void destroy(void)
@@ -764,14 +792,9 @@ static void destroy(void)
 
 static void on_show(void)
 {
-    if (!fb) return;
-    power_hold_active(true);                      /* 240 MHz pendant l'intro */
-    s_tilt = motion_accel_begin();
-    int16_t ax, ay, az;
-    if (s_tilt && motion_accel_read(&ax, &ay, &az)) { tilt0_x = ax / 1024.0f; tilt0_y = ay / 1024.0f; }
-    cam_x = cam_y = 128; cam_a = 0; cam_h = 120; cam_roll = cam_pitch = s_turn = 0;
-    s_last_ms = 0;
-    demo_synth_start(s_sound);
+    if (!S.px) return;
+    power_hold_active(true);                      /* 240 MHz pendant la démo */
+    restart();
     if (!v_tmr) v_tmr = lv_timer_create(tick_cb, 20, NULL);
     else lv_timer_resume(v_tmr);
 }
@@ -780,8 +803,8 @@ static void on_hide(void)
 {
     if (v_tmr) lv_timer_pause(v_tmr);
     demo_synth_stop();
-    if (fb) power_hold_active(false);
-    if (s_tilt) { motion_accel_end(); s_tilt = false; }
+    if (s_vox) { vox_free(); s_vox = false; }
+    if (S.px) power_hold_active(false);
 }
 
 static bool keep_on(void) { return true; }

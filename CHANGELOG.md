@@ -2,6 +2,26 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.31.0 — 2026-11-20
+
+- **Demo** rewritten and doubled in length (about 2 min, 64 bars): particle title, textured
+  tunnel, rotozoom over plasma, shaded torus, a 700-dot swarm morphing sphere → torus → cube →
+  galaxy over copper bars, metaballs with credits, burning title, the landscape flight with
+  sine-scroller, a 3D Celtic knot, "THANKS!" and fade out; tap at the end to watch again. The
+  wrist-flying part moved to its own game.
+- New **Soar** game: fly through gold rings against the clock by tilting your wrist. +5 s per
+  ring (less later on), combos for rings chained within 6 s, speed rising, boost on tap,
+  missed rings cost 3 s, crash on the terrain, best score kept. Rings hide behind hills (depth
+  buffer), arrow to the next ring, sun lens flare, speed lines, sparks, shake on crash.
+- **Landscape** much more detailed and new at every launch (512×512, built in the background):
+  winding rivers, lakes and beaches, patchwork meadows with hedgerows, ploughed and hay fields,
+  forests, white farmhouses, moorland, rock and snow; low-sun lighting with cast shadows,
+  perspective clouds, sky reflections on water, smoothed foreground.
+- Music: 64-bar arrangement (verse, chorus, bridge with pad, finale an octave up, fade out),
+  echo on the melody, a game loop and sound effects (ring, boost, countdown, crash).
+- Fix: unmuting the demo did not bring the sound back. The audio stream now stays open and
+  only sends silence while muted.
+
 ## 0.30.0 — 2026-11-20
 
 - New **Demo** app, *Tír na nÓg*: a demoscene-style intro computed entirely on the watch, about

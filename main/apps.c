@@ -12,6 +12,7 @@ extern const app_t app_lamp;
 extern const app_t app_steps;
 extern const app_t app_puca;
 extern const app_t app_demo;
+extern const app_t app_flight;
 extern const app_t app_rfgen;
 extern const app_t app_wifi;
 extern const app_t app_sdr;
@@ -28,6 +29,7 @@ const app_t *const g_apps[] = {
     &app_steps,
     &app_puca,
     &app_demo,
+    &app_flight,
     &app_lamp,
 #ifndef TW_NO_TVOFF
     &app_tvoff,

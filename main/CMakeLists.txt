@@ -48,6 +48,9 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/puca_sfx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/app_demo.c
     ${CMAKE_CURRENT_SOURCE_DIR}/demo_synth.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/demo_gfx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/voxel.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_flight.c
     ${CMAKE_CURRENT_SOURCE_DIR}/motion.c
     ${CMAKE_CURRENT_SOURCE_DIR}/radio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/webrx.c

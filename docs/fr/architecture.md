@@ -126,15 +126,22 @@ d'ESP-IDF 5.
   étoiles). Tous les sprites sont des grilles de texte dans `tools/puca_art.py`, qui génère
   `puca_gfx.c/.h` et une planche d'aperçu. Les effets sonores sont de courts airs en onde
   carrée joués par une tâche éphémère sur le flux I2S.
-- **Démo** (`app_demo.c`, musique `demo_synth.c` ; guide : [demo.md](demo.md)) : intro
-  calculée en 120×120 dans un tampon en RAM interne, doublée dans un canevas 240×240 en PSRAM
-  (minuteur LVGL de 20 ms, 240 MHz tenus tant qu'elle est affichée). Le synthétiseur tourne
-  dans sa tâche `demosnd` (cœur 0) sur le flux I2S à 16 kHz et sert d'horloge : chaque image
-  lit sa position dans le morceau (et l'enveloppe de grosse caisse) plutôt qu'un compteur
-  d'images, d'où des effets calés sur le tempo quel que soit le débit. Carte de hauteurs
-  (64 Ko) et de couleurs (128 Ko) générées en PSRAM à l'ouverture, libérées à la sortie. Le
-  pilotage lit l'accéléromètre en direct (`motion_accel_*` : le capteur est allumé à 100 Hz si
-  ni pas ni poignet ne l'utilisent, puis remis dans son état).
+- **Démo** (`app_demo.c`, guide : [demo.md](demo.md)) et **Envol** (`app_flight.c`, guide :
+  [flight.md](flight.md)) partagent trois modules. `demo_gfx.c` : couleurs RGB565, police 5×7
+  avec accents, triangles, agrandissement vers le canevas. `demo_synth.c` : synthétiseur façon
+  tracker dans sa tâche `demosnd` (cœur 0), flux I2S à 16 kHz ouvert du début à la fin (couper
+  le son n'envoie que du silence), morceau de 64 mesures pour la démo ou boucle pour le jeu,
+  bruitages mixés par-dessus ; il sert d'horloge : chaque image lit sa position dans le
+  morceau (et l'enveloppe de grosse caisse) plutôt qu'un compteur d'images. `voxel.c` : monde
+  de 512×512 (hauteurs 256 Ko, couleurs éclairées 512 Ko, en PSRAM) généré par une tâche
+  `voxgen` de basse priorité sur le cœur 0 — relief, rivières, prés de Voronoï bordés de haies,
+  forêts, fermes, éclairage avec ombres portées par lancer de rayon vers le soleil — puis rendu
+  colonne par colonne avec tampon de hauteur, interpolation au premier plan, brume, reflets,
+  nuages projetés, roulis par colonne et tampon de profondeur optionnel. La démo rend en
+  120×120 doublé, le jeu en 240×120 aux lignes doublées. Les deux tiennent 240 MHz tant
+  qu'elles sont affichées et lisent l'accéléromètre en direct (`motion_accel_*` : le capteur
+  est allumé à 100 Hz si ni pas ni poignet ne l'utilisent, puis remis dans son état). Le
+  record d'Envol est un blob NVS (`flight`/`best`).
 - **Changer de langue** reconstruit tous les écrans sur place, sans redémarrer.
 - Les objets LVGL sont alloués sur le tas ; les allocations de plus de 4 Ko vont en PSRAM, la
   RAM interne est gardée pour les piles, les tampons DMA et la radio.

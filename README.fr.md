@@ -69,11 +69,14 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   dépend des soins : lièvre (bien soigné et tu marches beaucoup — 1000 pas rapportent un
   trèfle), cheval, ou bouc ronchon. Ciel qui suit l'heure, petits airs 8 bits, rien ne tourne en
   fond (sa vie est calculée à l'ouverture) — voir le [guide Púca](docs/fr/puca.md).
-- **Démo « Tír na nÓg »**, une intro façon démoscène entièrement calculée par la montre : champ
-  d'étoiles et titre en particules, tunnel texturé, tore 3D ombré, puis survol de collines au
-  coucher du soleil en « voxel space » avec défilement sinusoïdal — et à la fin on pilote en
-  penchant le poignet. Musique chiptune 4 voies synthétisée en direct — voir le
-  [guide Démo](docs/fr/demo.md).
+- **Démo « Tír na nÓg »**, une intro façon démoscène de 2 minutes entièrement calculée par la
+  montre : titre en particules, tunnel texturé, rotozoom, tore ombré, nuée de points qui change
+  de forme, métaballes, feu, survol d'une Irlande inventée à chaque lancement (prés et haies,
+  rivières, fermes, ombres portées), nœud celtique en 3D — sur une musique chiptune
+  synthétisée en direct — voir le [guide Démo](docs/fr/demo.md).
+- **Envol**, un jeu de vol au-dessus de ce paysage : on pilote au poignet pour traverser des
+  anneaux d'or contre la montre, combos, turbo, crash, record — voir le
+  [guide Envol](docs/fr/flight.md).
 - **Les notifications ne font jamais quitter une app ou un menu** : elles glissent en
   bannière par-dessus (toucher pour lire, glisser vers le haut pour fermer) ; sur le cadran,
   elles s'ouvrent en plein écran comme avant.
@@ -103,7 +106,7 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Pas, Púca, Démo, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Pas, Púca, Démo, Envol, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |
@@ -177,6 +180,7 @@ Pour aller plus loin : [compiler, flasher, tester](docs/fr/building.md).
 | Radio (webradios) : réglages et utilisation | [docs/fr/radio.md](docs/fr/radio.md) | [docs/en/radio.md](docs/en/radio.md) |
 | Púca (animal virtuel) : sa vie, comment s'en occuper | [docs/fr/puca.md](docs/fr/puca.md) | [docs/en/puca.md](docs/en/puca.md) |
 | Démo « Tír na nÓg » : scènes, commandes, comment c'est fait | [docs/fr/demo.md](docs/fr/demo.md) | [docs/en/demo.md](docs/en/demo.md) |
+| Envol (jeu de vol) : commandes et règles | [docs/fr/flight.md](docs/fr/flight.md) | [docs/en/flight.md](docs/en/flight.md) |
 | Écrire une app, traduire | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) |
 | Historique | | [CHANGELOG.md](CHANGELOG.md) |
 | Contribuer | [CONTRIBUTING.md](CONTRIBUTING.md) | |
