@@ -38,6 +38,9 @@ typedef struct app_s {
     /* optionnel : true = l'app travaille en fond (écoute…) ; le bouton
      * éteint alors l'écran au lieu de revenir au cadran */
     bool (*background)(void);
+    /* optionnel : true = rien ne s'affiche par-dessus (jeu) ; les notifs
+     * restent dans la liste, sans bannière ni vibration. Les appels passent. */
+    bool (*no_interrupt)(void);
 } app_t;
 
 /* registre (apps.c) */

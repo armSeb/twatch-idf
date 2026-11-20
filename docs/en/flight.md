@@ -33,7 +33,9 @@ same course twice.
 
 Music and sound effects (ring, boost, countdown, crash) come from the same synth as the demo;
 mute by tapping *SOUND* top right on the title screen. The screen stays on and the CPU at
-240 MHz while playing; leaving the app abandons the game.
+240 MHz while playing; leaving the app abandons the game. Nothing interrupts the game:
+notifications received meanwhile go to the list, without a banner or vibration (calls still
+come through).
 
 ## How it is done
 

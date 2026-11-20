@@ -2567,6 +2567,12 @@ bool ui_on_notif(notif_entry_t *e, bool alert)
         return false;
     }
 
+    /* App plein écran qui ne veut pas être dérangée (jeu) : la notif attend
+     * dans la liste, sans bannière ni vibration */
+    if (display_is_on() && s_cur == SCR_APP && s_app_cur && s_app_cur->no_interrupt
+        && s_app_cur->no_interrupt() && e->n.category != ANCS_CAT_INCOMING_CALL)
+        return false;
+
     /* Mode discret : écran éteint → on vibre seulement ; le bouton affichera
      * cette notif. Les appels allument toujours (décrocher/refuser). */
     if (!display_is_on() && !settings_get()->notif_wake

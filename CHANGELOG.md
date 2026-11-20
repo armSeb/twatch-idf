@@ -2,6 +2,12 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.31.5 — 2026-11-20
+
+- Soar is never interrupted: notifications received while it is shown go to the list (and the
+  watch-face counter) without a banner or vibration. Incoming calls still come through.
+- Apps can ask for this with the new optional `no_interrupt()` callback in `app_t`.
+
 ## 0.31.4 — 2026-11-20
 
 - Soar draws **straight to the display**, bypassing LVGL: the picture is built in two 20-line

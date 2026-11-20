@@ -699,6 +699,7 @@ static void on_hide(void)
 }
 
 static bool keep_on(void) { return true; }
+static bool no_interrupt(void) { return true; }
 
 const app_t app_flight = {
     .name = N_("Envol"),
@@ -709,6 +710,7 @@ const app_t app_flight = {
     .on_show = on_show,
     .on_hide = on_hide,
     .keep_screen_on = keep_on,
+    .no_interrupt = no_interrupt,
 };
 
 #ifndef ESP_PLATFORM

@@ -35,6 +35,8 @@ On survole l'Irlande au coucher du soleil en pilotant au poignet, et on traverse
 Musique et bruitages (anneau, turbo, compte à rebours, crash) par le même synthétiseur que la
 démo ; le haut-parleur se coupe en touchant *SON* en haut à droite de l'écran titre. L'écran
 reste allumé et le processeur à 240 MHz pendant le jeu ; quitter l'app abandonne la partie.
+Rien ne vient interrompre le jeu : les notifications reçues pendant ce temps vont dans la
+liste, sans bannière ni vibration (les appels passent quand même).
 
 ## Comment c'est fait
 
