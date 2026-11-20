@@ -37,7 +37,7 @@
 #define PI 3.14159265f
 #define FY 70.0f
 #define NRING 3
-#define RING_R 10.0f
+#define RING_R 13.0f
 
 typedef enum { ST_GEN, ST_TITLE, ST_COUNT, ST_PLAY, ST_CRASH, ST_OVER, ST_PAUSE } state_t;
 
@@ -98,8 +98,8 @@ static void best_save(void)
 /* ------------------------------------------------------------------ anneaux */
 static void ring_place(ring_t *r, const ring_t *prev, float px, float py, float pdir)
 {
-    float dir = prev ? pdir + (g_frnd() - 0.5f) * 1.3f : pdir;     /* le premier : droit devant */
-    float d = prev ? 110 + g_frnd() * 50 : 90;
+    float dir = prev ? pdir + (g_frnd() - 0.5f) * 0.9f : pdir;     /* le premier : droit devant */
+    float d = prev ? 95 + g_frnd() * 35 : 75;
     r->x = (prev ? prev->x : px) + cosf(dir) * d;
     r->y = (prev ? prev->y : py) + sinf(dir) * d;
     r->dir = dir;
@@ -109,7 +109,7 @@ static void ring_place(ring_t *r, const ring_t *prev, float px, float py, float 
         float v = vox_ground(r->x + cosf(a) * rr, r->y + sinf(a) * rr);
         if (v > g) g = v;
     }
-    r->h = clampf(g + 18 + g_frnd() * 26, 30, 215);
+    r->h = clampf(g + 18 + g_frnd() * 18, 30, 215);
 }
 
 static void rings_init(void)
@@ -125,7 +125,7 @@ static void rings_shift(void)
     ring_place(&ring[2], &ring[1], 0, 0, ring[1].dir);
 }
 
-static void dline(int x0, int y0, float z0, int x1, int y1, float z1, int th, uint16_t c)
+static void dline(int x0, int y0, float z0, int x1, int y1, float z1, int th, uint16_t c, bool xray)
 {
     int n = abs(x1 - x0) > abs(y1 - y0) ? abs(x1 - x0) : abs(y1 - y0);
     if (n > 400) return;
@@ -133,7 +133,11 @@ static void dline(int x0, int y0, float z0, int x1, int y1, float z1, int th, ui
         float u = n ? k / (float)n : 0;
         int x = x0 + (int)((x1 - x0) * u), y = y0 + (int)((y1 - y0) * u);
         float z = z0 + (z1 - z0) * u;
-        if (!vox_visible(occ, W, x, y, z)) continue;
+        if (!vox_visible(occ, W, x, y, z)) {
+            /* anneau à atteindre caché par le relief : on le devine en transparence */
+            if (xray && ((x + y) & 1) && (unsigned)x < W && (unsigned)y < H) S.px[y * W + x] = g_blend(S.px[y * W + x], c, 140);
+            continue;
+        }
         for (int j = 0; j < th; j++)
             for (int i = 0; i < th; i++) {
                 int X = x + i - th / 2, Y = y + (j - th / 2) / 2;
@@ -160,8 +164,8 @@ static void ring_draw(const ring_t *r, int rank, float t)
     uint16_t dark = g_blend(c, 0, 110);
     for (int i = 0; i < 24; i++) {
         if (!ok[i] || !ok[i + 1]) continue;
-        dline((int)pxs[i], (int)pys[i] + 1, pzs[i], (int)pxs[i + 1], (int)pys[i + 1] + 1, pzs[i + 1], th, dark);
-        dline((int)pxs[i], (int)pys[i], pzs[i], (int)pxs[i + 1], (int)pys[i + 1], pzs[i + 1], th, c);
+        dline((int)pxs[i], (int)pys[i] + 1, pzs[i], (int)pxs[i + 1], (int)pys[i + 1] + 1, pzs[i + 1], th, dark, false);
+        dline((int)pxs[i], (int)pys[i], pzs[i], (int)pxs[i + 1], (int)pys[i + 1], pzs[i + 1], th, c, rank == 0);
     }
 }
 
@@ -271,7 +275,7 @@ static void play_step(float dt)
     cam.roll += (s_turn * 0.64f - cam.roll) * 0.15f;
     if (boost_t > 0) boost_t -= dt;
     else if (boost_charge < 1) boost_charge = clampf(boost_charge + dt / 4.0f, 0, 1);
-    float v = speed * (boost_t > 0 ? 1.7f : 1);
+    float v = speed * (boost_t > 0 ? 1.6f : 1);
     float ox = cam.x, oy = cam.y, oh = cam.h;
     cam.x += cosf(cam.a) * v * dt;
     cam.y += sinf(cam.a) * v * dt;
@@ -284,15 +288,15 @@ static void play_step(float dt)
         float x = ox + (cam.x - ox) * u, y = oy + (cam.y - oy) * u, h = oh + (cam.h - oh) * u;
         float dx = x - r->x, dy = y - r->y, dh = h - r->h;
         dx -= VOX_N * roundf(dx / VOX_N); dy -= VOX_N * roundf(dy / VOX_N);
-        if (dx * dx + dy * dy + dh * dh < RING_R * RING_R * 1.1f) {
+        if (dx * dx + dy * dy + dh * dh < RING_R * RING_R * 1.2f) {
             bool quick = play_t - last_ring_t < 6.0f;
             combo = quick ? combo + 1 : 1;
             last_ring_t = play_t;
             score += combo;
             rings_n++;
-            float bonus = rings_n < 10 ? 5 : rings_n < 25 ? 4 : 3;
+            float bonus = rings_n < 10 ? 6 : rings_n < 25 ? 5 : 4;
             time_left += bonus;
-            speed = clampf(speed + 1.5f, 0, 85);
+            speed = clampf(speed + 1.0f, 0, 60);
             if (combo > 1) snprintf(s_msg, sizeof s_msg, _("COMBO ×%d"), combo);
             else snprintf(s_msg, sizeof s_msg, "+%d S", (int)bonus);
             s_msg_t = 1.2f;
@@ -520,7 +524,8 @@ static void frame(void)
     s_fps_n++;
     if (ms - s_fps_t0 >= 1000) { s_fps = s_fps_n * 1000 / (int)(ms - s_fps_t0 ? ms - s_fps_t0 : 1); s_fps_n = 0; s_fps_t0 = ms; }
     float dt = (ms - s_last_ms) / 1000.0f;
-    if (dt < 0 || dt > 0.1f) dt = 0.033f;
+    if (dt < 0) dt = 0;
+    if (dt > 0.2f) dt = 0.2f;                       /* temps réel, même à faible débit */
     s_last_ms = ms;
     float t = ms / 1000.0f, ts = (ms - st_ms) / 1000.0f;
     s_t = t; s_ts = ts;
@@ -572,10 +577,10 @@ static void start_game(void)
     if (cam.h < g + 25) cam.h = g + 25;
     cam.roll = cam.pitch = 0;
     s_turn = s_climb = 0;
-    speed = 42;
+    speed = 30;
     boost_t = 0;
     boost_charge = 1;
-    time_left = 25;
+    time_left = 30;
     score = combo = rings_n = 0;
     s_msg_t = 0;
     shake = 0;

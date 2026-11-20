@@ -2,6 +2,15 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.31.6 — 2026-11-20
+
+- Soar: the game clock was capped at 0.1 s per frame, so below 10 frames/s the plane flew in
+  slow motion (about a quarter of its speed at 8 frames/s). It now follows real time (cap
+  0.2 s), and the game is rebalanced for it: starting speed 30 (was 42), at most 60, boost
+  ×1.6; rings larger (radius 13) and closer together (95–130 ahead, gentler turns, lower);
+  30 s on the clock, +6 s per ring (then +5, +4).
+- Soar: the next ring shows through hills faintly, so it no longer pops up at the last moment.
+
 ## 0.31.5 — 2026-11-20
 
 - Soar is never interrupted: notifications received while it is shown go to the list (and the

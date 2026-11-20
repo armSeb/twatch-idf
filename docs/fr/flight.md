@@ -16,18 +16,19 @@ On survole l'Irlande au coucher du soleil en pilotant au poignet, et on traverse
    lire l'heure : cette pose devient le neutre.
 3. **Penché à gauche / à droite** : virage (l'avion s'incline). **Penché vers soi / vers
    l'avant** : monter / descendre.
-4. **Toucher l'écran** : turbo (×1,7 pendant 1,2 s), la jauge *TURBO* se recharge en 4 s.
+4. **Toucher l'écran** : turbo (×1,6 pendant 1,2 s), la jauge *TURBO* se recharge en 4 s.
 5. **Toucher le coin du score** (en haut à gauche, sous le symbole ⏸) : pause, avec le bouton
    **QUITTER** et le nombre d'images par seconde. Toucher ailleurs reprend la partie.
 
 ## Règles
 
-- Le chrono part de **25 s**. Chaque anneau traversé rend **+5 s** (+4 s à partir du 10e,
-  +3 s à partir du 25e) et accélère un peu l'avion.
+- Le chrono part de **30 s**. Chaque anneau traversé rend **+6 s** (+5 s à partir du 10e,
+  +4 s à partir du 25e) et accélère un peu l'avion (jusqu'à deux fois la vitesse de départ).
 - Les anneaux enchaînés à moins de 6 s d'intervalle font monter le **combo** : un anneau vaut
   autant de points que le combo en cours.
-- Une flèche dorée au bord de l'écran montre l'anneau suivant quand il est hors champ ; les
-  deux suivants sont visibles en plus sombre.
+- Une flèche dorée au bord de l'écran montre l'anneau suivant quand il est hors champ ; caché
+  derrière une colline, il se devine en transparence. Les deux suivants sont visibles en plus
+  sombre.
 - Un anneau laissé loin derrière : **−3 s**, combo perdu, et un nouveau parcours part devant.
 - **Toucher le relief** (ou l'eau) : crash. *ALTITUDE !* clignote quand on rase le sol.
 - Fin de partie au crash ou quand le chrono tombe à zéro ; le **record** est gardé.

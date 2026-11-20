@@ -15,18 +15,18 @@ same course twice.
 2. **Tap** to take off. During the countdown, hold the watch as if reading the time: that pose
    becomes neutral.
 3. **Tilt left / right**: turn (the plane banks). **Tilt towards you / away**: climb / dive.
-4. **Tap**: boost (×1.7 for 1.2 s); the *BOOST* gauge refills in 4 s.
+4. **Tap**: boost (×1.6 for 1.2 s); the *BOOST* gauge refills in 4 s.
 5. **Tap the score corner** (top left, under the ⏸ sign): pause, with a **QUIT** button and
    the frame rate. Tap anywhere else to resume.
 
 ## Rules
 
-- The clock starts at **25 s**. Each ring gives back **+5 s** (+4 s from the 10th, +3 s from
-  the 25th) and speeds the plane up a little.
+- The clock starts at **30 s**. Each ring gives back **+6 s** (+5 s from the 10th, +4 s from
+  the 25th) and speeds the plane up a little (up to twice the starting speed).
 - Rings chained less than 6 s apart raise the **combo**: a ring is worth as many points as the
   current combo.
-- A gold arrow at the screen edge points to the next ring when it is out of view; the two
-  after it show darker.
+- A gold arrow at the screen edge points to the next ring when it is out of view; hidden
+  behind a hill, it shows through faintly. The two after it show darker.
 - A ring left far behind: **−3 s**, combo lost, and a new course starts ahead.
 - **Hitting the terrain** (or the water): crash. *PULL UP!* flashes when you skim the ground.
 - The game ends on a crash or when the clock hits zero; the **best score** is kept.
