@@ -362,6 +362,24 @@ static const tr_t EN[] = {
     { "Ton púca est retourné au tertre des fées.", "Your púca went back to the fairy mound." },
     { "Nouvel œuf", "New egg" },
     { "Heure inconnue : connecte l'iPhone", "Time unknown: connect the iPhone" },
+    { "Démo", "Demo" },
+    { "SEB & CLAUDE", "SEB & CLAUDE" },
+    { "PRÉSENTENT", "PRESENT" },
+    { "100 %", "100 %" },
+    { "CALCULÉ", "COMPUTED" },
+    { "SUR LA", "ON THE" },
+    { "MONTRE", "WATCH" },
+    { "RENDU LOGICIEL", "SOFTWARE RENDER" },
+    { "TÍR NA NÓG · UNE INTRO POUR T-WATCH 2020 · TOUT EST CALCULÉ ICI, MÊME LA MUSIQUE · "
+      "SALUTATIONS À FARBRAUSCH · LILYGO · ESPRESSIF · LA DÉMOSCÈNE · "
+      "ET AUX AMIS DES QSO DES GASCONS · BONS 73 ! ·         ",
+      "TÍR NA NÓG · AN INTRO FOR THE T-WATCH 2020 · EVERYTHING IS COMPUTED HERE, EVEN THE MUSIC · "
+      "GREETINGS TO FARBRAUSCH · LILYGO · ESPRESSIF · THE DEMOSCENE · "
+      "AND TO THE QSO DES GASCONS FRIENDS · 73 ! ·         " },
+    { "À TOI !", "YOUR TURN!" },
+    { "PENCHE LE POIGNET", "TILT YOUR WRIST" },
+    { "SON", "SOUND" },
+    { "MUET", "MUTE" },
 };
 
 static int s_lang = LANG_FR;

@@ -35,3 +35,9 @@ bool      motion_steps_on(void);
 uint32_t  motion_steps_today(void);
 /* h[0] = hier … h[6] = il y a 7 jours (0 si inconnu) */
 void      motion_history(uint32_t h[MOTION_HIST_DAYS]);
+
+/* Accéléromètre brut pour une app (inclinaison) : allume le capteur s'il dort,
+ * lit x, y, z (±2 g, 1024 = 1 g, axes de la puce), puis rend l'état réglé. */
+bool      motion_accel_begin(void);
+bool      motion_accel_read(int16_t *x, int16_t *y, int16_t *z);
+void      motion_accel_end(void);

@@ -126,6 +126,15 @@ d'ESP-IDF 5.
   étoiles). Tous les sprites sont des grilles de texte dans `tools/puca_art.py`, qui génère
   `puca_gfx.c/.h` et une planche d'aperçu. Les effets sonores sont de courts airs en onde
   carrée joués par une tâche éphémère sur le flux I2S.
+- **Démo** (`app_demo.c`, musique `demo_synth.c` ; guide : [demo.md](demo.md)) : intro
+  calculée en 120×120 dans un tampon en RAM interne, doublée dans un canevas 240×240 en PSRAM
+  (minuteur LVGL de 20 ms, 240 MHz tenus tant qu'elle est affichée). Le synthétiseur tourne
+  dans sa tâche `demosnd` (cœur 0) sur le flux I2S à 16 kHz et sert d'horloge : chaque image
+  lit sa position dans le morceau (et l'enveloppe de grosse caisse) plutôt qu'un compteur
+  d'images, d'où des effets calés sur le tempo quel que soit le débit. Carte de hauteurs
+  (64 Ko) et de couleurs (128 Ko) générées en PSRAM à l'ouverture, libérées à la sortie. Le
+  pilotage lit l'accéléromètre en direct (`motion_accel_*` : le capteur est allumé à 100 Hz si
+  ni pas ni poignet ne l'utilisent, puis remis dans son état).
 - **Changer de langue** reconstruit tous les écrans sur place, sans redémarrer.
 - Les objets LVGL sont alloués sur le tas ; les allocations de plus de 4 Ko vont en PSRAM, la
   RAM interne est gardée pour les piles, les tampons DMA et la radio.

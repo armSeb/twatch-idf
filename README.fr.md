@@ -69,6 +69,11 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
   dépend des soins : lièvre (bien soigné et tu marches beaucoup — 1000 pas rapportent un
   trèfle), cheval, ou bouc ronchon. Ciel qui suit l'heure, petits airs 8 bits, rien ne tourne en
   fond (sa vie est calculée à l'ouverture) — voir le [guide Púca](docs/fr/puca.md).
+- **Démo « Tír na nÓg »**, une intro façon démoscène entièrement calculée par la montre : champ
+  d'étoiles et titre en particules, tunnel texturé, tore 3D ombré, puis survol de collines au
+  coucher du soleil en « voxel space » avec défilement sinusoïdal — et à la fin on pilote en
+  penchant le poignet. Musique chiptune 4 voies synthétisée en direct — voir le
+  [guide Démo](docs/fr/demo.md).
 - **Les notifications ne font jamais quitter une app ou un menu** : elles glissent en
   bannière par-dessus (toucher pour lire, glisser vers le haut pour fermer) ; sur le cadran,
   elles s'ouvrent en plein écran comme avant.
@@ -98,7 +103,7 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Pas, Púca, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Pas, Púca, Démo, Lampe, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |
@@ -171,6 +176,7 @@ Pour aller plus loin : [compiler, flasher, tester](docs/fr/building.md).
 | WebRX (client OpenWebRX) : réglages et utilisation | [docs/fr/webrx.md](docs/fr/webrx.md) | [docs/en/webrx.md](docs/en/webrx.md) |
 | Radio (webradios) : réglages et utilisation | [docs/fr/radio.md](docs/fr/radio.md) | [docs/en/radio.md](docs/en/radio.md) |
 | Púca (animal virtuel) : sa vie, comment s'en occuper | [docs/fr/puca.md](docs/fr/puca.md) | [docs/en/puca.md](docs/en/puca.md) |
+| Démo « Tír na nÓg » : scènes, commandes, comment c'est fait | [docs/fr/demo.md](docs/fr/demo.md) | [docs/en/demo.md](docs/en/demo.md) |
 | Écrire une app, traduire | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) |
 | Historique | | [CHANGELOG.md](CHANGELOG.md) |
 | Contribuer | [CONTRIBUTING.md](CONTRIBUTING.md) | |

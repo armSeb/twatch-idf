@@ -2,6 +2,20 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.30.0 — 2026-11-20
+
+- New **Demo** app, *Tír na nÓg*: a demoscene-style intro computed entirely on the watch, about
+  1 min 10. Accelerating starfield, ~900 particles swirling into the title, endless textured
+  tunnel, shaded 3D torus pulsing on the kick drum, then a flight over sunset hills in "voxel
+  space" (heightmap generated at start-up, autopilot following the valleys, sine-scroller
+  greetings). Then "Your turn!": you fly by tilting your wrist (turn and bank, climb and
+  dive). Tap to mute; the screen stays on while it runs.
+- 4-voice chiptune synthesised live at 16 kHz (melody, arpeggio, bass, kick/snare/hi-hat from
+  noise), which is also the frame clock so effects land on the beat.
+- Motion: raw accelerometer access for apps (`motion_accel_begin/read/end`), waking the sensor
+  only if steps and raise to wake are both off.
+- Fonts: rocket icon (U+F135).
+
 ## 0.29.3 — 2026-11-17
 
 - Púca: **bedtime**. From sunset (or 8 pm) the moon button puts it to bed early, light off; it

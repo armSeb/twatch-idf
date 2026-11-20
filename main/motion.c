@@ -361,3 +361,40 @@ void motion_history(uint32_t h[MOTION_HIST_DAYS])
     if (s_steps && today) rollover(today);
     memcpy(h, s_hist, sizeof s_hist);
 }
+
+/* ------------------------------------------------------------------ */
+/* Accéléromètre brut (apps) : si le pas et le poignet sont coupés, le */
+/* capteur dort : on le réveille en mode simple, 100 Hz, ±2 g.         */
+/* ------------------------------------------------------------------ */
+static bool s_raw;
+
+bool motion_accel_begin(void)
+{
+    if (!s_i2c) return false;
+    if (s_steps || s_wrist) return true;                  /* déjà en marche (50 Hz) */
+    i2c_reg_write8(s_i2c, 0x7C, 0x00);                     /* PWR_CONF : pas d'économie */
+    vTaskDelay(pdMS_TO_TICKS(1));
+    i2c_reg_write8(s_i2c, 0x40, 0xA8);                     /* ACC_CONF : 100 Hz, moyenne */
+    i2c_reg_write8(s_i2c, 0x41, 0x00);                     /* ACC_RANGE : ±2 g */
+    i2c_reg_write8(s_i2c, 0x7D, 0x04);                     /* PWR_CTRL : accéléro ON */
+    vTaskDelay(pdMS_TO_TICKS(5));
+    s_raw = true;
+    return true;
+}
+
+bool motion_accel_read(int16_t *x, int16_t *y, int16_t *z)
+{
+    uint8_t b[6];
+    if (!s_i2c || i2c_reg_read(s_i2c, 0x12, b, 6) != ESP_OK) return false;
+    *x = (int16_t)((b[1] << 8) | b[0]) >> 4;
+    *y = (int16_t)((b[3] << 8) | b[2]) >> 4;
+    *z = (int16_t)((b[5] << 8) | b[4]) >> 4;
+    return true;
+}
+
+void motion_accel_end(void)
+{
+    if (!s_raw) return;
+    s_raw = false;
+    motion_apply();                                         /* retour au réglage (suspend) */
+}

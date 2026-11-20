@@ -116,6 +116,14 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   live as text grids in `tools/puca_art.py`, which generates `puca_gfx.c/.h` and a preview
   sheet. Sound effects are short square-wave tunes played by a one-shot task through the I2S
   stream.
+- **Demo** (`app_demo.c`, music `demo_synth.c`; user guide: [demo.md](demo.md)): an intro
+  rendered at 120×120 into an internal-RAM buffer, doubled into a 240×240 PSRAM canvas (20 ms
+  LVGL timer, 240 MHz held while shown). The synth runs in its own `demosnd` task (core 0) on
+  the I2S stream at 16 kHz and is the clock: each frame reads its position in the tune (and
+  the kick-drum envelope) rather than a frame counter, so effects stay on the beat whatever
+  the frame rate. Heightmap (64 KB) and colour map (128 KB) are generated in PSRAM on opening
+  and freed on exit. Flying reads the accelerometer live (`motion_accel_*`: the sensor is woken
+  at 100 Hz if neither steps nor raise to wake use it, then put back as it was).
 - **Language change** rebuilds every screen in place, without a restart.
 - LVGL objects are allocated from the heap; allocations above 4 KB go to PSRAM, the internal
   RAM is kept for stacks, DMA buffers and the radio.
