@@ -45,6 +45,8 @@ bloc ; la carte garde hauteur et couleur dans le même mot de 32 bits, si bien q
 échantillon ne coûte qu'une lecture en PSRAM. Pour cacher les anneaux derrière les collines,
 le rendu note pour chaque colonne le haut du relief à 16 distances (2,5 Ko au lieu d'un
 tampon de profondeur complet). Le calcul est partagé entre les deux cœurs de l'ESP32 : la
-moitié gauche de l'image sur le cœur 0, la moitié droite sur le cœur 1, en même temps. L'interface (chrono, score, jauge,
-flèche, messages) est dessinée ensuite à pleine résolution. Effets : reflet du soleil dans
+moitié gauche de l'image sur le cœur 0, la moitié droite sur le cœur 1, en même temps. L'image ne passe pas par LVGL : elle part directement à l'écran en bandes de 20 lignes
+construites en RAM interne (l'une se remplit pendant que l'autre est envoyée), avec
+l'interface (chrono, score, jauge, flèche, messages) dessinée bande par bande à pleine
+résolution. Effets : reflet du soleil dans
 l'objectif, lignes de vitesse en turbo, gerbes d'étincelles, secousse et éclair rouge au crash.

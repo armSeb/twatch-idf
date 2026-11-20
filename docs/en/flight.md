@@ -43,6 +43,8 @@ column is first computed into a small local buffer, then copied in one go; the m
 height and colour in the same 32-bit word, so one sample costs a single PSRAM read. To hide
 rings behind hills, the renderer records for each column the top of the terrain at 16
 distances (2.5 KB instead of a full depth buffer). The work is split between the ESP32's two cores:
-the left half of the picture on core 0, the right half on core 1, at the same time. The interface (clock, score, gauge, arrow, messages) is then drawn at full resolution.
+the left half of the picture on core 0, the right half on core 1, at the same time. The picture bypasses LVGL: it goes straight to the display in 20-line strips built in
+internal RAM (one is filled while the other is sent), with the interface (clock, score,
+gauge, arrow, messages) drawn strip by strip at full resolution.
 Effects: sun lens flare, speed lines while boosting, spark bursts, shake and red flash on a
 crash.

@@ -142,7 +142,10 @@ d'ESP-IDF 5.
   de 32 bits par case (1 Mo) : une seule lecture PSRAM par échantillon, c'est ce qui limite
   le débit. Le rendu est partagé entre les deux cœurs : une tâche `voxrend` (cœur 0, créée au
   premier rendu, arrêtée avec le monde) calcule la moitié gauche pendant que l'appelant
-  calcule la droite, synchronisés par deux sémaphores. La démo rend en 120×120 doublé, le jeu en 160×120 élargi ×1,5. Les deux tiennent 240 MHz tant
+  calcule la droite, synchronisés par deux sémaphores. La démo rend en 120×120 doublé dans un canevas LVGL ; le jeu en 160×120 élargi ×1,5
+  et envoyé directement à l'écran (`display_direct()` : deux bandes de 20 lignes en RAM DMA,
+  l'une remplie pendant que l'autre part, sans canevas en PSRAM — chaque écriture en PSRAM
+  est suivie d'une barrière mémoire sur cet ESP32). Les deux tiennent 240 MHz tant
   qu'elles sont affichées et lisent l'accéléromètre en direct (`motion_accel_*` : le capteur
   est allumé à 100 Hz si ni pas ni poignet ne l'utilisent, puis remis dans son état). Le
   record d'Envol est un blob NVS (`flight`/`best`).

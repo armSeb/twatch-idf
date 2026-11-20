@@ -200,6 +200,17 @@ void g_tri(gsurf_t *s, int x0, int y0, int x1, int y1, int x2, int y2, uint16_t 
     }
 }
 
+void g_rect(gsurf_t *s, int x0, int y0, int x1, int y1, uint16_t c)
+{
+    y0 -= s->oy; y1 -= s->oy;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > s->w) x1 = s->w;
+    if (y1 > s->h) y1 = s->h;
+    for (int y = y0; y < y1; y++)
+        for (int x = x0; x < x1; x++) s->px[y * s->w + x] = c;
+}
+
 void g_fill(gsurf_t *s, uint16_t c)
 {
     for (int i = 0; i < s->w * s->h; i++) s->px[i] = c;

@@ -10,6 +10,7 @@
 typedef struct {
     uint16_t *px;
     int w, h;
+    int oy;          /* première ligne contenue (bande d'écran) ; 0 en général */
 } gsurf_t;
 
 static inline uint16_t g_rgb(int r, int g, int b)
@@ -39,13 +40,18 @@ static inline uint16_t g_add(uint16_t a, uint16_t b)
 
 static inline void g_put(gsurf_t *s, int x, int y, uint16_t c)
 {
+    y -= s->oy;
     if ((unsigned)x < (unsigned)s->w && (unsigned)y < (unsigned)s->h) s->px[y * s->w + x] = c;
 }
 
 static inline void g_glow(gsurf_t *s, int x, int y, uint16_t c)
 {
+    y -= s->oy;
     if ((unsigned)x < (unsigned)s->w && (unsigned)y < (unsigned)s->h) s->px[y * s->w + x] = g_add(s->px[y * s->w + x], c);
 }
+
+/* rectangle plein [x0, x1[ × [y0, y1[, découpé à la surface (bandes comprises) */
+void g_rect(gsurf_t *s, int x0, int y0, int x1, int y1, uint16_t c);
 
 /* aléatoire rapide (xorshift) */
 void     g_seed(uint32_t s);

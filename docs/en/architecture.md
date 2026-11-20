@@ -132,7 +132,10 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   split between the two cores: a `voxrend` task (core 0, created on the first render, stopped
   with the world) computes the left half while the caller computes the right, synchronised by
   two semaphores. The demo
-  renders at 120×120 doubled, the game at 160×120 widened ×1.5. Both hold 240 MHz while shown and read the
+  renders at 120×120 doubled into an LVGL canvas; the game at 160×120 widened ×1.5 and sent
+  straight to the display (`display_direct()`: two 20-line strips in DMA RAM, one filled
+  while the other is sent, no PSRAM canvas — every PSRAM write is followed by a memory
+  barrier on this ESP32). Both hold 240 MHz while shown and read the
   accelerometer live (`motion_accel_*`: the sensor is woken at 100 Hz if neither steps nor
   raise to wake use it, then put back as it was). Soar's best score is an NVS blob
   (`flight`/`best`).

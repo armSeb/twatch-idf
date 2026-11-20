@@ -2,6 +2,16 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.31.4 — 2026-11-20
+
+- Soar draws **straight to the display**, bypassing LVGL: the picture is built in two 20-line
+  strips in internal DMA RAM, one being filled while the other is sent to the screen. No more
+  240×240 canvas in PSRAM written then read back every frame (PSRAM writes are slow on this
+  ESP32: each one is followed by a memory barrier). The interface is drawn strip by strip
+  (surfaces with a line offset). 0.31.3 measured 9 frames/s.
+- New `display_direct()` / `display_direct_end()` for games; `g_rect()` and banded surfaces
+  in `demo_gfx`.
+
 ## 0.31.3 — 2026-11-20
 
 - Landscape rendering on **both cores**: the left half of the picture is computed by a task

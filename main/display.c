@@ -11,6 +11,8 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_vendor.h"
 #include "lvgl.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "app_events.h"
 
 static const char *TAG = "display";
@@ -49,6 +51,38 @@ static void flush_cb(lv_display_t *d, const lv_area_t *a, uint8_t *px)
 {
     lv_draw_sw_rgb565_swap(px, lv_area_get_size(a));
     esp_lcd_panel_draw_bitmap(s_panel, a->x1, a->y1, a->x2 + 1, a->y2 + 1, px);
+}
+
+/* ------------------------------------------------------------------ */
+/* Affichage direct (jeux)                                              */
+/* ------------------------------------------------------------------ */
+#define STRIP_LINES 20
+static uint16_t *s_strip[2];
+
+bool display_direct(display_strip_fn fill, void *ctx)
+{
+    if (!s_on) return false;
+    if (!s_strip[0]) {
+        for (int i = 0; i < 2; i++)
+            s_strip[i] = heap_caps_malloc(BOARD_LCD_W * STRIP_LINES * 2, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+        if (!s_strip[0] || !s_strip[1]) { display_direct_end(); return false; }
+    }
+    /* esp_lcd attend la fin de la bande précédente avant d'envoyer la suivante :
+     * la bande k se remplit pendant que k−1 part à l'écran */
+    for (int y = 0, k = 0; y < BOARD_LCD_H; y += STRIP_LINES, k ^= 1) {
+        int n = BOARD_LCD_H - y < STRIP_LINES ? BOARD_LCD_H - y : STRIP_LINES;
+        fill(s_strip[k], y, n, ctx);
+        lv_draw_sw_rgb565_swap(s_strip[k], BOARD_LCD_W * n);
+        esp_lcd_panel_draw_bitmap(s_panel, 0, y, BOARD_LCD_W, y + n, s_strip[k]);
+    }
+    return true;
+}
+
+void display_direct_end(void)
+{
+    if (!s_strip[0] && !s_strip[1]) return;
+    vTaskDelay(pdMS_TO_TICKS(20));                /* dernière bande partie */
+    for (int i = 0; i < 2; i++) { heap_caps_free(s_strip[i]); s_strip[i] = NULL; }
 }
 
 /* ------------------------------------------------------------------ */

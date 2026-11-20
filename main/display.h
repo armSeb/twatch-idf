@@ -27,4 +27,11 @@ void      display_perf_tick(void);
 bool      display_tap_begin(void);      /* sur EV_TOUCH_INT : démarre l'analyse */
 int       display_tap_poll(void);       /* 1 = double tap, 0 = continuer, -1 = abandon */
 uint32_t  display_tap_sample_ms(void);
+/* Affichage direct pour les jeux, sans LVGL : fill() remplit des bandes de
+ * lignes (RGB565 natif) envoyées à l'écran au fur et à mesure, pendant que la
+ * suivante se prépare. Deux bandes de 20 lignes en RAM DMA, libérées par
+ * display_direct_end(). false si l'écran est éteint ou la mémoire manque. */
+typedef void (*display_strip_fn)(uint16_t *px, int y0, int lines, void *ctx);
+bool      display_direct(display_strip_fn fill, void *ctx);
+void      display_direct_end(void);
 void      display_tap_enable(bool en);  /* réglage modifié */      /* CPU max seulement pendant l'interaction */

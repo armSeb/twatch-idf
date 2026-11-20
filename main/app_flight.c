@@ -28,6 +28,9 @@
 #include "demo_gfx.h"
 #include "demo_synth.h"
 #include "voxel.h"
+#ifdef ESP_PLATFORM
+#include "display.h"
+#endif
 
 #define W  160                       /* colonnes rendues, élargies ×1,5 à l'écran */
 #define H  120
@@ -41,7 +44,7 @@ typedef enum { ST_GEN, ST_TITLE, ST_COUNT, ST_PLAY, ST_CRASH, ST_OVER, ST_PAUSE 
 typedef struct { float x, y, h, dir; } ring_t;
 
 static gsurf_t S;                    /* relief 240×120 */
-static gsurf_t C;                    /* canevas 240×240 (interface) */
+static gsurf_t C;                    /* simulateur seulement : canevas 240×240 */
 static uint8_t *occ;                 /* occultation par le relief (voxel.c) */
 static uint32_t s_fps_t0;
 static int s_fps_n, s_fps;
@@ -323,14 +326,16 @@ static void play_step(float dt)
 }
 
 /* ------------------------------------------------------------------ dessin */
-static void hud_text(const char *s, int x, int y, int sc, uint16_t c) { g_text(&C, s, x, y, sc, c, true); }
-static void hud_c(const char *s, int y, int sc, uint16_t c) { g_text_c(&C, s, y, g_text_fit(s, sc, 232), c, true); }
+/* L'interface est dessinée bande par bande (affichage direct) : tout passe par
+ * des surfaces décalées (gsurf_t.oy) et g_put / g_rect / g_text. */
+static void hud_text(gsurf_t *d, const char *s, int x, int y, int sc, uint16_t c) { g_text(d, s, x, y, sc, c, true); }
+static void hud_c(gsurf_t *d, const char *s, int y, int sc, uint16_t c) { g_text_c(d, s, y, g_text_fit(s, sc, 232), c, true); }
 
 static void flare(void)
 {
     float d = remainderf(VOX_SUN_A - cam.a, 2 * PI);
     if (fabsf(d) > 0.75f) return;
-    float sx = W / 2 + tanf(d) * W / 2, sy = H * 0.33f + cam.pitch - H * 0.12f + (sx - W / 2) * cam.roll;
+    float sx = W / 2 + tanf(d) * W / 2, sy = H * 0.33f + cam.pitch - H * 0.12f + (sx - W / 2) * cam.roll * 120.0f / W;
     float vx = W / 2 - sx, vy = H / 2 - sy;
     static const float POS[] = { 0.5f, 0.9f, 1.3f, 1.7f };
     static const uint8_t RAD[] = { 3, 6, 2, 9 };
@@ -350,32 +355,38 @@ static void speed_lines(float t)
         float r0 = 50 + fmodf(t * 300 + k * 37, 80);
         for (int i = 0; i < 18; i++) {
             float r = r0 + i;
-            g_glow(&S, (int)(W / 2 + cosf(a) * r * 1.6f), (int)(H / 2 + sinf(a) * r * 0.5f), g_rgb(40, 40, 40));
+            g_glow(&S, (int)(W / 2 + cosf(a) * r * 1.1f), (int)(H / 2 + sinf(a) * r * 0.5f), g_rgb(40, 40, 40));
         }
     }
 }
 
-static void arrow_to(const ring_t *r)
+/* flèche vers l'anneau suivant, calculée une fois par image */
+static struct { bool on; int cx, cy; float ex, ey; } s_arrow;
+
+static void arrow_update(const ring_t *r)
 {
     float sx, sy, z;
+    s_arrow.on = false;
     bool vis = vox_project(&S, &cam, FY, r->x, r->y, r->h, &sx, &sy, &z);
-    if (vis && sx > 10 && sx < W - 10 && sy > 5 && sy < H - 5) return;
-    /* direction de l'anneau dans le repère de la caméra */
+    if (vis && sx > 6 && sx < W - 6 && sy > 5 && sy < H - 5) return;
     float dx = r->x - cam.x, dy = r->y - cam.y;
     dx -= VOX_N * roundf(dx / VOX_N); dy -= VOX_N * roundf(dy / VOX_N);
-    float a = atan2f(dy, dx) - cam.a;
-    a = remainderf(a, 2 * PI);
+    float a = remainderf(atan2f(dy, dx) - cam.a, 2 * PI);
     float ex = sinf(a), ey = -cosf(a) + (r->h - cam.h) * -0.01f;
     float l = sqrtf(ex * ex + ey * ey) + 1e-6f;
-    ex /= l; ey /= l;
-    int cx = (int)(120 + ex * 96), cy = (int)(130 + ey * 88);
+    s_arrow.ex = ex / l; s_arrow.ey = ey / l;
+    s_arrow.cx = (int)(120 + s_arrow.ex * 96); s_arrow.cy = (int)(130 + s_arrow.ey * 88);
+    s_arrow.on = true;
+}
+
+static void arrow_draw(gsurf_t *d)
+{
+    if (!s_arrow.on) return;
     uint16_t c = g_rgb(255, 200, 50);
     for (int i = 0; i < 14; i++) {
         float w = (14 - i) * 0.45f;
-        for (int j = (int)-w; j <= (int)w; j++) {
-            int X = (int)(cx + ex * (i - 7) + -ey * j), Y = (int)(cy + ey * (i - 7) + ex * j);
-            if ((unsigned)X < 240 && (unsigned)Y < 240) C.px[Y * 240 + X] = c;
-        }
+        for (int j = (int)-w; j <= (int)w; j++)
+            g_put(d, (int)(s_arrow.cx + s_arrow.ex * (i - 7) - s_arrow.ey * j), (int)(s_arrow.cy + s_arrow.ey * (i - 7) + s_arrow.ex * j), c);
     }
 }
 
@@ -390,39 +401,120 @@ static void draw_world(float t, bool rings)
     flare();
 }
 
-/* 160×120 → 240×240 : colonnes 1, 2, 1, 2… (×1,5), lignes doublées */
-static void upscale(void)
+static float s_t, s_ts;               /* temps de l'image, pour l'interface */
+
+static void hud_draw(gsurf_t *d)
 {
-    for (int y = 0; y < H; y++) {
-        const uint16_t *src = S.px + y * W;
-        uint16_t *d = C.px + (2 * y) * 240;
-        for (int x = 0; x < W; x += 2) {
-            uint16_t a = src[x], b = src[x + 1];
-            d[0] = a; d[1] = a; d[2] = b;
-            d += 3;
-        }
-        memcpy(C.px + (2 * y + 1) * 240, C.px + (2 * y) * 240, 480);
+    float t = s_t, ts = s_ts;
+    char b[48];
+    switch (st) {
+    case ST_GEN: {
+        int p = vox_progress();
+        hud_c(d, _("CRÉATION DU MONDE"), 96, 2, g_rgb(200, 220, 255));
+        g_rect(d, 40, 126, 200, 134, g_rgb(40, 40, 60));
+        g_rect(d, 40, 126, 40 + p * 160 / 100, 134, g_rgb(255, 200, 60));
+        snprintf(b, sizeof b, "%d %%", p);
+        hud_c(d, b, 144, 1, g_rgb(160, 170, 200));
+        break;
     }
+    case ST_TITLE: {
+        int y = (int)(40 + sinf(t * 1.5f) * 4);
+        g_text_c(d, _("ENVOL"), y + 2, 6, g_rgb(60, 30, 10), false);
+        g_text_c(d, _("ENVOL"), y, 6, g_rgb(255, 220, 120), false);
+        snprintf(b, sizeof b, _("RECORD %u"), (unsigned)best);
+        hud_c(d, b, 98, 2, 0xFFFF);
+        if ((int)(t * 1.6f) & 1) hud_c(d, _("TOUCHE POUR DÉCOLLER"), 176, 2, g_rgb(255, 240, 200));
+        hud_c(d, _("PENCHE LE POIGNET POUR PILOTER"), 204, 1, g_rgb(230, 230, 240));
+        hud_text(d, s_sound ? _("SON") : _("MUET"), 196, 8, 1, g_rgb(220, 220, 220));
+        break;
+    }
+    case ST_COUNT: {
+        int n = 3 - (int)ts;
+        if (n > 0) snprintf(b, sizeof b, "%d", n); else snprintf(b, sizeof b, "%s", _("GO !"));
+        int sc = 9 - (int)(fmodf(ts, 1.0f) * 4);
+        hud_c(d, b, 90 - sc * 3, sc, g_rgb(255, 230, 120));
+        hud_c(d, _("TIENS LA MONTRE À PLAT"), 200, 1, 0xFFFF);
+        break;
+    }
+    case ST_PLAY: case ST_CRASH: case ST_PAUSE: {
+        snprintf(b, sizeof b, "%d", (int)ceilf(time_left));
+        uint16_t tc = time_left < 5 && ((int)(t * 4) & 1) ? g_rgb(255, 60, 40) : 0xFFFF;
+        g_text_c(d, b, 10, 3, tc, true);
+        snprintf(b, sizeof b, "%d", score);
+        hud_text(d, b, 10, 12, 2, g_rgb(255, 210, 80));
+        hud_text(d, _("PTS"), 10, 30, 1, g_rgb(220, 200, 150));
+        if (st == ST_PLAY) { g_rect(d, 12, 44, 16, 56, 0xFFFF); g_rect(d, 19, 44, 23, 56, 0xFFFF); }   /* pause : toucher ici */
+        g_rect(d, 180, 16, 230, 21, g_rgb(30, 30, 40));                                           /* jauge du turbo */
+        g_rect(d, 180, 16, 180 + (int)(boost_charge * 50), 21, boost_charge >= 1 ? g_rgb(80, 220, 255) : g_rgb(60, 130, 170));
+        hud_text(d, _("TURBO"), 186, 24, 1, g_rgb(180, 220, 240));
+        if (st == ST_PLAY) {
+            arrow_draw(d);
+            if (cam.h - vox_ground(cam.x, cam.y) < 10 && ((int)(t * 6) & 1)) hud_c(d, _("ALTITUDE !"), 210, 2, g_rgb(255, 70, 50));
+            if (s_msg_t > 0) hud_c(d, s_msg, 64 - (int)((1.2f - s_msg_t) * 20), 2, g_rgb(255, 240, 160));
+            if (play_t < 3) hud_c(d, _("TRAVERSE LES ANNEAUX D'OR"), 216, 1, 0xFFFF);
+        } else if (st == ST_CRASH) hud_c(d, _("CRASH !"), 100, 4, g_rgb(255, 230, 200));
+        if (st == ST_PAUSE) {
+            hud_c(d, _("PAUSE"), 60, 4, 0xFFFF);
+            hud_c(d, _("TOUCHE POUR REPRENDRE"), 110, 1, g_rgb(230, 230, 240));
+            g_rect(d, 60, 146, 180, 182, g_rgb(255, 120, 90));
+            g_rect(d, 61, 147, 179, 181, g_rgb(70, 20, 20));
+            hud_c(d, _("QUITTER"), 158, 2, g_rgb(255, 220, 210));
+            snprintf(b, sizeof b, _("%d IMAGES/S"), s_fps);
+            hud_c(d, b, 196, 1, g_rgb(150, 150, 160));
+        }
+        break;
+    }
+    case ST_OVER:
+        hud_c(d, s_timeout ? _("TEMPS ÉCOULÉ") : _("CRASH !"), 44, 2, g_rgb(255, 200, 120));
+        snprintf(b, sizeof b, "%d", score);
+        hud_c(d, b, 72, 6, 0xFFFF);
+        if (rings_n == 1) snprintf(b, sizeof b, "%s", _("1 ANNEAU"));
+        else snprintf(b, sizeof b, _("%d ANNEAUX"), rings_n);
+        hud_c(d, b, 124, 1, g_rgb(220, 220, 230));
+        if (s_new_best) { if ((int)(t * 3) & 1) hud_c(d, _("NOUVEAU RECORD !"), 144, 2, g_rgb(255, 210, 60)); }
+        else { snprintf(b, sizeof b, _("RECORD %u"), (unsigned)best); hud_c(d, b, 144, 2, g_rgb(200, 200, 210)); }
+        if (ts > 1.5f && ((int)(t * 1.6f) & 1)) hud_c(d, _("TOUCHE POUR REJOUER"), 190, 2, g_rgb(255, 240, 200));
+        break;
+    }
+}
+
+/* une bande de l'écran : relief 160×120 élargi (colonnes 1, 2, 1, 2…, lignes
+ * doublées), puis l'interface par-dessus */
+static void fill_strip(uint16_t *px, int y0, int n, void *ctx)
+{
+    for (int y = y0; y < y0 + n; y++) {
+        uint16_t *dst = px + (y - y0) * 240;
+        if (st == ST_GEN) { for (int x = 0; x < 240; x++) dst[x] = g_rgb(8, 10, 24); continue; }
+        const uint16_t *src = S.px + (y >> 1) * W;
+        for (int x = 0; x < W; x += 2) {
+            uint16_t a = src[x], b2 = src[x + 1];
+            dst[0] = a; dst[1] = a; dst[2] = b2;
+            dst += 3;
+        }
+    }
+    gsurf_t d = { px, 240, n, y0 };
+    hud_draw(&d);
+}
+
+static void present(void)
+{
+#ifdef ESP_PLATFORM
+    display_direct(fill_strip, NULL);
+#else
+    for (int y = 0; y < 240; y += 20) fill_strip(C.px + y * 240, y, 20, NULL);   /* simulateur : canevas */
+    lv_obj_invalidate(v_cv);
+#endif
 }
 
 static void pause_draw(void)
 {
-    for (int i = 0; i < 240 * 240; i++) C.px[i] = g_blend(C.px[i], 0, 150);
-    char b[32];
-    hud_c(_("PAUSE"), 60, 4, 0xFFFF);
-    hud_c(_("TOUCHE POUR REPRENDRE"), 110, 1, g_rgb(230, 230, 240));
-    for (int y = 146; y < 182; y++)
-        for (int x = 60; x < 180; x++)
-            C.px[y * 240 + x] = (y == 146 || y == 181 || x == 60 || x == 179) ? g_rgb(255, 120, 90) : g_rgb(70, 20, 20);
-    hud_c(_("QUITTER"), 158, 2, g_rgb(255, 220, 210));
-    snprintf(b, sizeof b, _("%d IMAGES/S"), s_fps);
-    hud_c(b, 196, 1, g_rgb(150, 150, 160));
-    lv_obj_invalidate(v_cv);
+    g_fade(&S, 150);
+    present();
 }
 
 static void frame(void)
 {
-    if (!S.px || !C.px) return;
+    if (!S.px) return;
     if (st == ST_PAUSE) return;                      /* image figée, rien à calculer */
     uint32_t ms = demo_synth_ms();
     s_fps_n++;
@@ -431,22 +523,11 @@ static void frame(void)
     if (dt < 0 || dt > 0.1f) dt = 0.033f;
     s_last_ms = ms;
     float t = ms / 1000.0f, ts = (ms - st_ms) / 1000.0f;
-    char b[48];
+    s_t = t; s_ts = ts;
 
     if (st == ST_GEN) {
-        int p = vox_progress();
-        g_fill(&C, g_rgb(8, 10, 24));
-        hud_c(_("CRÉATION DU MONDE"), 96, 2, g_rgb(200, 220, 255));
-        for (int x = 40; x < 200; x++)
-            for (int y = 126; y < 134; y++)
-                C.px[y * 240 + x] = x - 40 < p * 160 / 100 ? g_rgb(255, 200, 60) : g_rgb(40, 40, 60);
-        snprintf(b, sizeof b, "%d %%", p);
-        hud_c(b, 144, 1, g_rgb(160, 170, 200));
-        if (p >= 100) {
-            spawn();
-            set_state(ST_TITLE);
-        }
-        lv_obj_invalidate(v_cv);
+        present();
+        if (vox_progress() >= 100) { spawn(); set_state(ST_TITLE); }
         return;
     }
 
@@ -459,89 +540,26 @@ static void frame(void)
         for (int k = 0; k < 10; k++) { float v = vox_ground(cam.x + cosf(cam.a) * k * 12, cam.y + sinf(cam.a) * k * 12); if (v > g) g = v; }
         if (cam.h < g + 25) cam.h += (g + 25 - cam.h) * 0.1f;
         cam.roll *= 0.9f;
+        static int last_n;
+        int n = 3 - (int)ts;
+        if (ts < 0.05f) { rings_init(); last_n = 4; }   /* anneaux placés depuis la position du départ */
+        if (n != last_n && n >= 0) { demo_synth_sfx(n > 0 ? SFX_TICK : SFX_GO); last_n = n; }
+        if (ts >= 3.6f) { play_t = 0; last_ring_t = -10; set_state(ST_PLAY); }
     }
-    else if (st == ST_PLAY) play_step(dt);
+    else if (st == ST_PLAY) { play_step(dt); if (s_msg_t > 0) s_msg_t -= dt; }
     else if (st == ST_CRASH) { shake = clampf(shake - dt * 1.2f, 0, 1); if (ts > 1.6f) set_state(ST_OVER); }
     else if (st == ST_OVER) { cam.a += 0.12f * dt; cam.h += (vox_ground(cam.x, cam.y) + 50 - cam.h) * 0.02f; cam.roll *= 0.95f; cam.pitch *= 0.95f; }
 
     bool rings = st == ST_COUNT || st == ST_PLAY;
     draw_world(t, rings);
-    if (st == ST_PLAY && boost_t > 0) speed_lines(t);
+    if (st == ST_PLAY) { arrow_update(&ring[0]); if (boost_t > 0) speed_lines(t); }
     sparks_draw(dt);
     if (st == ST_CRASH) {
         g_flash(&S, (int)(clampf(1 - ts * 2, 0, 1) * 256));
         for (int i = 0; i < W * H; i++) S.px[i] = g_blend(S.px[i], g_rgb(200, 30, 10), (int)(clampf(0.5f - ts * 0.25f, 0, 0.5f) * 256));
     }
     if (st == ST_OVER) g_fade(&S, 120);
-    upscale();
-
-    /* interface à pleine résolution */
-    switch (st) {
-    case ST_TITLE: {
-        int y = (int)(40 + sinf(t * 1.5f) * 4);
-        g_text_c(&C, _("ENVOL"), y + 2, 6, g_rgb(60, 30, 10), false);
-        g_text_c(&C, _("ENVOL"), y, 6, g_rgb(255, 220, 120), false);
-        snprintf(b, sizeof b, _("RECORD %u"), (unsigned)best);
-        hud_c(b, 98, 2, 0xFFFF);
-        if ((int)(t * 1.6f) & 1) hud_c(_("TOUCHE POUR DÉCOLLER"), 176, 2, g_rgb(255, 240, 200));
-        hud_c(_("PENCHE LE POIGNET POUR PILOTER"), 204, 1, g_rgb(230, 230, 240));
-        hud_text(s_sound ? _("SON") : _("MUET"), 196, 8, 1, g_rgb(220, 220, 220));
-        break;
-    }
-    case ST_COUNT: {
-        int n = 3 - (int)ts;
-        if (n > 0) snprintf(b, sizeof b, "%d", n); else snprintf(b, sizeof b, "%s", _("GO !"));
-        float k = fmodf(ts, 1.0f);
-        int sc = 9 - (int)(k * 4);
-        hud_c(b, 90 - sc * 3, sc, g_rgb(255, 230, 120));
-        hud_c(_("TIENS LA MONTRE À PLAT"), 200, 1, 0xFFFF);
-        if (ts >= 3.6f) { play_t = 0; last_ring_t = -10; set_state(ST_PLAY); }
-        if (ts < 0.05f) rings_init();                    /* anneaux placés depuis la position du départ */
-        static int last_n;
-        if (ts < 0.05f) last_n = 4;
-        if (n != last_n && n >= 0) { demo_synth_sfx(n > 0 ? SFX_TICK : SFX_GO); last_n = n; }
-        break;
-    }
-    case ST_PLAY: case ST_CRASH: {
-        snprintf(b, sizeof b, "%d", (int)ceilf(time_left));
-        uint16_t tc = time_left < 5 && ((int)(t * 4) & 1) ? g_rgb(255, 60, 40) : 0xFFFF;
-        g_text_c(&C, b, 10, 3, tc, true);
-        snprintf(b, sizeof b, "%d", score);
-        hud_text(b, 10, 12, 2, g_rgb(255, 210, 80));
-        hud_text(_("PTS"), 10, 30, 1, g_rgb(220, 200, 150));
-        if (st == ST_PLAY)                                /* pause : toucher ici */
-            for (int y = 44; y < 56; y++) { for (int x = 12; x < 16; x++) C.px[y * 240 + x] = 0xFFFF; for (int x = 19; x < 23; x++) C.px[y * 240 + x] = 0xFFFF; }
-        /* jauge d'accélérateur */
-        for (int x = 0; x < 50; x++)
-            for (int y = 0; y < 5; y++)
-                C.px[(16 + y) * 240 + 180 + x] = x < boost_charge * 50 ? (boost_charge >= 1 ? g_rgb(80, 220, 255) : g_rgb(60, 130, 170)) : g_rgb(30, 30, 40);
-        hud_text(_("TURBO"), 186, 24, 1, g_rgb(180, 220, 240));
-        if (st == ST_PLAY) {
-            arrow_to(&ring[0]);
-            float alt = cam.h - vox_ground(cam.x, cam.y);
-            if (alt < 10 && ((int)(t * 6) & 1)) hud_c(_("ALTITUDE !"), 210, 2, g_rgb(255, 70, 50));
-            if (s_msg_t > 0) {
-                s_msg_t -= dt;
-                hud_c(s_msg, 64 - (int)((1.2f - s_msg_t) * 20), 2, g_rgb(255, 240, 160));
-            }
-            if (play_t < 3) hud_c(_("TRAVERSE LES ANNEAUX D'OR"), 216, 1, 0xFFFF);
-        } else hud_c(_("CRASH !"), 100, 4, g_rgb(255, 230, 200));
-        break;
-    }
-    case ST_OVER:
-        hud_c(s_timeout ? _("TEMPS ÉCOULÉ") : _("CRASH !"), 44, 2, g_rgb(255, 200, 120));
-        snprintf(b, sizeof b, "%d", score);
-        hud_c(b, 72, 6, 0xFFFF);
-        if (rings_n == 1) snprintf(b, sizeof b, "%s", _("1 ANNEAU"));
-        else snprintf(b, sizeof b, _("%d ANNEAUX"), rings_n);
-        hud_c(b, 124, 1, g_rgb(220, 220, 230));
-        if (s_new_best) { if ((int)(t * 3) & 1) hud_c(_("NOUVEAU RECORD !"), 144, 2, g_rgb(255, 210, 60)); }
-        else { snprintf(b, sizeof b, _("RECORD %u"), (unsigned)best); hud_c(b, 144, 2, g_rgb(200, 200, 210)); }
-        if (ts > 1.5f && ((int)(t * 1.6f) & 1)) hud_c(_("TOUCHE POUR REJOUER"), 190, 2, g_rgb(255, 240, 200));
-        break;
-    default: break;
-    }
-    lv_obj_invalidate(v_cv);
+    present();
 }
 
 static void tick_cb(lv_timer_t *t) { frame(); }
@@ -598,6 +616,9 @@ static void tap_cb(lv_event_t *e)
 static void free_all(void)
 {
     if (s_vox) { vox_free(); s_vox = false; }
+#ifdef ESP_PLATFORM
+    display_direct_end();
+#endif
     heap_caps_free(S.px); heap_caps_free(C.px); heap_caps_free(occ);
     S.px = C.px = NULL;
     occ = NULL;
@@ -608,18 +629,32 @@ static void create(lv_obj_t *scr)
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
     S = (gsurf_t){ heap_caps_malloc(W * H * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT), W, H };
     if (!S.px) S.px = heap_caps_malloc(W * H * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#ifdef ESP_PLATFORM
+    C = (gsurf_t){ NULL, 240, 240 };          /* affichage direct : pas de canevas */
+#else
     C = (gsurf_t){ heap_caps_malloc(240 * 240 * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT), 240, 240 };
+#endif
     occ = heap_caps_malloc(W * VOX_OCC, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!occ) occ = heap_caps_malloc(W * VOX_OCC, MALLOC_CAP_8BIT);
+#ifdef ESP_PLATFORM
+    v_cv = lv_obj_create(scr);                    /* zone tactile seulement : l'image part en direct */
+    lv_obj_remove_style_all(v_cv);
+    lv_obj_set_size(v_cv, 240, 240);
+    bool ok = S.px && occ;
+#else
     v_cv = lv_canvas_create(scr);
-    if (!S.px || !C.px || !occ) {
+    bool ok = S.px && C.px && occ;
+#endif
+    if (!ok) {
         free_all();
         lv_obj_t *l = ui_label(scr, &font_text_16, C_FG, _("Mémoire insuffisante"));
         lv_obj_center(l);
         return;
     }
+#ifndef ESP_PLATFORM
     memset(C.px, 0, 240 * 240 * 2);
     lv_canvas_set_buffer(v_cv, C.px, 240, 240, LV_COLOR_FORMAT_RGB565);
+#endif
     lv_obj_set_pos(v_cv, 0, 0);
     lv_obj_add_flag(v_cv, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(v_cv, tap_cb, LV_EVENT_CLICKED, NULL);
@@ -655,6 +690,9 @@ static void on_hide(void)
 {
     if (v_tmr) lv_timer_pause(v_tmr);
     demo_synth_stop();
+#ifdef ESP_PLATFORM
+    display_direct_end();                         /* rend les bandes DMA */
+#endif
     if (S.px) power_hold_active(false);
     if (s_tilt) { motion_accel_end(); s_tilt = false; }
     if (st == ST_PLAY || st == ST_COUNT || st == ST_PAUSE) st = ST_TITLE;   /* partie abandonnée */
