@@ -2,6 +2,12 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.31.2 — 2026-11-20
+
+- Fix: **Battery** and **Settings** had vanished from the app launcher (and with them the
+  update page). The launcher held 16 entries; with Demo and Soar there are 18, and the last two
+  were silently dropped. It now holds 32, and those two always keep their place.
+
 ## 0.31.1 — 2026-11-20
 
 - Soar: about 4 frames/s on the watch, now several times faster. The terrain frame buffer did

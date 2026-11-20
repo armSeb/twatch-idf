@@ -2089,7 +2089,7 @@ typedef struct {
     const app_t *app;
 } launch_t;
 
-#define LAUNCH_MAX 16
+#define LAUNCH_MAX 32
 static launch_t s_launch[LAUNCH_MAX];
 static int s_launch_n;
 
@@ -2111,7 +2111,8 @@ static void build_launcher(void)
 {
     s_launch_n = 0;
     launch_add(N_("Lecture"), LV_SYMBOL_AUDIO, 0x1DB954, SCR_MEDIA, NULL);
-    for (int i = 0; i < g_app_count; i++)
+    /* Énergie et Réglages ont toujours leur place, même si les apps débordent */
+    for (int i = 0; i < g_app_count && s_launch_n < LAUNCH_MAX - 2; i++)
         launch_add(g_apps[i]->name, g_apps[i]->icon, g_apps[i]->color, SCR_APP, g_apps[i]);
     launch_add(N_("Énergie"), LV_SYMBOL_BATTERY_FULL, 0x22C55E, SCR_POWER, NULL);
     launch_add(N_("Réglages"), LV_SYMBOL_SETTINGS, 0x8A8F98, SCR_MENU, NULL);
