@@ -2,6 +2,12 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.31.7 — 2026-11-21
+
+- Soar has its own, gentler background music: a 16-bar loop with a music-box arpeggio, pad,
+  soft triangle bass, muted kick and hi-hat, and a slow, sparse melody in the second half;
+  about 10 dB below the demo so the sound effects stand out. The demo's tune is unchanged.
+
 ## 0.31.6 — 2026-11-20
 
 - Soar: the game clock was capped at 0.1 s per frame, so below 10 frames/s the plane flew in

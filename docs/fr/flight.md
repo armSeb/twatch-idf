@@ -34,7 +34,9 @@ On survole l'Irlande au coucher du soleil en pilotant au poignet, et on traverse
 - Fin de partie au crash ou quand le chrono tombe à zéro ; le **record** est gardé.
 
 Musique et bruitages (anneau, turbo, compte à rebours, crash) par le même synthétiseur que la
-démo ; le haut-parleur se coupe en touchant *SON* en haut à droite de l'écran titre. L'écran
+démo. La musique d'Envol est un morceau à part, en fond : boîte à musique, nappe, basse douce
+en triangles, batterie feutrée, et une mélodie lente qui entre à la deuxième moitié de la
+boucle de 16 mesures (environ 10 dB sous la démo, les bruitages restent bien audibles) ; le haut-parleur se coupe en touchant *SON* en haut à droite de l'écran titre. L'écran
 reste allumé et le processeur à 240 MHz pendant le jeu ; quitter l'app abandonne la partie.
 Rien ne vient interrompre le jeu : les notifications reçues pendant ce temps vont dans la
 liste, sans bannière ni vibration (les appels passent quand même).

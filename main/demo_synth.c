@@ -41,9 +41,21 @@ static const uint8_t LEAD_B[8][16] = {
     { 76, 0, 0, 0, 0, 0, 0, 0, 72, 0, 0, 0, 69, 0, 1, 0 },
 };
 
+/* Envol : mélodie lente et clairsemée, sur couplet puis refrain */
+static const uint8_t LEAD_G[8][16] = {
+    { 76, 0, 0, 0, 0, 0, 0, 0, 72, 0, 0, 0, 74, 0, 0, 0 },
+    { 72, 0, 0, 0, 0, 0, 0, 0, 69, 0, 0, 0, 0, 0, 0, 0 },
+    { 67, 0, 0, 0, 72, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0 },
+    { 74, 0, 0, 0, 0, 0, 0, 0, 71, 0, 0, 0, 0, 0, 1, 0 },
+    { 69, 0, 0, 0, 72, 0, 0, 0, 77, 0, 0, 0, 76, 0, 0, 0 },
+    { 74, 0, 0, 0, 0, 0, 0, 0, 71, 0, 0, 0, 74, 0, 0, 0 },
+    { 71, 0, 0, 0, 0, 0, 0, 0, 67, 0, 0, 0, 0, 0, 0, 0 },
+    { 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 },
+};
+
 enum { D_K = 1, D_S = 2, D_H = 4 };
-enum { DR_NONE, DR_BUILD, DR_BUILDROLL, DR_FULL, DR_FILL, DR_HALF, DR_FOUR, DR_ROLL, DR_END };
-static const uint8_t DRUMS[9][16] = {
+enum { DR_NONE, DR_BUILD, DR_BUILDROLL, DR_FULL, DR_FILL, DR_HALF, DR_FOUR, DR_ROLL, DR_END, DR_SOFT };
+static const uint8_t DRUMS[10][16] = {
     { 0 },
     { 0, 0, D_H, 0, 0, 0, D_H, 0, 0, 0, D_H, 0, 0, 0, D_H, D_H },
     { 0, 0, D_H, 0, 0, 0, D_H, 0, 0, 0, D_H, 0, D_S, D_S, D_S, D_S },
@@ -53,11 +65,13 @@ static const uint8_t DRUMS[9][16] = {
     { D_K, 0, D_H, 0, D_K, 0, D_H, 0, D_K, 0, D_H, 0, D_K, 0, D_H, D_H },
     { D_K, 0, D_S, 0, D_K, 0, D_S, 0, D_K | D_S, 0, D_S, D_S, D_S, D_S, D_S, D_S },
     { D_K, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { D_K, 0, 0, 0, D_H, 0, 0, 0, 0, 0, 0, 0, D_H, 0, 0, 0 },
 };
 
-enum { F_ARP = 1, F_BASS = 2, F_PAD = 4, F_ARPHI = 8, F_LEADHI = 16 };
-typedef struct { uint8_t chord, lead, drums, flags; } bar_t;   /* lead : 0, 1..8 = A, 9..16 = B */
-static bar_t ARR[DEMO_BARS];
+enum { F_ARP = 1, F_BASS = 2, F_PAD = 4, F_ARPHI = 8, F_LEADHI = 16, F_SOFT = 32 };
+typedef struct { uint8_t chord, lead, drums, flags; } bar_t;   /* lead : 0, 1..8 = A, 9..16 = B, 17..24 = jeu */
+#define GAME_BARS 16
+static bar_t ARR[DEMO_BARS + GAME_BARS];      /* la démo, puis la boucle d'Envol */
 
 static void arr_set(int from, int n, const uint8_t *prog, int lead, int drums, int flags)
 {
@@ -96,6 +110,12 @@ static void arr_init(void)
     arr_set(60, 4, P_A, 0, DR_NONE, F_ARP | F_PAD);
     ARR[60].drums = DR_END;
     ARR[63].chord = C_AM;
+    /* Envol : boîte à musique, nappe, basse douce ; la mélodie à la 2e moitié */
+    const int G = DEMO_BARS, soft = F_SOFT | F_PAD | F_ARP | F_BASS;
+    arr_set(G, 4, P_A, 0, DR_SOFT, soft);
+    arr_set(G + 4, 4, P_B, 0, DR_SOFT, soft);
+    arr_set(G + 8, 4, P_A, 17, DR_SOFT, soft);
+    arr_set(G + 12, 4, P_B, 21, DR_SOFT, soft);
 }
 
 static demo_song_t s_song;
@@ -104,9 +124,7 @@ static demo_song_t s_song;
 static int song_bar(int bar)
 {
     if (s_song == SONG_DEMO) return bar < DEMO_BARS ? bar : -1;
-    if (bar < 4) return 4 + bar;
-    int i = (bar - 4) % 32;
-    return i < 16 ? 8 + i : i < 24 ? 40 + (i - 16) : 48 + (i - 24);
+    return DEMO_BARS + bar % GAME_BARS;
 }
 
 static uint8_t drums_at(int bar, int step)
@@ -131,6 +149,7 @@ static float k_ph;
 static uint32_t lfsr = 0xACE1u;
 static int32_t hat_prev;
 static int s_master = 32767;         /* Q15, fondu de la fin */
+static bool s_soft;                  /* mesure douce : triangles, batterie feutrée */
 
 #define ECHO_N (DEMO_RATE * 3 * DEMO_STEP_MS / 1000)   /* écho à 3 pas */
 static int16_t *s_echo;
@@ -154,12 +173,24 @@ static void on_step(int bar, int step)
     if (b < 0) { v_pad_target = 0; return; }
     const bar_t *a = &ARR[b];
     const uint8_t *ch = CHORD[a->chord];
-    if (a->flags & F_ARP) {
+    s_soft = a->flags & F_SOFT;
+    if (s_soft) {
+        if ((a->flags & F_ARP) && !(step & 1)) {             /* boîte à musique, croches */
+            v_arp.inc = note_inc(ch[(step >> 1) % 3] + 12);
+            v_arp.env = 16000;
+            v_arp.decay = decay_q15(260);
+        }
+        if ((a->flags & F_BASS) && (step == 0 || step == 8)) {
+            v_bass.inc = note_inc(ROOT[a->chord]);
+            v_bass.env = 26000;
+            v_bass.decay = decay_q15(700);
+        }
+    } else if (a->flags & F_ARP) {
         v_arp.inc = note_inc(ch[step % 3] + ((a->flags & F_ARPHI) && (step & 4) ? 12 : 0));
         v_arp.env = (a->flags & F_PAD) && !(a->flags & F_BASS) ? 20000 : 32767;
         v_arp.decay = decay_q15(90);
     }
-    if ((a->flags & F_BASS) && !(step & 1)) {
+    if (!s_soft && (a->flags & F_BASS) && !(step & 1)) {
         v_bass.inc = note_inc(ROOT[a->chord] + ((step & 2) ? 12 : 0));
         v_bass.env = 32767;
         v_bass.decay = decay_q15(140);
@@ -169,13 +200,13 @@ static void on_step(int bar, int step)
         for (int i = 0; i < 3; i++) v_pad_inc[i] = note_inc(ch[i] - 12) + (uint32_t)(i * 9000);   /* léger désaccord */
     }
     if (a->lead) {
-        const uint8_t *row = a->lead <= 8 ? LEAD_A[a->lead - 1] : LEAD_B[a->lead - 9];
+        const uint8_t *row = a->lead <= 8 ? LEAD_A[a->lead - 1] : a->lead <= 16 ? LEAD_B[a->lead - 9] : LEAD_G[a->lead - 17];
         uint8_t n = row[step];
         if (n == 1) v_lead.env = 0;
         else if (n) {
             v_lead.inc = note_inc(n + ((a->flags & F_LEADHI) ? 12 : 0));
-            v_lead.env = 32767;
-            v_lead.decay = decay_q15(420);
+            v_lead.env = s_soft ? 24000 : 32767;
+            v_lead.decay = decay_q15(s_soft ? 900 : 420);
         }
     }
     uint8_t d = DRUMS[a->drums][step];
@@ -184,7 +215,7 @@ static void on_step(int bar, int step)
     if (d & D_H) h_t = 0;
     /* fondu des 4 dernières mesures de la démo */
     if (s_song == SONG_DEMO && b >= 60) s_master = 32767 - (int)(((b - 60) * 16 + step) * 32767 / 64) + 2000;
-    else s_master = 32767;
+    else s_master = s_song == SONG_GAME ? 21000 : 32767;      /* le jeu : en fond */
 }
 
 static inline uint32_t noise(void)
@@ -249,6 +280,12 @@ static int32_t sfx_sample(void)
     return v;
 }
 
+static inline int32_t tri(uint32_t ph)                  /* triangle, ±16384 */
+{
+    int32_t x = (int32_t)(ph >> 16) - 32768;
+    return (x < 0 ? -x : x) - 16384;
+}
+
 static int16_t sample(void)
 {
     uint32_t step_len = DEMO_RATE * DEMO_STEP_MS / 1000;
@@ -260,7 +297,8 @@ static int16_t sample(void)
     if (s_sfx_req) { s_sfx = s_sfx_req; s_sfx_req = 0; s_sfx_t = 0; s_sfx_ph = 0; }
     int32_t acc = 0, lead = 0;
     if (v_lead.env > 40) {                                 /* mélodie : carré 25 % */
-        lead = ((v_lead.ph >> 30) == 0 ? 3800 : -1270) * v_lead.env >> 15;
+        lead = s_soft ? (tri(v_lead.ph) * 3 / 16) * v_lead.env >> 15
+                      : ((v_lead.ph >> 30) == 0 ? 3800 : -1270) * v_lead.env >> 15;
         v_lead.ph += v_lead.inc;
         v_lead.env = v_lead.env * v_lead.decay >> 15;
         if (v_lead.env < 13000 && v_lead.decay < 32760) v_lead.decay = decay_q15(1400);   /* tenue */
@@ -272,12 +310,14 @@ static int16_t sample(void)
         acc += lead + (e * 3 >> 3);
     } else acc += lead;
     if (v_arp.env > 40) {                                  /* arpège : carré 50 % */
-        acc += ((int32_t)(v_arp.ph >> 31) ? 1400 : -1400) * v_arp.env >> 15;
+        acc += s_soft ? (tri(v_arp.ph) / 12) * v_arp.env >> 15
+                      : ((int32_t)(v_arp.ph >> 31) ? 1400 : -1400) * v_arp.env >> 15;
         v_arp.ph += v_arp.inc;
         v_arp.env = v_arp.env * v_arp.decay >> 15;
     }
     if (v_bass.env > 40) {                                 /* basse : carré 50 % */
-        acc += ((int32_t)(v_bass.ph >> 31) ? 3400 : -3400) * v_bass.env >> 15;
+        acc += s_soft ? (tri(v_bass.ph) / 4) * v_bass.env >> 15
+                      : ((int32_t)(v_bass.ph >> 31) ? 3400 : -3400) * v_bass.env >> 15;
         v_bass.ph += v_bass.inc;
         v_bass.env = v_bass.env * v_bass.decay >> 15;
     }
@@ -296,7 +336,7 @@ static int16_t sample(void)
         float f = 48.0f + 140.0f * expf(-t * 35.0f);
         k_ph += f / DEMO_RATE;
         if (k_ph > 1) k_ph -= 1;
-        acc += (int32_t)(9000.0f * expf(-t * 9.0f) * sinf(k_ph * 6.2831853f));
+        acc += (int32_t)((s_soft ? 3800.0f : 9000.0f) * expf(-t * 9.0f) * sinf(k_ph * 6.2831853f));
         k_t++;
     }
     if (s_tt < DEMO_RATE / 5) {                            /* caisse claire */
@@ -310,7 +350,7 @@ static int16_t sample(void)
         int32_t n = (int32_t)(noise() & 0xFFFF) - 32768;
         int32_t hp = n - hat_prev;
         hat_prev = n;
-        acc += (int32_t)(hp * 0.03f * expf(-t * 90.0f));
+        acc += (int32_t)(hp * (s_soft ? 0.012f : 0.03f) * expf(-t * 90.0f));
         h_t++;
     }
     acc = (acc * (s_master < 0 ? 0 : s_master)) >> 15;

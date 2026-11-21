@@ -31,7 +31,10 @@ same course twice.
 - **Hitting the terrain** (or the water): crash. *PULL UP!* flashes when you skim the ground.
 - The game ends on a crash or when the clock hits zero; the **best score** is kept.
 
-Music and sound effects (ring, boost, countdown, crash) come from the same synth as the demo;
+Music and sound effects (ring, boost, countdown, crash) come from the same synth as the demo.
+Soar's music is a tune of its own, in the background: music box, pad, soft triangle bass,
+muted drums, and a slow melody coming in for the second half of the 16-bar loop (about 10 dB
+below the demo, so the sound effects stay clear);
 mute by tapping *SOUND* top right on the title screen. The screen stays on and the CPU at
 240 MHz while playing; leaving the app abandons the game. Nothing interrupts the game:
 notifications received meanwhile go to the list, without a banner or vibration (calls still
