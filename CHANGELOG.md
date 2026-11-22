@@ -2,6 +2,11 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.32.1 — 2026-11-22
+
+- IR lamp: a long press on a known key now shows its NEC address and code (besides search
+  again / forget).
+
 ## 0.32.0 — 2026-11-22
 
 - New **IR lamp** app: an infrared remote for solar lamps with an 8-key remote (ON, OFF, 3H,

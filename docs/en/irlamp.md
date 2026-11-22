@@ -35,7 +35,8 @@ blink to confirm.
 ## Using it
 
 A known key shows in colour: tapping it sends the code (twice, to be safe), with a short
-vibration. **Long press** a key to search for it again or forget it. Codes are kept in memory.
+vibration. **Long press** a key to see its NEC address and code, and to search for it again or forget
+it. Codes are kept in memory.
 
 If no address makes the lamp react, it probably uses another protocol than NEC: its codes will
 have to be read with an infrared receiver (a TSOP38238 on an ESP32 with IRremoteESP8266's

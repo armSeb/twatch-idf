@@ -38,7 +38,8 @@ toujours ; certaines lampes clignotent pour confirmer.
 ## Utiliser
 
 Une touche connue s'affiche en couleur : la toucher envoie le code (deux fois, par sécurité),
-avec une petite vibration. **Appui long** sur une touche : la chercher à nouveau ou l'oublier.
+avec une petite vibration. **Appui long** sur une touche : son adresse et son code NEC s'affichent, avec de quoi la
+chercher à nouveau ou l'oublier.
 Les codes sont gardés en mémoire.
 
 Si aucune adresse ne fait réagir la lampe, elle utilise sans doute un autre protocole que

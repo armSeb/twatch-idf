@@ -322,9 +322,17 @@ static void build(void)
         break;
     }
     case ST_READY:
-        snprintf(b, sizeof b, _("Recherche : %s"), KEY_NAME[s_key]);
-        text(b, 4, C_FG);
-        text(_("Lampe allumée pour OFF, éteinte pour ON… Vise-la, démarre, et touche l'écran dès qu'elle réagit."), 30, C_DIM);
+        if (s_keys.valid & (1 << s_key)) {                    /* touche connue : son code */
+            snprintf(b, sizeof b, "%s", KEY_NAME[s_key]);
+            text(b, 4, C_FG);
+            snprintf(b, sizeof b, _("adresse %04X · code %02X"), s_keys.addr[s_key], s_keys.cmd[s_key]);
+            text(b, 28, lv_color_hex(0xFACC15));
+            text(_("Démarrer : chercher à nouveau ce code."), 64, C_DIM);
+        } else {
+            snprintf(b, sizeof b, _("Recherche : %s"), KEY_NAME[s_key]);
+            text(b, 4, C_FG);
+            text(_("Lampe allumée pour OFF, éteinte pour ON… Vise-la, démarre, et touche l'écran dès qu'elle réagit."), 30, C_DIM);
+        }
         btn(v_body, _("Démarrer"), green, start_cb, NULL, 120, 40);
         lv_obj_align(lv_obj_get_child(v_body, -1), LV_ALIGN_TOP_MID, s_keys.valid & (1 << s_key) ? -62 : 0, 150);
         if (s_keys.valid & (1 << s_key)) {
