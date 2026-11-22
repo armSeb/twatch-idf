@@ -126,6 +126,11 @@ d'ESP-IDF 5.
   étoiles). Tous les sprites sont des grilles de texte dans `tools/puca_art.py`, qui génère
   `puca_gfx.c/.h` et une planche d'aperçu. Les effets sonores sont de courts airs en onde
   carrée joués par une tâche éphémère sur le flux I2S.
+- **Lampe IR** (`app_irlamp.c`, guide : [irlamp.md](irlamp.md)) : télécommande NEC (`ir_nec.c`,
+  RMT à 1 µs, porteuse 38 kHz) ; canal et verrou de fréquence pris seulement pendant
+  l'envoi, par une tâche éphémère. Recherche des codes : balayage, journal des 64 derniers
+  envois horodatés, suspects des 2,5 s précédant le toucher, recherche par moitiés. Codes
+  dans un blob NVS (`irlamp`/`keys`).
 - **Démo** (`app_demo.c`, guide : [demo.md](demo.md)) et **Envol** (`app_flight.c`, guide :
   [flight.md](flight.md)) partagent trois modules. `demo_gfx.c` : couleurs RGB565, police 5×7
   avec accents, triangles, agrandissement vers le canevas. `demo_synth.c` : synthétiseur façon

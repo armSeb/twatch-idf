@@ -116,6 +116,10 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   live as text grids in `tools/puca_art.py`, which generates `puca_gfx.c/.h` and a preview
   sheet. Sound effects are short square-wave tunes played by a one-shot task through the I2S
   stream.
+- **IR lamp** (`app_irlamp.c`, guide: [irlamp.md](irlamp.md)): NEC remote (`ir_nec.c`, RMT at
+  1 µs, 38 kHz carrier); channel and frequency lock taken only while sending, by a short-lived
+  task. Code search: sweep, log of the last 64 timestamped sends, suspects from the 2.5 s
+  before the tap, halving search. Codes in an NVS blob (`irlamp`/`keys`).
 - **Demo** (`app_demo.c`, guide: [demo.md](demo.md)) and **Soar** (`app_flight.c`, guide:
   [flight.md](flight.md)) share three modules. `demo_gfx.c`: RGB565 colours, 5×7 font with
   accents, triangles, scaling into the canvas. `demo_synth.c`: tracker-style synth in its

@@ -2,6 +2,18 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.32.0 — 2026-11-22
+
+- New **IR lamp** app: an infrared remote for solar lamps with an 8-key remote (ON, OFF, 3H,
+  5H, 8H, 25 %, 50 %, 100 %), laid out like the original. The watch has no IR receiver, so it
+  finds the NEC codes itself: it sweeps the 256 codes of the most common addresses (about
+  30 s each), you tap "IT REACTED!" when the lamp responds, then a halving search over the
+  codes of the last 2.5 s narrows it to one in 4–5 tries. Once one key is known, the others
+  only sweep that address, starting next to the known code. Codes kept in NVS; long press a
+  key to search again or forget it.
+- `ir_nec.c`: NEC transmitter on the IR LED (RMT, 38 kHz carrier), the channel and its
+  frequency lock held only while sending.
+
 ## 0.31.7 — 2026-11-21
 
 - Soar has its own, gentler background music: a 16-bar loop with a music-box arpeggio, pad,

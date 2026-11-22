@@ -423,6 +423,27 @@ static const tr_t EN[] = {
       "THE LANDSCAPE IS INVENTED AT EVERY LAUNCH: MEADOWS, HEDGES, FARMS, RIVERS · "
       "GREETINGS TO LILYGO · ESPRESSIF · THE DEMOSCENE · "
       "AND TO THE QSO DES GASCONS FRIENDS · 73 ! ·         " },
+    { "Adresse %04X · code %02X", "Address %04X · code %02X" },
+    { "Grise : trouver son code\nAppui long : rechercher", "Grey: find its code\nLong press: search again" },
+    { "Touche une touche pour\nchercher son code", "Tap a key\nto find its code" },
+    { "Recherche : %s", "Searching: %s" },
+    { "Lampe allumée pour OFF, éteinte pour ON… Vise-la, démarre, et touche l'écran dès qu'elle réagit.", "Lamp on for OFF, off for ON… Aim at it, start, and tap the screen as soon as it reacts." },
+    { "ÇA A RÉAGI !", "IT REACTED!" },
+    { "Arrêter", "Stop" },
+    { "Encore %d codes possibles", "%d codes still possible" },
+    { "Remets la lampe dans son état de départ, vise-la, puis essaie.", "Put the lamp back in its starting state, aim at it, then try." },
+    { "Essayer", "Try" },
+    { "La lampe a-t-elle réagi ?", "Did the lamp react?" },
+    { "Non", "No" },
+    { "Renvoyer", "Send again" },
+    { "Code trouvé pour %s", "Code found for %s" },
+    { "adresse %04X · code %02X", "address %04X · code %02X" },
+    { "Vérifier", "Check" },
+    { "Enregistrer", "Save" },
+    { "Ce n'est pas ça", "That's not it" },
+    { "Aucune réaction sur toutes les adresses essayées. La lampe utilise peut-être un autre protocole : il faudra relever ses codes avec un récepteur.", "No reaction on any address tried. The lamp may use another protocol: its codes will have to be read with a receiver." },
+    { "Retour", "Back" },
+    { "Lampe IR", "IR lamp" },
 };
 
 static int s_lang = LANG_FR;

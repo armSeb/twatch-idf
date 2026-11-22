@@ -66,6 +66,9 @@ Priorities, in order: **stability**, **battery life**, **finish**.
   [Demo guide](docs/en/demo.md).
 - **Soar**, a flying game over that landscape: tilt your wrist to fly through gold rings
   against the clock, combos, boost, crashes, best score — see the [Soar guide](docs/en/flight.md).
+- **IR lamp**, an infrared remote for 8-key solar lamps (ON, OFF, timers, brightness). The
+  watch has no IR receiver, so it finds the NEC codes itself: a sweep, a tap when the lamp
+  reacts, then a halving search — see the [IR lamp guide](docs/en/irlamp.md).
 - **Notifications never pull you out of an app or menu**: they slide in as a banner on top
   (tap to read, swipe up to dismiss); on the watch face they open full screen as before.
 - **Quick controls**: Bluetooth, **Do not disturb**, torch, now playing, brightness.
@@ -91,7 +94,7 @@ Priorities, in order: **stability**, **battery life**, **finish**.
 |---|---|---|
 | Watch face | swipe ↑ | Notifications (close: ↓ or →) |
 | Watch face | swipe ↓ | Quick controls (close: ↑ or →) |
-| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Steps, Púca, Demo, Soar, Torch, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Carrier, Battery, Settings |
+| Watch face | swipe ← | Apps: Now playing, Stopwatch, Timer, Steps, Púca, Demo, Soar, Torch, IR lamp, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Carrier, Battery, Settings |
 | Watch face | long press | Choose the watch face |
 | Anywhere else | swipe → or « ‹ » | Back to where you came from |
 | Screen off | double tap | Wake up (on the last unseen notification in silent mode) |
@@ -165,6 +168,7 @@ More: [building, flashing and tests](docs/en/building.md).
 | Púca (virtual pet): how it lives and how to care for it | [docs/en/puca.md](docs/en/puca.md) | [docs/fr/puca.md](docs/fr/puca.md) |
 | Demo "Tír na nÓg": scenes, controls, how it is done | [docs/en/demo.md](docs/en/demo.md) | [docs/fr/demo.md](docs/fr/demo.md) |
 | Soar (flying game): controls and rules | [docs/en/flight.md](docs/en/flight.md) | [docs/fr/flight.md](docs/fr/flight.md) |
+| IR lamp: finding and using a solar lamp's codes | [docs/en/irlamp.md](docs/en/irlamp.md) | [docs/fr/irlamp.md](docs/fr/irlamp.md) |
 | Writing apps, translating | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) |
 | Changes | [CHANGELOG.md](CHANGELOG.md) | |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) | |
