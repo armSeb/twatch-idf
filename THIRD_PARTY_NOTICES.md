@@ -16,6 +16,7 @@ tiers suivants, chacun sous sa propre licence.*
 | [lwIP](https://savannah.nongnu.org/projects/lwip/) (via ESP-IDF) | linked | Swedish Institute of Computer Science | BSD-3-Clause |
 | [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) (via ESP-IDF) | linked | The Mbed TLS Contributors | Apache-2.0 |
 | [Apache NimBLE](https://github.com/apache/mynewt-nimble) (via ESP-IDF) | linked | The Apache Software Foundation | Apache-2.0 |
+| [cJSON](https://github.com/DaveGamble/cJSON) (via ESP-IDF) | linked (Remote app) | Dave Gamble and cJSON contributors | MIT |
 | wpa_supplicant, newlib and the other ESP-IDF firmware components | linked | see ESP-IDF's `docs/en/COPYRIGHT.rst` | BSD and others, as listed there |
 | [LVGL](https://github.com/lvgl/lvgl) 9.2.2 | linked | LVGL Kft | MIT |
 | [Montserrat](https://github.com/JulietaUla/Montserrat) (Medium), converted to bitmaps in `main/fonts/` | embedded | Julieta Ulanovsky and contributors | SIL Open Font License 1.1 |
@@ -51,6 +52,7 @@ licence des composants ci-dessus. Un binaire qui inclut *TV off* contient du con
 
 ## Trademarks / Marques
 
-iPhone, iOS and Apple Watch are trademarks of Apple Inc. T-Watch, LilyGo and TV-B-Gone are
-trademarks of their respective owners. This project is independent and not affiliated with,
+iPhone, iOS and Apple Watch are trademarks of Apple Inc. T-Watch, LilyGo, TV-B-Gone, Philips,
+Samsung, LG, Sony and Bluetooth are trademarks of their respective owners; brand names only
+name the devices the bundled remote models are meant for. This project is independent and not affiliated with,
 endorsed or sponsored by them.
