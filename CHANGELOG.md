@@ -2,6 +2,16 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.33.1 — 2026-11-22
+
+- Mouse: pairing with an iPhone failed. In mouse mode the watch no longer distributes its
+  identity key (IRK), the same as the normal watch's (an iPhone that knows it refuses a second
+  device carrying it; the static address is enough); the link parameters requested after
+  encryption now follow Apple's HID rules (11.25–27.5 ms, was 7.5–15 ms); stale keys are
+  dropped after an encryption failure; numeric comparison is accepted if a host asks for it.
+- Mouse: the Bluetooth log (About) now traces pairing in mouse mode (connection, encryption
+  or failure code, link parameters, subscriptions, disconnection reason).
+
 ## 0.33.0 — 2026-11-22
 
 - **Remote** replaces IR lamp: several infrared remotes described as JSON (up to 8 × 30 keys,

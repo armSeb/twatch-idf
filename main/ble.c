@@ -410,7 +410,7 @@ static int hid_gap_event(struct ble_gap_event *event)
         }
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
-        ble_diag("souris : déco 0x%x", event->disconnect.reason);
+        ble_diag("souris : déco 0x%x", event->disconnect.reason);   /* 0x13 pair, 0x16 nous, 0x3d MIC, 0x5 auth */
         s_conn = BLE_HS_CONN_HANDLE_NONE;
         s_itvl = s_lat = s_tmo = 0;
         ble_npl_callout_stop(&s_co_sec);
@@ -424,23 +424,39 @@ static int hid_gap_event(struct ble_gap_event *event)
             refresh_bonds();
             set_state(BLE_ST_SECURED);
             ble_diag("souris : chiffré");
-            /* réactivité : 7,5–15 ms, latence 4 (rien à envoyer = la radio dort) */
-            struct ble_gap_upd_params up = { .itvl_min = 6, .itvl_max = 12, .latency = 4,
+            /* réactivité dans les règles d'Apple pour le HID : min ≥ 11,25 ms,
+             * max ≥ min + 15 ms ; latence 4 (rien à envoyer = la radio dort) */
+            struct ble_gap_upd_params up = { .itvl_min = 9, .itvl_max = 22, .latency = 4,
                                              .supervision_timeout = 300, .min_ce_len = 0, .max_ce_len = 0 };
             ble_gap_update_params(event->enc_change.conn_handle, &up);
         } else {
             ble_diag("souris : ÉCHEC chiffr. %d", event->enc_change.status);
+            if (ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0) {   /* clés périmées : on oublie */
+                ble_store_util_delete_peer(&desc.peer_id_addr);
+                refresh_bonds();
+            }
+        }
+        return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE_REQ:
+        return 0;
+    case BLE_GAP_EVENT_PASSKEY_ACTION:
+        ble_diag("souris : passkey act %d", event->passkey.params.action);
+        if (event->passkey.params.action == BLE_SM_IOACT_NUMCMP) {     /* comparaison : on accepte */
+            struct ble_sm_io io = { .action = BLE_SM_IOACT_NUMCMP, .numcmp_accept = 1 };
+            ble_sm_inject_io(event->passkey.conn_handle, &io);
         }
         return 0;
     case BLE_GAP_EVENT_REPEAT_PAIRING:
+        ble_diag("souris : ré-appairage");
         if (ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc) == 0) ble_store_util_delete_peer(&desc.peer_id_addr);
         return BLE_GAP_REPEAT_PAIRING_RETRY;
     case BLE_GAP_EVENT_SUBSCRIBE:
         hid_on_subscribe(event->subscribe.attr_handle, event->subscribe.cur_notify);
-        if (hid_ready()) set_state(BLE_ST_READY);
+        if (hid_ready() && s_state != BLE_ST_READY) { set_state(BLE_ST_READY); ble_diag("souris : prête"); }
         return 0;
     case BLE_GAP_EVENT_CONN_UPDATE:
         refresh_conn_params(event->conn_update.conn_handle);
+        ble_diag("souris : liaison %u ms st=%d", (unsigned)(s_itvl * 5 / 4), event->conn_update.status);
         return 0;
     case BLE_GAP_EVENT_ADV_COMPLETE:
         if (s_conn == BLE_HS_CONN_HANDLE_NONE) adv_start(s_fast_adv, ADV_FAST_MS);
@@ -709,6 +725,10 @@ esp_err_t ble_start(void)
     if (s_hid) {                                         /* ordinateur : « Just Works » */
         ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_NO_IO;
         ble_hs_cfg.sm_mitm = 0;
+        /* Pas de clé d'identité (IRK) : c'est la même que celle de la montre
+         * normale, déjà connue de l'iPhone, qui refuse alors l'appairage d'un
+         * second appareil portant la même. L'adresse statique suffit. */
+        ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC;
     }
 
     ble_svc_gap_init();

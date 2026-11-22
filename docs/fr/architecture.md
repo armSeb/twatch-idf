@@ -140,7 +140,7 @@ d'ESP-IDF 5.
   statique dérivée autrement de la MAC, nom, apparence 0x03C2), les services HID (rapports
   souris 1, clavier 2, multimédia 3, références de rapport, mode protocole), DIS (PnP ID) et
   batterie, sans ANCS, en « Just Works » ; événements GAP propres (pas de paramètres éco,
-  liaison 7,5–15 ms latence 4). Le pavé lit le tactile toutes les 10 ms, accélère selon la
+  liaison 11,25–27,5 ms latence 4, sans IRK distribuée). Le pavé lit le tactile toutes les 10 ms, accélère selon la
   vitesse et regroupe les déplacements (~80 rapports/s au plus).
 - **Démo** (`app_demo.c`, guide : [demo.md](demo.md)) et **Envol** (`app_flight.c`, guide :
   [flight.md](flight.md)) partagent trois modules. `demo_gfx.c` : couleurs RGB565, police 5×7

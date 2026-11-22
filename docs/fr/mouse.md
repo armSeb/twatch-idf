@@ -3,7 +3,8 @@
 **Français** · [English](../en/mouse.md)
 
 La montre devient un pavé tactile, une télécommande de présentation et une télécommande
-multimédia **Bluetooth** pour un ordinateur. Elle marche sous Windows, macOS, Linux, Android et
+multimédia **Bluetooth** pour un ordinateur, une tablette ou un iPhone (iOS : pointeur via
+AssistiveTouch). Elle marche sous Windows, macOS, Linux, Android et
 ChromeOS, sans pilote ni logiciel à installer.
 
 ![Souris](../img/mouse-fr.png)
@@ -49,6 +50,8 @@ plus les informations d'appareil et la batterie, et le service de notifications 
 absent. L'iPhone ne voit donc jamais de souris, et l'appairage avec l'ordinateur est séparé de
 celui du téléphone.
 
-L'appairage se fait en « Just Works », sans code. La liaison demande 7,5 à 15 ms d'intervalle
-pour la réactivité, avec une latence de 4 pour que la radio dorme quand on ne bouge pas.
+L'appairage se fait en « Just Works », sans code, et sans clé d'identité (IRK) : celle de la
+montre normale, déjà connue de l'iPhone, lui ferait refuser ce second appareil. En cas d'échec,
+le journal Bluetooth (À propos) indique l'étape et le code d'erreur (lignes « souris : … »). La liaison demande 11,25 à 27,5 ms d'intervalle
+(règles d'Apple pour le HID) pour la réactivité, avec une latence de 4 pour que la radio dorme quand on ne bouge pas.
 L'écran tactile est lu toutes les 10 ms pendant l'app, au lieu de 33.

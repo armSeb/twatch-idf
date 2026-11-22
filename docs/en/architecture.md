@@ -128,7 +128,7 @@ libraries (a few registers are enough), native `esp_lcd`, ESP-IDF 5 `i2c_master`
   `ble_set_hid_mode()` then `ble_start()` restart NimBLE with another identity (static address
   derived differently from the MAC, name, appearance 0x03C2), the HID services (mouse report 1,
   keyboard 2, media 3, report references, protocol mode), DIS (PnP ID) and battery, without
-  ANCS, "Just Works"; its own GAP events (no eco parameters, 7.5–15 ms link with latency 4).
+  ANCS, "Just Works"; its own GAP events (no eco parameters, 11.25–27.5 ms link with latency 4, no IRK distributed).
   The touchpad reads the touch screen every 10 ms, accelerates with speed and batches moves
   (~80 reports/s at most).
 - **Demo** (`app_demo.c`, guide: [demo.md](demo.md)) and **Soar** (`app_flight.c`, guide:

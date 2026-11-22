@@ -3,7 +3,7 @@
 [Français](../fr/mouse.md) · **English**
 
 The watch becomes a **Bluetooth** touchpad, presentation clicker and media remote for a
-computer. It works with Windows, macOS, Linux, Android and ChromeOS, with no driver or software
+computer, a tablet or an iPhone (iOS: pointer through AssistiveTouch). It works with Windows, macOS, Linux, Android and ChromeOS, with no driver or software
 to install.
 
 ![Mouse](../img/mouse-en.png)
@@ -47,6 +47,8 @@ Mouse mode is another Bluetooth identity: another address, the name "T-Watch Sou
 device information and battery, and the iPhone notification service is absent. So the iPhone
 never sees a mouse, and the pairing with the computer is separate from the phone's.
 
-Pairing is "Just Works", with no code. The link asks for a 7.5–15 ms interval for
-responsiveness, with a latency of 4 so the radio sleeps when nothing moves. The touch screen is
+Pairing is "Just Works", with no code, and without an identity key (IRK): the normal watch's,
+already known to the iPhone, would make it refuse this second device. If it fails, the
+Bluetooth log (About) shows the step and the error code ("souris : …" lines). The link asks for an 11.25–27.5 ms interval
+(Apple's HID rules) for responsiveness, with a latency of 4 so the radio sleeps when nothing moves. The touch screen is
 read every 10 ms while in the app, instead of 33.
