@@ -119,5 +119,6 @@ phase2:
 esp_err_t i2c_bus_add(i2c_bus_id_t b, uint8_t a, i2c_master_dev_handle_t *o) { *o = (void *)1; return 0; }
 esp_err_t i2c_reg_write8(i2c_master_dev_handle_t d, uint8_t r, uint8_t v) { if (r == 0x7D) ACC = v; return 0; }
 esp_err_t i2c_reg_read8(i2c_master_dev_handle_t d, uint8_t r, uint8_t *v) { *v = 0; return 0; }
+esp_err_t i2c_reg_read(i2c_master_dev_handle_t d, uint8_t r, uint8_t *b, size_t n) { memset(b, 0, n); return 0; }   /* accéléromètre brut */
 void ble_diag(const char *f, ...) {}
 bool app_post_from_isr(const app_event_t *e, BaseType_t *h) { return true; }
