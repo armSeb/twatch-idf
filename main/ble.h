@@ -39,6 +39,10 @@ void      ble_get_info(ble_info_t *out);
 void      ble_set_battery(uint8_t pct); /* thread-safe */
 void      ble_forget_all(void);         /* thread-safe : efface les bonds, déconnecte */
 void      ble_pairing_mode(void);       /* thread-safe : pub rapide pendant 60 s */
+/* mode souris (ble_hid.h) : pris en compte au prochain ble_start() */
+void      ble_set_hid_mode(bool on);
+bool      ble_hid_mode(void);
+uint8_t   ble_get_battery(void);
 
 /* usage interne (ancs.c) */
 void      ble_internal_set_state(ble_state_t st);

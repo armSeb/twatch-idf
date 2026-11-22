@@ -1448,7 +1448,8 @@ static void ota_reboot_cb(lv_timer_t *t) { ota_reboot_now(); }
 
 static void ota_title(void)
 {
-    if (o_title) lv_label_set_text(o_title, o_app >= 0 ? _("Wi-Fi et radios") : _("Mise à jour"));
+    if (o_title) lv_label_set_text(o_title, o_app < 0 ? _("Mise à jour") :
+                                   ota_get_page() == OTA_PAGE_REMOTE ? _("Télécommandes") : _("Wi-Fi et radios"));
 }
 
 static void ota_ui_running(void)
@@ -2358,12 +2359,14 @@ void app_open(const app_t *a)
 
 /* Réglages d'une app par la page web de la montre (point d'accès de la mise
  * à jour). La session se termine toujours par un redémarrage, qui rouvre l'app. */
-void app_open_settings_portal(const app_t *a)
+void app_open_settings_portal(const app_t *a) { app_open_settings_page(a, OTA_PAGE_WEBRX); }
+
+void app_open_settings_page(const app_t *a, int page)
 {
     int idx = app_index(a);
     if (idx < 0 || ota_active()) return;
     o_app = idx;
-    ota_set_page(OTA_PAGE_WEBRX);
+    ota_set_page(page);
     /* sans animation : la vue de l'app est libérée tout de suite, sa RAM
      * interne revient au serveur web et au Wi-Fi */
     show(SCR_OTA, LV_SCR_LOAD_ANIM_NONE);

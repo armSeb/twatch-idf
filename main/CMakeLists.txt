@@ -51,8 +51,12 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/demo_gfx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/voxel.c
     ${CMAKE_CURRENT_SOURCE_DIR}/app_flight.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/app_irlamp.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/ir_nec.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_remote.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ir_proto.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ir_tx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/remote_cfg.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_mouse.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ble_hid.c
     ${CMAKE_CURRENT_SOURCE_DIR}/motion.c
     ${CMAKE_CURRENT_SOURCE_DIR}/radio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/webrx.c

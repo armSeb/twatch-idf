@@ -12,3 +12,5 @@ python3 check_i18n.py
     ./test_motion 2>&1 | grep -v "^I motion" && ./test_motion b 2>&1 | grep -v "^I motion"; rm -f nvs.bin)
 # Púca : vie de l'animal (évolution, sommeil, négligence, pas → trèfles)
 gcc -std=gnu17 -Wall -Wextra -fsanitize=address,undefined -g -I../main -o test_puca test_puca.c ../main/puca_model.c -lm && ./test_puca
+gcc -std=gnu17 -Wall -Wextra -fsanitize=address,undefined -g -I../main -o test_ir test_ir.c ../main/ir_proto.c && ./test_ir
+gcc -std=gnu17 -Wall -Wextra -fsanitize=address,undefined -g -DRC_NO_NVS -I../main -I${IDF_PATH:-/root/esp/idf556}/components/json/cJSON -o test_remote test_remote.c ../main/remote_cfg.c ${IDF_PATH:-/root/esp/idf556}/components/json/cJSON/cJSON.c ../main/ir_proto.c && ./test_remote

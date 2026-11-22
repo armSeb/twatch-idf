@@ -77,10 +77,15 @@ Priorités, dans l'ordre : **stabilité**, **autonomie**, **finition**.
 - **Envol**, un jeu de vol au-dessus de ce paysage : on pilote au poignet pour traverser des
   anneaux d'or contre la montre, combos, turbo, crash, record — voir le
   [guide Envol](docs/fr/flight.md).
-- **Lampe IR**, une télécommande infrarouge pour les lampes solaires à 8 touches (ON, OFF,
-  minuteries, luminosité). La montre n'a pas de récepteur IR : elle trouve elle-même les codes
-  NEC, par un balayage, un toucher quand la lampe réagit, puis une recherche par moitiés — voir
-  le [guide Lampe IR](docs/fr/irlamp.md).
+- **Télécommande**, plusieurs télécommandes infrarouges (TV, lampe…) décrites en JSON et
+  modifiables depuis le téléphone : NEC, Samsung, RC5, RC6, Sony ; modèles fournis (lampe
+  solaire, TV Philips, Samsung, LG et Sony, télécommande chinoise « Car MP3 ») ; répétition
+  tant qu'on garde le doigt ; et comme la montre n'a pas de récepteur IR, elle trouve elle-même
+  les codes inconnus (codes probables, ou balayage + « ça a réagi ! » + recherche par moitiés)
+  — voir le [guide Télécommande](docs/fr/remote.md).
+- **Souris** : la montre devient pavé tactile, télécommande de présentation et télécommande
+  multimédia Bluetooth pour un ordinateur (HID, sans pilote), puis revient à l'iPhone en
+  sortant — voir le [guide Souris](docs/fr/mouse.md).
 - **Les notifications ne font jamais quitter une app ou un menu** : elles glissent en
   bannière par-dessus (toucher pour lire, glisser vers le haut pour fermer) ; sur le cadran,
   elles s'ouvrent en plein écran comme avant.
@@ -110,7 +115,7 @@ de 380 mAh en bon état.
 |---|---|---|
 | Cadran | glisser ↑ | Notifications (refermer : ↓ ou →) |
 | Cadran | glisser ↓ | Contrôles rapides (refermer : ↑ ou →) |
-| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Pas, Púca, Démo, Envol, Lampe, Lampe IR, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
+| Cadran | glisser ← | Apps : Lecture, Chrono, Minuteur, Pas, Púca, Démo, Envol, Lampe, Télécommande, Souris, TV off, Wi-Fi, SDR, WebRX, Tone, Radio, Porteuse, Énergie, Réglages |
 | Cadran | appui long | Choix du cadran |
 | Partout ailleurs | glisser → ou « ‹ » | Retour à l'écran d'où l'on vient |
 | Écran éteint | double tap | Réveil (sur la dernière notif non vue en mode discret) |
@@ -185,7 +190,8 @@ Pour aller plus loin : [compiler, flasher, tester](docs/fr/building.md).
 | Púca (animal virtuel) : sa vie, comment s'en occuper | [docs/fr/puca.md](docs/fr/puca.md) | [docs/en/puca.md](docs/en/puca.md) |
 | Démo « Tír na nÓg » : scènes, commandes, comment c'est fait | [docs/fr/demo.md](docs/fr/demo.md) | [docs/en/demo.md](docs/en/demo.md) |
 | Envol (jeu de vol) : commandes et règles | [docs/fr/flight.md](docs/fr/flight.md) | [docs/en/flight.md](docs/en/flight.md) |
-| Lampe IR : trouver et utiliser les codes d'une lampe solaire | [docs/fr/irlamp.md](docs/fr/irlamp.md) | [docs/en/irlamp.md](docs/en/irlamp.md) |
+| Télécommande : télécommandes infrarouges, recherche des codes, format JSON | [docs/fr/remote.md](docs/fr/remote.md) | [docs/en/remote.md](docs/en/remote.md) |
+| Souris : pavé tactile, diapos et multimédia en Bluetooth | [docs/fr/mouse.md](docs/fr/mouse.md) | [docs/en/mouse.md](docs/en/mouse.md) |
 | Écrire une app, traduire | [docs/fr/apps-and-i18n.md](docs/fr/apps-and-i18n.md) | [docs/en/apps-and-i18n.md](docs/en/apps-and-i18n.md) |
 | Historique | | [CHANGELOG.md](CHANGELOG.md) |
 | Contribuer | [CONTRIBUTING.md](CONTRIBUTING.md) | |

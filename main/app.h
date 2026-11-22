@@ -58,6 +58,8 @@ bool app_is_open(const app_t *app);
 /* réglages de l'app saisis sur la page web de la montre (point d'accès Wi-Fi,
  * Bluetooth coupé) ; la session finit par un redémarrage qui rouvre l'app */
 void app_open_settings_portal(const app_t *app);
+/* idem, page donnée (OTA_PAGE_*) */
+void app_open_settings_page(const app_t *app, int page);
 /* dans on_hide : true si l'on quitte vraiment l'app écran allumé (pas une
  * extinction, ni une notification ou un appel ouverts par-dessus) */
 bool app_leaving_for_good(void);

@@ -35,7 +35,8 @@ bool        ota_rolled_back(void);         /* l'image précédente avait échou�
 /* depuis la tâche app (UI) */
 /* page servie sur http://192.168.4.1 (avant ota_start) ; l'autre reste
  * accessible par un lien */
-enum { OTA_PAGE_UPDATE = 0, OTA_PAGE_WEBRX = 1 };
+enum { OTA_PAGE_UPDATE = 0, OTA_PAGE_WEBRX = 1, OTA_PAGE_REMOTE = 2 };
+int ota_get_page(void);
 void        ota_set_page(int page);
 const char *ota_start(void);               /* NULL si démarré, sinon raison du refus */
 void        ota_cancel(void);              /* abandon : redémarrage propre */

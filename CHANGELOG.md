@@ -2,6 +2,26 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.33.0 — 2026-11-22
+
+- **Remote** replaces IR lamp: several infrared remotes described as JSON (up to 8 × 30 keys,
+  1–4 columns, colours, wide keys, empty cells, per-key protocol). Protocols NEC, Samsung,
+  RC5, RC6 (with toggle bit), Sony 12/15/20 bits. Bundled models: solar lamp, Philips, Samsung,
+  LG and Sony TVs (power, mute, volume, channels), Chinese "Car MP3" 21-key remote. Volume keys
+  repeat while held. ≡ lists the remotes (switch, long press to delete, add a model, edit on the
+  phone); ✎ setup mode; long press a key for its details (protocol, address, code, test,
+  forget). Code search for any protocol: "Likely codes" (halving search over each protocol's
+  usual codes) or sweep + "it reacted!" + halving search; a remote in *auto* adopts the protocol
+  found. The lamp's learned codes are kept.
+- Remotes are editable on the watch's web page (access point): the JSON with one button per
+  model, validated by the watch before saving.
+- New **Mouse** app: the watch becomes a Bluetooth HID touchpad (pointer with acceleration, tap
+  = click, long press = right click, tap-and-drag, scroll strip), presentation clicker (big
+  ◀ ▶, F5, black screen, Esc) and media remote (tracks, play/pause, volume, mute) for a
+  computer, no driver needed. It uses a separate Bluetooth identity ("T-Watch Souris") without
+  the iPhone notification service, and goes back to the iPhone when you leave.
+- Host tests: IR encoding checked by independent decoders, remote JSON round trip and errors.
+
 ## 0.32.2 — 2026-11-22
 
 - IR lamp: back (button or swipe) from a search or code screen now returns to the key grid

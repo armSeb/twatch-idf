@@ -1,6 +1,7 @@
 #include "i18n.h"
 #include "esp_attr.h"
 #include "ota.h"
+#include "remote_cfg.h"
 #include <string.h>
 #include <stdio.h>
 #include "esp_log.h"
@@ -343,6 +344,7 @@ static char (*s_scan)[33];                 /* réseaux vus au démarrage du poin
 static int s_nscan;
 
 void ota_set_page(int page) { s_page = page; }
+int ota_get_page(void) { return s_page; }
 
 static const char WRX_HEAD[] =
     "<!doctype html><html><head><meta charset=utf-8>"
@@ -471,9 +473,118 @@ static esp_err_t webrx_get(httpd_req_t *r)
 #undef c
 }
 
+/* ------------------------------------------------------------------ */
+/* Page « Télécommandes » : le JSON des télécommandes infrarouges       */
+/* ------------------------------------------------------------------ */
+static const char RC_HEAD[] =
+    "<!doctype html><html><head><meta charset=utf-8>"
+    "<meta name=viewport content='width=device-width,initial-scale=1'>"
+    "<title>T-Watch</title><style>"
+    "body{font:16px -apple-system,system-ui,sans-serif;background:#111;color:#eee;margin:0;padding:20px;max-width:640px}"
+    "h1{font-size:22px;margin:0 0 4px}p,li{color:#9aa}textarea{width:100%;box-sizing:border-box;height:52vh;font:13px ui-monospace,Menlo,monospace;"
+    "background:#1d2026;color:#eee;border:1px solid #3a3d44;border-radius:8px;padding:8px}"
+    "button{font-size:16px;padding:12px 18px;border:0;border-radius:10px;background:#3b82f6;color:#fff;margin-top:12px;width:100%}"
+    "button:disabled{background:#334}.p{background:#1f2937;width:auto;margin:4px 4px 0 0;padding:8px 12px;font-size:14px}"
+    "#m{margin-top:12px;min-height:1.4em}.ok{color:#4ade80}.ko{color:#f87171}code{color:#fde68a}summary{color:#9aa;margin-top:12px}"
+    "#l{float:right;background:none;border:1px solid #445;color:#9aa;width:auto;padding:4px 10px;font-size:13px;margin:0}a{color:#9aa}"
+    "</style></head><body><button id=l type=button onclick=sw()></button><h1 id=t></h1><p id=h></p><div id=pr></div>";
+static const char RC_TAIL[] =
+    "<details><summary id=fs></summary><div id=fd></div></details>"
+    "<button id=b onclick=go()></button><div id=m></div><p><a id=o href=/update.html></a></p><script>"
+    "var T={fr:{t:'Télécommandes',h:'Les télécommandes de l’app, en JSON : ajouter un modèle, des touches, changer l’ordre, saisir des codes relevés ailleurs.',"
+    "a:'+ ',b:'Enregistrer',w:'Enregistrement…',ok:'Enregistré : la montre redémarre.',ko:'Échec : ',lost:'Connexion perdue.',fs:'Format',"
+    "fd:'<ul><li><code>proto</code> : nec, samsung, rc5, rc6, sony12, sony15, sony20 (ou auto : à découvrir)</li>"
+    "<li><code>addr</code>, <code>code</code> : hexadécimal ; NEC : 2 chiffres = adresse standard</li>"
+    "<li><code>cols</code> : 1 à 4 colonnes ; <code>w</code> : largeur d’une touche en colonnes</li>"
+    "<li><code>{\"label\":\"\"}</code> : case vide ; sans <code>code</code> : à chercher depuis la montre</li>"
+    "<li><code>repeat</code> : répète tant qu’on garde le doigt (volume…)</li>"
+    "<li><code>color</code> : green, red, blue, yellow, orange, purple, grey</li>"
+    "<li>une touche peut avoir son propre <code>proto</code> / <code>addr</code></li></ul>',"
+    "json:'JSON invalide',remotes:'il manque la liste « remotes »',proto:'protocole inconnu',addr:'adresse invalide',code:'code invalide',keys:'il manque « keys »',"
+    "too_many:'8 télécommandes au plus',too_many_keys:'30 touches au plus par télécommande',empty:'aucune télécommande',nvs:'écriture impossible',size:'trop long',o:'Mise à jour du firmware →'},"
+    "en:{t:'Remotes',h:'The app’s remotes, as JSON: add a model, keys, reorder, enter codes read elsewhere.',"
+    "a:'+ ',b:'Save',w:'Saving…',ok:'Saved: the watch restarts.',ko:'Failed: ',lost:'Connection lost.',fs:'Format',"
+    "fd:'<ul><li><code>proto</code>: nec, samsung, rc5, rc6, sony12, sony15, sony20 (or auto: to be found)</li>"
+    "<li><code>addr</code>, <code>code</code>: hexadecimal; NEC: 2 digits = standard address</li>"
+    "<li><code>cols</code>: 1 to 4 columns; <code>w</code>: key width in columns</li>"
+    "<li><code>{\"label\":\"\"}</code>: empty cell; no <code>code</code>: to be searched from the watch</li>"
+    "<li><code>repeat</code>: repeats while held (volume…)</li>"
+    "<li><code>color</code>: green, red, blue, yellow, orange, purple, grey</li>"
+    "<li>a key may have its own <code>proto</code> / <code>addr</code></li></ul>',"
+    "json:'invalid JSON',remotes:'the “remotes” list is missing',proto:'unknown protocol',addr:'invalid address',code:'invalid code',keys:'“keys” is missing',"
+    "too_many:'at most 8 remotes',too_many_keys:'at most 30 keys per remote',empty:'no remote',nvs:'could not save',size:'too long',o:'Firmware update →'}};"
+    "var L=(navigator.language||'en').slice(0,2)=='fr'?'fr':'en';"
+    "function $(i){return document.getElementById(i);}function tr(k){return T[L][k]||k;}"
+    "function draw(){document.documentElement.lang=L;['t','h','b','o','fs'].forEach(function(k){$(k).textContent=tr(k);});"
+    "$('fd').innerHTML=tr('fd');$('l').textContent=L=='fr'?'English':'Français';"
+    "$('pr').innerHTML='';P.forEach(function(p,i){var b=document.createElement('button');b.className='p';b.type='button';"
+    "b.textContent=tr('a')+p.n;b.onclick=function(){add(i);};$('pr').appendChild(b);});}"
+    "function sw(){L=L=='fr'?'en':'fr';draw();}"
+    "function add(i){var m=$('m');try{var o=JSON.parse($('j').value);o.remotes.push(P[i].r);"
+    "$('j').value=JSON.stringify(o,null,1);m.className='';m.textContent='';}catch(e){m.className='ko';m.textContent=tr('ko')+tr('json');}}"
+    "function go(){var m=$('m'),b=$('b'),v=$('j').value;try{JSON.parse(v);}catch(e){m.className='ko';m.textContent=tr('ko')+tr('json');return;}"
+    "b.disabled=true;m.className='';m.textContent=tr('w');var x=new XMLHttpRequest();x.open('POST','/remotes');"
+    "x.setRequestHeader('Content-Type','text/plain');"
+    "x.onload=function(){if(x.status==200){m.className='ok';m.textContent=tr('ok');}"
+    "else{m.className='ko';m.textContent=tr('ko')+tr(x.responseText);b.disabled=false;}};"
+    "x.onerror=function(){m.className='ko';m.textContent=tr('lost');b.disabled=false;};x.send(v);}draw();</script></body></html>";
+
+static esp_err_t webrx_bad(httpd_req_t *r, const char *code);
+
+static esp_err_t remotes_get(httpd_req_t *r)
+{
+    s_last_activity_us = esp_timer_get_time();
+    char *json = rc_load_json(true);
+    if (!json) return httpd_resp_send_500(r);
+    size_t jl = strlen(json);
+    size_t cap = sizeof(RC_HEAD) + sizeof(RC_TAIL) + jl * 2 + 8192;
+    char *pg = heap_caps_malloc(cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!pg) { free(json); return httpd_resp_send_500(r); }
+    size_t n = strlcpy(pg, RC_HEAD, cap);
+    /* modèles : un tableau JS { n: nom, r: objet } */
+    n += snprintf(pg + n, cap - n, "<script>var P=[");
+    for (int i = 0; i < RC_PRESET_N; i++)
+        n += snprintf(pg + n, cap - n, "%s{n:'%s',r:%s}", i ? "," : "", _(rc_preset_name(i)), rc_preset_json(i));
+    n += snprintf(pg + n, cap - n, "];</script><textarea id=j spellcheck=false autocapitalize=off>");
+    n += esc(pg + n, cap - n, json);
+    free(json);
+    n += snprintf(pg + n, cap - n, "</textarea>%s", RC_TAIL);
+    httpd_resp_set_type(r, "text/html; charset=utf-8");
+    httpd_resp_set_hdr(r, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(r, "Connection", "close");
+    esp_err_t ret = httpd_resp_send(r, pg, n < cap ? n : cap - 1);
+    free(pg);
+    return ret;
+}
+
+static esp_err_t remotes_post(httpd_req_t *r)
+{
+    s_last_activity_us = esp_timer_get_time();
+    if (r->content_len <= 0 || r->content_len > 12000) return webrx_bad(r, "size");
+    char *body = heap_caps_malloc(r->content_len + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!body) return webrx_bad(r, "nvs");
+    int got = 0;
+    while (got < (int)r->content_len) {
+        int k = httpd_req_recv(r, body + got, r->content_len - got);
+        if (k <= 0) { free(body); return k == HTTPD_SOCK_ERR_TIMEOUT ? webrx_bad(r, "size") : ESP_FAIL; }
+        got += k;
+    }
+    body[got] = 0;
+    const char *err = "json";
+    int rc = rc_save_json(body, &err);
+    free(body);
+    if (rc) return webrx_bad(r, err);
+    ESP_LOGI(TAG, "télécommandes enregistrées");
+    httpd_resp_set_type(r, "text/plain; charset=utf-8");
+    httpd_resp_set_hdr(r, "Connection", "close");
+    httpd_resp_sendstr(r, "ok");
+    post_ev(OTA_EV_SAVED);
+    return ESP_OK;
+}
+
 static esp_err_t root_get(httpd_req_t *r)
 {
-    return s_page == OTA_PAGE_WEBRX ? webrx_get(r) : page_get(r);
+    return s_page == OTA_PAGE_WEBRX ? webrx_get(r) : s_page == OTA_PAGE_REMOTE ? remotes_get(r) : page_get(r);
 }
 
 static int hexv(char c)
@@ -729,7 +840,7 @@ const char *ota_start(void)
 
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
     hc.stack_size = 6144;
-    hc.max_uri_handlers = 12;
+    hc.max_uri_handlers = 14;
     hc.recv_wait_timeout = 10;
     hc.lru_purge_enable = true;        /* Safari ouvre des connexions en avance : on recycle */
     hc.uri_match_fn = httpd_uri_match_wildcard;
@@ -758,6 +869,8 @@ const char *ota_start(void)
         { .uri = "/update.html", .method = HTTP_GET, .handler = page_get },
         { .uri = "/webrx", .method = HTTP_GET, .handler = webrx_get },
         { .uri = "/webrx", .method = HTTP_POST, .handler = webrx_post },
+        { .uri = "/remotes", .method = HTTP_GET, .handler = remotes_get },
+        { .uri = "/remotes", .method = HTTP_POST, .handler = remotes_post },
         { .uri = "/hotspot-detect.html", .method = HTTP_GET, .handler = probe_apple },
         { .uri = "/library/test/success.html", .method = HTTP_GET, .handler = probe_apple },
         { .uri = "/generate_204", .method = HTTP_GET, .handler = probe_204 },

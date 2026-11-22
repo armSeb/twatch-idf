@@ -40,6 +40,9 @@
 #define SYM_GHOST     "\xEF\x9B\xA2"   /* U+F6E2 */
 #define SYM_ROCKET    "\xEF\x84\xB5"   /* U+F135 */
 #define SYM_PLANE     "\xEF\x81\xB2"   /* U+F072 */
+#define SYM_KEYPAD    "\xEF\x80\x8A"   /* U+F00A */
+#define SYM_PEN       "\xEF\x8C\x84"   /* U+F304 */
+#define SYM_POINTER   "\xEF\x89\x85"   /* U+F245 */
 
 #define UI_ANIM_MS 140
 

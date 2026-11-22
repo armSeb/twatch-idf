@@ -126,11 +126,22 @@ d'ESP-IDF 5.
   étoiles). Tous les sprites sont des grilles de texte dans `tools/puca_art.py`, qui génère
   `puca_gfx.c/.h` et une planche d'aperçu. Les effets sonores sont de courts airs en onde
   carrée joués par une tâche éphémère sur le flux I2S.
-- **Lampe IR** (`app_irlamp.c`, guide : [irlamp.md](irlamp.md)) : télécommande NEC (`ir_nec.c`,
-  RMT à 1 µs, porteuse 38 kHz) ; canal et verrou de fréquence pris seulement pendant
-  l'envoi, par une tâche éphémère. Recherche des codes : balayage, journal des 64 derniers
-  envois horodatés, suspects des 2,5 s précédant le toucher, recherche par moitiés. Codes
-  dans un blob NVS (`irlamp`/`keys`).
+- **Télécommande** (`app_remote.c`, guide : [remote.md](remote.md)) : télécommandes en JSON
+  (`remote_cfg.c`, cJSON, blob NVS `remote`/`json`, ~6 Ko en PSRAM une fois lues ; modèles
+  intégrés ; reprise des codes de l'ancienne app Lampe IR). Codage des protocoles en C pur
+  (`ir_proto.c` : NEC, Samsung, RC5 et RC6 avec bit de bascule, Sony 12/15/20, testé sur PC par
+  décodage), émission par le RMT (`ir_tx.c`, 1 µs, porteuse 36/38/40 kHz selon le protocole ;
+  canal et verrou de fréquence pris seulement pendant l'envoi, par une tâche éphémère).
+  Recherche des codes : balayage (cibles protocole × adresse, en spirale autour d'un code
+  connu), journal des 64 derniers envois horodatés, recherche par moitiés. Édition sur la page
+  web du point d'accès (`/remotes`, JSON validé par la montre avant d'être gardé).
+- **Souris** (`app_mouse.c`, `ble_hid.c`, guide : [mouse.md](mouse.md)) : HID over GATT.
+  `ble_set_hid_mode()` puis `ble_start()` redémarrent NimBLE avec une autre identité (adresse
+  statique dérivée autrement de la MAC, nom, apparence 0x03C2), les services HID (rapports
+  souris 1, clavier 2, multimédia 3, références de rapport, mode protocole), DIS (PnP ID) et
+  batterie, sans ANCS, en « Just Works » ; événements GAP propres (pas de paramètres éco,
+  liaison 7,5–15 ms latence 4). Le pavé lit le tactile toutes les 10 ms, accélère selon la
+  vitesse et regroupe les déplacements (~80 rapports/s au plus).
 - **Démo** (`app_demo.c`, guide : [demo.md](demo.md)) et **Envol** (`app_flight.c`, guide :
   [flight.md](flight.md)) partagent trois modules. `demo_gfx.c` : couleurs RGB565, police 5×7
   avec accents, triangles, agrandissement vers le canevas. `demo_synth.c` : synthétiseur façon

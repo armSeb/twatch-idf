@@ -19,6 +19,7 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+#include "ble_hid.h"
 
 static const char *TAG = "ble";
 
@@ -66,6 +67,8 @@ static bool s_pairing_in_progress;
 static bool s_fast_adv;
 static int s_eco_tries;
 static bool s_eco_pending;
+static bool s_hid;                 /* mode souris (autre identité, services HID) */
+static bool s_ancs_up;
 
 static struct ble_npl_callout s_co_adv, s_co_eco, s_co_rssi, s_co_enc, s_co_sec, s_co_readv;
 static int64_t s_conn_t0_us;       /* instant de connexion (diag délai de chiffrement) */
@@ -84,6 +87,7 @@ static void adv_start(bool fast, uint32_t fast_ms);
 
 /* Apparence GAP : 0x00C1 = Watch: Sports Watch (numéros assignés Bluetooth) */
 #define BLE_APPEARANCE 0x00C1
+#define HID_APPEARANCE 0x03C2        /* souris */
 
 
 /* ------------------------------------------------------------------ */
@@ -158,14 +162,15 @@ static void adv_set_data(void)
     f.uuids16 = &hid;
     f.num_uuids16 = 1;
     f.uuids16_is_complete = 1;
-    f.appearance = BLE_APPEARANCE;
+    f.appearance = s_hid ? HID_APPEARANCE : BLE_APPEARANCE;
     f.appearance_is_present = 1;
     int rc = ble_gap_adv_set_fields(&f);
     if (rc) ESP_LOGE(TAG, "adv_set_fields rc=%d", rc);
 
     struct ble_hs_adv_fields rsp = { 0 };
-    rsp.name = (const uint8_t *)DEVICE_NAME;
-    rsp.name_len = strlen(DEVICE_NAME);
+    const char *name = s_hid ? HID_NAME : DEVICE_NAME;
+    rsp.name = (const uint8_t *)name;
+    rsp.name_len = strlen(name);
     rsp.name_is_complete = 1;
     rc = ble_gap_adv_rsp_set_fields(&rsp);
     if (rc) ESP_LOGE(TAG, "adv_rsp_set_fields rc=%d", rc);
@@ -387,9 +392,68 @@ static void ev_pair_cb(struct ble_npl_event *ev)
 }
 
 /* ------------------------------------------------------------------ */
+/* Mode souris : connexion à un ordinateur, sans ANCS ni paramètres « éco » */
+static int hid_gap_event(struct ble_gap_event *event)
+{
+    struct ble_gap_conn_desc desc;
+    switch (event->type) {
+    case BLE_GAP_EVENT_CONNECT:
+        if (event->connect.status == 0) {
+            s_conn = event->connect.conn_handle;
+            ble_npl_callout_stop(&s_co_adv);
+            hid_on_connect(s_conn);
+            set_state(BLE_ST_CONNECTED);
+            ble_diag("souris : conn");
+            ble_npl_callout_reset(&s_co_sec, ble_npl_time_ms_to_ticks32(SEC_DELAY_MS));
+        } else {
+            ble_npl_callout_reset(&s_co_readv, ble_npl_time_ms_to_ticks32(300));
+        }
+        return 0;
+    case BLE_GAP_EVENT_DISCONNECT:
+        ble_diag("souris : déco 0x%x", event->disconnect.reason);
+        s_conn = BLE_HS_CONN_HANDLE_NONE;
+        s_itvl = s_lat = s_tmo = 0;
+        ble_npl_callout_stop(&s_co_sec);
+        hid_on_disconnect();
+        adv_start(true, ADV_FAST_MS);
+        return 0;
+    case BLE_GAP_EVENT_ENC_CHANGE:
+        if (event->enc_change.status == 0) {
+            ble_npl_callout_stop(&s_co_sec);
+            hid_on_encrypted();
+            refresh_bonds();
+            set_state(BLE_ST_SECURED);
+            ble_diag("souris : chiffré");
+            /* réactivité : 7,5–15 ms, latence 4 (rien à envoyer = la radio dort) */
+            struct ble_gap_upd_params up = { .itvl_min = 6, .itvl_max = 12, .latency = 4,
+                                             .supervision_timeout = 300, .min_ce_len = 0, .max_ce_len = 0 };
+            ble_gap_update_params(event->enc_change.conn_handle, &up);
+        } else {
+            ble_diag("souris : ÉCHEC chiffr. %d", event->enc_change.status);
+        }
+        return 0;
+    case BLE_GAP_EVENT_REPEAT_PAIRING:
+        if (ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc) == 0) ble_store_util_delete_peer(&desc.peer_id_addr);
+        return BLE_GAP_REPEAT_PAIRING_RETRY;
+    case BLE_GAP_EVENT_SUBSCRIBE:
+        hid_on_subscribe(event->subscribe.attr_handle, event->subscribe.cur_notify);
+        if (hid_ready()) set_state(BLE_ST_READY);
+        return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE:
+        refresh_conn_params(event->conn_update.conn_handle);
+        return 0;
+    case BLE_GAP_EVENT_ADV_COMPLETE:
+        if (s_conn == BLE_HS_CONN_HANDLE_NONE) adv_start(s_fast_adv, ADV_FAST_MS);
+        return 0;
+    default:
+        return 0;
+    }
+}
+
 static int gap_event(struct ble_gap_event *event, void *arg)
 {
     struct ble_gap_conn_desc desc;
+    if (s_hid) return hid_gap_event(event);
 
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
@@ -577,7 +641,7 @@ static void on_sync(void)
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_BT);
     uint8_t rnd[6];
-    for (int i = 0; i < 6; i++) rnd[i] = mac[5 - i] ^ (uint8_t)(0x5A + 17 * i);
+    for (int i = 0; i < 6; i++) rnd[i] = mac[5 - i] ^ (uint8_t)((s_hid ? 0xA5 : 0x5A) + 17 * i);   /* souris : autre identité */
     rnd[5] |= 0xC0;                         /* 2 bits de poids fort = 11 : statique */
     rc = ble_hs_id_set_rnd(rnd);
     if (rc == 0) {
@@ -641,13 +705,20 @@ esp_err_t ble_start(void)
     ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
 
+    if (s_hid) s_batt_handle = 0;                        /* la batterie est servie par ble_hid.c */
+    if (s_hid) {                                         /* ordinateur : « Just Works » */
+        ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_NO_IO;
+        ble_hs_cfg.sm_mitm = 0;
+    }
+
     ble_svc_gap_init();
     ble_svc_gatt_init();
-    int rc = ble_gatts_count_cfg(s_svcs);
-    if (rc == 0) rc = ble_gatts_add_svcs(s_svcs);
+    const struct ble_gatt_svc_def *svcs = s_hid ? hid_svcs() : s_svcs;
+    int rc = ble_gatts_count_cfg(svcs);
+    if (rc == 0) rc = ble_gatts_add_svcs(svcs);
     if (rc) ESP_LOGE(TAG, "GATT server rc=%d", rc);
-    ble_svc_gap_device_name_set(DEVICE_NAME);
-    ble_svc_gap_device_appearance_set(BLE_APPEARANCE);   /* « montre » (icône iOS ?) */
+    ble_svc_gap_device_name_set(s_hid ? HID_NAME : DEVICE_NAME);
+    ble_svc_gap_device_appearance_set(s_hid ? HID_APPEARANCE : BLE_APPEARANCE);
     ble_store_config_init();
 
     struct ble_npl_eventq *q = nimble_port_get_dflt_eventq();
@@ -660,7 +731,8 @@ esp_err_t ble_start(void)
     ble_npl_event_init(&s_ev_batt, ev_batt_cb, NULL);
     ble_npl_event_init(&s_ev_forget, ev_forget_cb, NULL);
     ble_npl_event_init(&s_ev_pair, ev_pair_cb, NULL);
-    ancs_host_init();
+    s_ancs_up = !s_hid;
+    if (s_ancs_up) ancs_host_init();
 
     s_conn = BLE_HS_CONN_HANDLE_NONE;
     s_running = true;
@@ -681,7 +753,9 @@ void ble_stop(void)
         ble_npl_callout_deinit(&s_co_enc);
         ble_npl_callout_deinit(&s_co_sec);
         ble_npl_callout_deinit(&s_co_readv);
-        ancs_host_deinit();
+        if (s_ancs_up) ancs_host_deinit();
+        s_ancs_up = false;
+        hid_on_disconnect();
         nimble_port_deinit();             /* désactive et libère le contrôleur */
     } else {
         /* pile toujours en place : ne pas la croire arrêtée, sinon le prochain
@@ -710,6 +784,10 @@ void ble_get_info(ble_info_t *o)
     o->adv_active = s_running && ble_gap_adv_active();
     memcpy(o->addr, s_addr, 6);
 }
+
+void ble_set_hid_mode(bool on) { s_hid = on; }
+bool ble_hid_mode(void) { return s_hid; }
+uint8_t ble_get_battery(void) { return s_batt; }
 
 void ble_set_battery(uint8_t pct)
 {
