@@ -29,6 +29,11 @@ itself, key by key.
 Once one key is known, the next ones go much faster: the watch only sweeps the lamp's address,
 starting from the neighbouring codes (on these remotes, keys often have consecutive codes).
 
+**Likely codes**: once one key is found, this button directly tries, by halves, the 21 codes
+of the Chinese "Car MP3" remote (NEC, address 0x00), which many solar lamps reuse: no sweep,
+4 or 5 tries. On that model the keys are, row by row: 45 46 47 · 44 40 43 · 07 15 09 ·
+16 19 0D · 0C 18 5E · 08 1C 5A · 42 52 4A.
+
 Start with **OFF** (or **ON**): it is the most visible. Timers do not always show; some lamps
 blink to confirm.
 
@@ -36,7 +41,7 @@ blink to confirm.
 
 A known key shows in colour: tapping it sends the code (twice, to be safe), with a short
 vibration. **Long press** a key to see its NEC address and code, and to search for it again or forget
-it. Codes are kept in memory.
+it. The back button (or swiping right) returns to the grid; from the grid, it leaves the app. Codes are kept in memory.
 
 If no address makes the lamp react, it probably uses another protocol than NEC: its codes will
 have to be read with an infrared receiver (a TSOP38238 on an ESP32 with IRremoteESP8266's

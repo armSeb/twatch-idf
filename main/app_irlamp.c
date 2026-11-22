@@ -212,6 +212,36 @@ static void scan_begin(int32_t from)
 }
 
 static void start_cb(lv_event_t *e) { scan_begin(0); }
+
+/* Les 21 codes de la télécommande chinoise « Car MP3 » (NEC), que reprennent
+ * beaucoup de lampes solaires : on les essaie directement par moitiés. */
+static const uint8_t CARMP3[] = {
+    0x45, 0x46, 0x47, 0x44, 0x40, 0x43, 0x07, 0x15, 0x09, 0x16, 0x19,
+    0x0D, 0x0C, 0x18, 0x5E, 0x08, 0x1C, 0x5A, 0x42, 0x52, 0x4A,
+};
+
+static bool known_addr(uint16_t *a)
+{
+    for (int k = 0; k < NKEY; k++) if (s_keys.valid & (1 << k)) { *a = s_keys.addr[k]; return true; }
+    return false;
+}
+
+static void likely_cb(lv_event_t *e)
+{
+    uint16_t a;
+    if (!known_addr(&a)) return;
+    s_ncand = 0;
+    for (size_t i = 0; i < sizeof CARMP3; i++) {
+        bool used = false;                                 /* déjà pris par une autre touche */
+        for (int k = 0; k < NKEY; k++)
+            if (k != s_key && (s_keys.valid & (1 << k)) && s_keys.addr[k] == a && s_keys.cmd[k] == CARMP3[i]) used = true;
+        if (!used) s_cand[s_ncand++] = (sent_t){ a, CARMP3[i], 0, 0 };
+    }
+    s_pos = 0;
+    s_tries = 0;
+    s_half = s_ncand / 2;
+    set_state(ST_TRY);
+}
 static void back_cb(lv_event_t *e) { s_stop = true; set_state(ST_KEYS); }
 
 static void react_cb(lv_event_t *e)
@@ -258,7 +288,7 @@ static void save_cb(lv_event_t *e)
     set_state(ST_KEYS);
 }
 
-static void wrong_cb(lv_event_t *e) { scan_begin(s_cand[0].idx + 1); }
+static void wrong_cb(lv_event_t *e) { scan_begin(s_cand[0].idx + 1); }   /* reprend le balayage après lui */
 
 static void forget_cb(lv_event_t *e)
 {
@@ -327,11 +357,20 @@ static void build(void)
             text(b, 4, C_FG);
             snprintf(b, sizeof b, _("adresse %04X · code %02X"), s_keys.addr[s_key], s_keys.cmd[s_key]);
             text(b, 28, lv_color_hex(0xFACC15));
-            text(_("Démarrer : chercher à nouveau ce code."), 64, C_DIM);
+            text(_("Démarrer : chercher à nouveau ce code."), 56, C_DIM);
         } else {
             snprintf(b, sizeof b, _("Recherche : %s"), KEY_NAME[s_key]);
             text(b, 4, C_FG);
-            text(_("Lampe allumée pour OFF, éteinte pour ON… Vise-la, démarre, et touche l'écran dès qu'elle réagit."), 30, C_DIM);
+            uint16_t a0;
+            if (known_addr(&a0)) text(_("Mets la lampe dans un état où cette touche se voit, puis vise-la."), 30, C_DIM);
+            else text(_("Lampe allumée pour OFF, éteinte pour ON… Vise-la, démarre, et touche l'écran dès qu'elle réagit."), 30, C_DIM);
+        }
+        {
+            uint16_t a;
+            if (known_addr(&a)) {                              /* adresse connue : 21 codes probables */
+                btn(v_body, _("Codes probables"), blue, likely_cb, NULL, 200, 36);
+                lv_obj_align(lv_obj_get_child(v_body, -1), LV_ALIGN_TOP_MID, 0, 106);
+            }
         }
         btn(v_body, _("Démarrer"), green, start_cb, NULL, 120, 40);
         lv_obj_align(lv_obj_get_child(v_body, -1), LV_ALIGN_TOP_MID, s_keys.valid & (1 << s_key) ? -62 : 0, 150);
@@ -432,6 +471,14 @@ static bool on_event(int code) { refresh(); return false; }
 static bool busy(void) { return s_run; }
 static bool keep_on(void) { return st != ST_KEYS; }
 
+static bool on_back(void)
+{
+    if (st == ST_KEYS) return false;                       /* écran principal : on quitte */
+    s_stop = true;
+    set_state(ST_KEYS);
+    return true;
+}
+
 const app_t app_irlamp = {
     .name = N_("Lampe IR"),
     .icon = LV_SYMBOL_CHARGE,
@@ -443,4 +490,5 @@ const app_t app_irlamp = {
     .on_event = on_event,
     .busy = busy,
     .keep_screen_on = keep_on,
+    .on_back = on_back,
 };

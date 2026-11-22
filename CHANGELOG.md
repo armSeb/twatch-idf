@@ -2,6 +2,15 @@
 
 All notable changes. Versions follow `PROJECT_VER` in `CMakeLists.txt`.
 
+## 0.32.2 — 2026-11-22
+
+- IR lamp: back (button or swipe) from a search or code screen now returns to the key grid
+  instead of leaving the app. Apps can handle back themselves with the new optional
+  `on_back()` callback in `app_t`.
+- IR lamp: **Likely codes** — once the address is known, a halving search over the 21 codes of
+  the common Chinese "Car MP3" NEC remote, which many solar lamps reuse (ON 45, OFF 47, 25 %
+  0C, 50 % 18 here, so 100 % is most likely 5E): 4–5 tries, no sweep.
+
 ## 0.32.1 — 2026-11-22
 
 - IR lamp: a long press on a known key now shows its NEC address and code (besides search

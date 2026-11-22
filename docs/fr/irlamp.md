@@ -32,6 +32,12 @@ Dès qu'une touche est connue, les suivantes vont beaucoup plus vite : la montre
 que l'adresse de la lampe, en partant des codes voisins (sur ces télécommandes, les touches ont
 souvent des codes qui se suivent).
 
+**Codes probables** : une fois une touche trouvée, ce bouton essaie directement, par moitiés,
+les 21 codes de la télécommande chinoise « Car MP3 » (NEC, adresse 0x00), que reprennent
+beaucoup de lampes solaires : pas de balayage, 4 ou 5 essais. Sur ce modèle, les touches
+valent, rangée par rangée : 45 46 47 · 44 40 43 · 07 15 09 · 16 19 0D · 0C 18 5E · 08 1C 5A ·
+42 52 4A.
+
 Commence par **OFF** (ou **ON**) : c'est le plus visible. Les minuteries ne se voient pas
 toujours ; certaines lampes clignotent pour confirmer.
 
@@ -39,7 +45,8 @@ toujours ; certaines lampes clignotent pour confirmer.
 
 Une touche connue s'affiche en couleur : la toucher envoie le code (deux fois, par sécurité),
 avec une petite vibration. **Appui long** sur une touche : son adresse et son code NEC s'affichent, avec de quoi la
-chercher à nouveau ou l'oublier.
+chercher à nouveau ou l'oublier. Le bouton retour (ou glisser vers la droite) ramène à la
+grille ; depuis la grille, il quitte l'app.
 Les codes sont gardés en mémoire.
 
 Si aucune adresse ne fait réagir la lampe, elle utilise sans doute un autre protocole que

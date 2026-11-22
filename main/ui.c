@@ -958,6 +958,7 @@ static scr_id_t menu_parent(scr_id_t id)
 
 static void back_cb(lv_event_t *ev)
 {
+    if (s_cur == SCR_APP && s_app_cur && s_app_cur->on_back && s_app_cur->on_back()) return;
     if (s_cur == SCR_OTA && ota_active()) {
         toast(o_app >= 0 ? _("Annuler d'abord les réglages") : _("Annuler d'abord la mise à jour"));
         return;

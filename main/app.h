@@ -41,6 +41,9 @@ typedef struct app_s {
     /* optionnel : true = rien ne s'affiche par-dessus (jeu) ; les notifs
      * restent dans la liste, sans bannière ni vibration. Les appels passent. */
     bool (*no_interrupt)(void);
+    /* optionnel : bouton retour ou glissé → ; true = géré par l'app (retour à
+     * son écran principal), false = on quitte l'app */
+    bool (*on_back)(void);
 } app_t;
 
 /* registre (apps.c) */

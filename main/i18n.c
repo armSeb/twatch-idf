@@ -443,6 +443,8 @@ static const tr_t EN[] = {
     { "Ce n'est pas ça", "That's not it" },
     { "Aucune réaction sur toutes les adresses essayées. La lampe utilise peut-être un autre protocole : il faudra relever ses codes avec un récepteur.", "No reaction on any address tried. The lamp may use another protocol: its codes will have to be read with a receiver." },
     { "Retour", "Back" },
+    { "Codes probables", "Likely codes" },
+    { "Mets la lampe dans un état où cette touche se voit, puis vise-la.", "Put the lamp in a state where this key shows, then aim at it." },
     { "Démarrer : chercher à nouveau ce code.", "Start: search for this code again." },
     { "Lampe IR", "IR lamp" },
 };
