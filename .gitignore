@@ -24,3 +24,5 @@ host_tests/test_gauge
 host_tests/motion/test_motion
 host_tests/motion/nvs.bin
 host_tests/test_puca
+host_tests/test_ir
+host_tests/test_remote
